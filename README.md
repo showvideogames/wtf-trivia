@@ -1,16 +1,39 @@
-# React + Vite
+# WTF Trivia
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+WTF Trivia is a React + Vite trivia game with:
 
-Currently, two official plugins are available:
+- a public daily game experience
+- an archive/replay flow
+- an admin editor for creating and publishing games
+- Supabase persistence for games, players, records, stats, and uploaded images
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Local setup
 
-## React Compiler
+1. Create `.env.local` from `.env.example`.
+2. Fill in:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+   - `VITE_ADMIN_PASSWORD`
+3. Install dependencies with `npm install`.
+4. Run locally with `npm run dev`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Vercel setup
 
-## Expanding the ESLint configuration
+This repo is configured for Vercel with [vercel.json](C:\Users\leviw\wtf-trivia-fix\wtf-trivia\vercel.json), which forces:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- framework: `vite`
+- build command: `npm run build`
+- output directory: `dist`
+
+Add the same environment variables in Vercel for Production, Preview, and Development.
+
+## Supabase setup
+
+Run the SQL in [supabase/schema.sql](C:\Users\leviw\wtf-trivia-fix\wtf-trivia\supabase\schema.sql) in the Supabase SQL editor.
+
+This app currently uses the public anon key from the browser, so your Row Level Security policies matter. The included schema enables the reads and writes this app expects.
+
+## Notes
+
+- The admin login is still client-side, so `VITE_ADMIN_PASSWORD` is obfuscation rather than true security.
+- If you want, the next hardening step is to move admin writes and image uploads behind Vercel serverless functions with a real server-side secret.

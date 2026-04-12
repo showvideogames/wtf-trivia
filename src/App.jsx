@@ -1596,10 +1596,12 @@ function useConfetti() {
 // ============================================================
 // SUPABASE CLIENT
 // ============================================================
-const SB_URL = "https://ujhwjxjgrygchtnzwvjk.supabase.co";
-const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqaHdqeGpncnlnY2h0bnp3dmprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4NzUxMTQsImV4cCI6MjA5MTQ1MTExNH0.h_gvl60ZwMtOvZplHvvhiTiW_DKTjEqEz1r5QOPOTc4";
+const SB_URL = import.meta.env.VITE_SUPABASE_URL?.trim() || "";
+const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() || "";
+const SUPABASE_READY = Boolean(SB_URL && SB_KEY);
 
 async function sbFetch(path, opts={}){
+  if(!SUPABASE_READY) throw new Error("Supabase is not configured.");
   const res = await fetch(`${SB_URL}${path}`, {
     ...opts,
     headers:{
@@ -1621,6 +1623,7 @@ async function sbFetch(path, opts={}){
 // ===== IMAGE UPLOAD to Supabase Storage =====
 async function uploadImage(dataUri, folder="images"){
   if(!dataUri || !dataUri.startsWith("data:")) return dataUri; // already a URL
+  if(!SUPABASE_READY) throw new Error("Supabase is not configured.");
   const [meta, b64] = dataUri.split(",");
   const mime = meta.match(/:(.*?);/)[1];
   const ext = mime.split("/")[1] || "png";
@@ -1817,7 +1820,7 @@ async function dbUpdateStats(playerId, date, score, totalQuestions, answers){
 // ============================================================
 // DATA LAYER — local helpers kept for non-async usage
 // ============================================================
-const ADMIN_PASS = "admin123";
+const ADMIN_PASS = import.meta.env.VITE_ADMIN_PASSWORD?.trim() || "admin123";
 function safeRead(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch{return null;}}
 function safeWrite(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch{return false;}}
 function calcBestCombo(answers){let best=0,cur=0;for(const a of answers){if(a.correct){cur++;best=Math.max(best,cur);}else cur=0;}return best;}
