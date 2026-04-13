@@ -1281,25 +1281,31 @@ const styles = `
   .game-header-img {
     width: 100%;
     height: 160px;
-    object-fit: cover;
+    object-fit: contain;
     border-radius: 14px 14px 0 0;
     border-bottom: var(--ink);
     display: block;
+    background: rgba(11, 26, 44, 0.16);
   }
   .game-header-img-wrap {
     margin: -24px -20px 16px -20px;
     border-radius: 14px 14px 0 0;
     overflow: hidden;
     border-bottom: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, rgba(11,26,44,.12), rgba(11,26,44,.04));
   }
   .archive-thumb {
     width: 48px;
     height: 36px;
-    object-fit: cover;
+    object-fit: contain;
     border-radius: 8px;
     border: 2px solid var(--black);
     box-shadow: 2px 2px 0 var(--black);
     flex-shrink: 0;
+    background: rgba(11, 26, 44, 0.12);
   }
 
   /* ===== IMAGE UPLOADER ===== */
