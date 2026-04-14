@@ -2125,6 +2125,55 @@ function buildShare(gr){
   const g=answers.map(a=>a.correct?"🟢":"🔴").join("");
   return`What The Fudge Trivia 🍬\n${gr?.themeTitle||"Puzzle Results"}\n${gr?.score||0}/${gr?.totalQuestions||0} ${g}\nwhatthefudgetrivia.com`;
 }
+const IMAGE_UPLOAD_PRESETS = {
+  default: { maxWidth: 1600, maxHeight: 1600, quality: 0.82 },
+  header: { maxWidth: 1600, maxHeight: 900, quality: 0.82 },
+  category: { maxWidth: 1200, maxHeight: 1200, quality: 0.82 },
+  question: { maxWidth: 1400, maxHeight: 1400, quality: 0.84 }
+};
+function fileToDataUrl(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ev=>resolve(ev.target?.result||"");
+    reader.onerror = ()=>reject(new Error("Couldn't read image file."));
+    reader.readAsDataURL(file);
+  });
+}
+function loadImageElement(src){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    img.onload = ()=>resolve(img);
+    img.onerror = ()=>reject(new Error("Couldn't load image for optimization."));
+    img.src = src;
+  });
+}
+async function optimizeImageDataUrl(dataUrl,preset="default"){
+  if(!dataUrl||!dataUrl.startsWith("data:image/")) return dataUrl;
+  const presetCfg = IMAGE_UPLOAD_PRESETS[preset]||IMAGE_UPLOAD_PRESETS.default;
+  const mimeMatch = dataUrl.match(/^data:(image\/[^;]+);/i);
+  const inputMime = mimeMatch?.[1]?.toLowerCase()||"image/jpeg";
+  if(inputMime==="image/svg+xml"||inputMime==="image/gif") return dataUrl;
+
+  const img = await loadImageElement(dataUrl);
+  const scale = Math.min(1, presetCfg.maxWidth/img.width, presetCfg.maxHeight/img.height);
+  const targetWidth = Math.max(1, Math.round(img.width*scale));
+  const targetHeight = Math.max(1, Math.round(img.height*scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext("2d");
+  if(!ctx) return dataUrl;
+  ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+  const outputMime = "image/webp";
+  const optimized = canvas.toDataURL(outputMime, presetCfg.quality);
+  return optimized.length < dataUrl.length ? optimized : dataUrl;
+}
+async function readOptimizedImageFile(file,preset="default"){
+  const dataUrl = await fileToDataUrl(file);
+  return optimizeImageDataUrl(dataUrl,preset);
+}
 function averageScoreCopy(score,total){
   return `Average chaos level: ${score}/${total}`;
 }
@@ -2279,19 +2328,28 @@ function ColorPicker({value, onChange, label}){
 // ============================================================
 // IMAGE UPLOADER — upload file or paste URL, with live preview
 // ============================================================
-function ImageUploader({value, onChange, label="Image", compact=false}){
+function ImageUploader({value, onChange, label="Image", compact=false, preset="default"}){
   const[tab,setTab]=useState(value&&!value.startsWith("data:")?"url":"upload");
   const[urlDraft,setUrlDraft]=useState(value&&!value.startsWith("data:")?value:"");
   const[err,setErr]=useState(false);
+  const[loading,setLoading]=useState(false);
   const fileRef=useRef(null);
 
-  const handleFile=e=>{
+  const handleFile=async e=>{
     const f=e.target.files?.[0];
     if(!f)return;
     if(!f.type.startsWith("image/")){setErr(true);setTimeout(()=>setErr(false),2000);return;}
-    const r=new FileReader();
-    r.onload=ev=>{onChange(ev.target.result);e.target.value="";};
-    r.readAsDataURL(f);
+    try{
+      setLoading(true);
+      const optimized = await readOptimizedImageFile(f,preset);
+      onChange(optimized);
+    }catch{
+      setErr(true);
+      setTimeout(()=>setErr(false),2000);
+    }finally{
+      setLoading(false);
+      e.target.value="";
+    }
   };
 
   const handleUrl=v=>{
@@ -2319,7 +2377,8 @@ function ImageUploader({value, onChange, label="Image", compact=false}){
           <label className="img-drop-zone" style={{cursor:"pointer"}}>
             <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} style={{display:"none"}}/>
             <div style={{fontSize:28}}>📸</div>
-            <div className="img-drop-lbl">{err?"Not an image file!":"Tap to choose an image"}</div>
+            <div className="img-drop-lbl">{loading?"Optimizing image...":err?"Couldn't load image file!":"Tap to choose an image"}</div>
+            <div className="img-drop-lbl" style={{fontSize:11,color:"rgba(255,255,255,.3)",marginTop:3}}>Large uploads are automatically resized for faster loading</div>
             {value&&value.startsWith("data:")&&<div className="img-drop-lbl" style={{color:"rgba(34,197,94,.7)",marginTop:3}}>✓ Image loaded</div>}
           </label>
         )}
@@ -2921,10 +2980,10 @@ function AdminEditor({game:ig,onSave,onDelete,onBack}){
           </div>
           <div style={{display:"flex",gap:9}}>
             <div style={{flex:1}}>
-              <ImageUploader label={`Category A Image${game.categoryA?" ("+game.categoryA+")":""}`} value={game.categoryAImage||""} onChange={v=>set("categoryAImage",v)}/>
+              <ImageUploader label={`Category A Image${game.categoryA?" ("+game.categoryA+")":""}`} value={game.categoryAImage||""} onChange={v=>set("categoryAImage",v)} preset="category"/>
             </div>
             <div style={{flex:1}}>
-              <ImageUploader label={`Category B Image${game.categoryB?" ("+game.categoryB+")":""}`} value={game.categoryBImage||""} onChange={v=>set("categoryBImage",v)}/>
+              <ImageUploader label={`Category B Image${game.categoryB?" ("+game.categoryB+")":""}`} value={game.categoryBImage||""} onChange={v=>set("categoryBImage",v)} preset="category"/>
             </div>
           </div>
           <div style={{display:"flex",gap:9}}>
@@ -2935,7 +2994,7 @@ function AdminEditor({game:ig,onSave,onDelete,onBack}){
               <ColorPicker label={`Category B Color${game.categoryB?" ("+game.categoryB+")":""}`} value={game.categoryBColor||"pink"} onChange={v=>set("categoryBColor",v)}/>
             </div>
           </div>
-          <ImageUploader label="Header Image (shown on home screen & archive)" value={game.headerImage||""} onChange={v=>set("headerImage",v)}/>
+          <ImageUploader label="Header Image (shown on home screen & archive)" value={game.headerImage||""} onChange={v=>set("headerImage",v)} preset="header"/>
           <div style={{display:"flex",gap:7,marginTop:2}}>
             <button className="btn-adm btn-adm-g" onClick={dft}>Save Draft</button>
             <button className={`btn-adm ${ok?"btn-adm-green":""}`} style={!ok?{opacity:.5,cursor:"not-allowed"}:{}} onClick={pub}>{game.status==="published"?"✓ Published":"Publish"}</button>
@@ -2984,7 +3043,7 @@ function QForm({initial,catA,catB,onSave,onCancel}){
       </div>
       <div className="adm-field"><label>Flavor Copy</label><textarea className="adm-input adm-ta" value={q.flavorCopy} placeholder="The funny, warm, goofy reaction line..." onChange={e=>up("flavorCopy",e.target.value)}/></div>
       <div className="adm-field"><label>Explanation Copy</label><textarea className="adm-input adm-ta" value={q.explanationCopy} placeholder="One straight factual sentence..." onChange={e=>up("explanationCopy",e.target.value)}/></div>
-      <ImageUploader label="Question Image (shown on reveal screen)" value={q.imageUrl||""} onChange={v=>up("imageUrl",v)}/>
+      <ImageUploader label="Question Image (shown on reveal screen)" value={q.imageUrl||""} onChange={v=>up("imageUrl",v)} preset="question"/>
       {q.imageUrl&&<div className="adm-field"><label>Alt Text *</label><input className="adm-input" value={q.imageAlt} placeholder="Screen reader description..." onChange={e=>up("imageAlt",e.target.value)}/></div>}
       {q.imageUrl&&<div className="adm-field"><label>Image Source</label><input className="adm-input" value={q.imageSource} placeholder="Via Wikimedia Commons" onChange={e=>up("imageSource",e.target.value)}/></div>}
       <div style={{display:"flex",gap:7,marginTop:7}}>
