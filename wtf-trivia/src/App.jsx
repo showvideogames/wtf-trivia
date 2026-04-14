@@ -1794,6 +1794,49 @@ async function dbCompleteGame(playerId, date, answers, score, totalQuestions){
   // Update stats
   await dbUpdateStats(playerId, date, score, totalQuestions, answers);
 }
+async function dbGetPuzzleCommunityStats(date, userScore){
+  try {
+    const rows = await sbFetch(`/rest/v1/game_records?game_date=eq.${date}&completed=eq.true&select=score,total_questions,answers`);
+    const finished = rows||[];
+    if(!finished.length){
+      return {
+        finishedPlayers: 0,
+        averageScore: 0,
+        beatRate: 0,
+        perfectRate: 0,
+        questionAccuracies: []
+      };
+    }
+    const totalQuestions = finished[0]?.total_questions||0;
+    const totalScore = finished.reduce((sum,r)=>sum+(r.score||0),0);
+    const perfectCount = finished.filter(r=>(r.score||0)===(r.total_questions||0)).length;
+    const beatenCount = finished.filter(r=>(r.score||0)<=userScore).length;
+    const questionAccuracies = Array.from({length:totalQuestions},(_,idx)=>{
+      let answered = 0;
+      let correct = 0;
+      finished.forEach(r=>{
+        const ans = Array.isArray(r.answers) ? r.answers[idx] : null;
+        if(ans){
+          answered += 1;
+          if(ans.correct) correct += 1;
+        }
+      });
+      return {
+        index: idx,
+        correctRate: answered ? Math.round(correct/answered*100) : 0
+      };
+    });
+    return {
+      finishedPlayers: finished.length,
+      averageScore: Math.round(totalScore/finished.length),
+      beatRate: Math.round(beatenCount/finished.length*100),
+      perfectRate: Math.round(perfectCount/finished.length*100),
+      questionAccuracies
+    };
+  } catch(e){
+    return null;
+  }
+}
 
 // ===== DB FUNCTIONS — STATS =====
 async function dbGetStats(playerId){
@@ -2309,9 +2352,11 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,isR
 }
 
 // ---- SCORE ----
-function ScoreScreen({gameRecord,onNav,sound,isReplay=false}){
+function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
   const[copied,setCopied]=useState(false);
   const[animKey,setAnimKey]=useState(0);
+  const[communityStats,setCommunityStats]=useState(null);
+  const[showAdvanced,setShowAdvanced]=useState(false);
   const{play}=sound;
   const{canvasRef,shoot}=useConfetti();
   const isPerfect=gameRecord.score===gameRecord.totalQuestions;
@@ -2325,6 +2370,16 @@ function ScoreScreen({gameRecord,onNav,sound,isReplay=false}){
     const id=setInterval(()=>setAnimKey(k=>k+1), 3000);
     return()=>clearInterval(id);
   },[]);
+
+  useEffect(()=>{
+    let cancelled = false;
+    (async()=>{
+      if(!gameRecord?.date) return;
+      const stats = await dbGetPuzzleCommunityStats(gameRecord.date, gameRecord.score);
+      if(!cancelled) setCommunityStats(stats);
+    })();
+    return ()=>{cancelled = true;};
+  },[gameRecord?.date, gameRecord?.score]);
 
   const txt=buildShare(gameRecord);
   const share=()=>{try{navigator.clipboard.writeText(txt);}catch{}setCopied(true);setTimeout(()=>setCopied(false),2000);};
@@ -2348,6 +2403,37 @@ function ScoreScreen({gameRecord,onNav,sound,isReplay=false}){
         </div>
         <div className="score-sublbl">questions correct</div>
         <div className="score-msg">{scoreMsg(gameRecord.score,gameRecord.totalQuestions)}</div>
+
+        {communityStats&&(
+          <div style={{marginTop:14,background:"rgba(255,255,255,.65)",border:"var(--ink)",borderRadius:18,padding:"14px 14px 12px",boxShadow:"var(--shadow-sm)"}}>
+            <div style={{fontFamily:"'Fredoka One',cursive",fontSize:18,color:"var(--black)",marginBottom:8}}>How Other Players Did</div>
+            {communityStats.finishedPlayers<10&&(
+              <div style={{fontSize:12,fontWeight:800,color:"var(--teal-dark)",marginBottom:10}}>
+                You are one of the first players, so these stats may change. Come back later for more accurate results!
+              </div>
+            )}
+            <div style={{display:"grid",gap:8}}>
+              <div style={{fontSize:14,fontWeight:800,color:"var(--black)"}}>Average player scored {communityStats.averageScore}/{gameRecord.totalQuestions}</div>
+              <div style={{fontSize:14,fontWeight:800,color:"var(--black)"}}>You beat {communityStats.beatRate}% of players</div>
+              <div style={{fontSize:14,fontWeight:800,color:"var(--black)"}}>{communityStats.perfectRate}% got a perfect score</div>
+              <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)"}}>{communityStats.finishedPlayers} finished player{communityStats.finishedPlayers===1?"":"s"} counted</div>
+            </div>
+            <button className="btn-sm" style={{marginTop:12,width:"100%"}} onClick={()=>setShowAdvanced(v=>!v)}>
+              {showAdvanced?"Hide advanced stats":"Show advanced stats"}
+            </button>
+            {showAdvanced&&(
+              <div style={{marginTop:10,display:"grid",gap:8}}>
+                {communityStats.questionAccuracies.map((q,idx)=>(
+                  <div key={q.index} style={{background:"rgba(255,255,255,.7)",border:"2px solid rgba(26,26,26,.12)",borderRadius:14,padding:"10px 12px"}}>
+                    <div style={{fontSize:12,fontWeight:900,color:"var(--teal-dark)",textTransform:"uppercase",letterSpacing:.5}}>Question {idx+1}</div>
+                    <div style={{fontSize:14,fontWeight:800,color:"var(--black)",marginTop:2}}>{game?.questions?.[idx]?.itemText||"Accuracy"}</div>
+                    <div style={{fontSize:13,fontWeight:800,color:"rgba(26,26,26,.72)",marginTop:4}}>{q.correctRate}% of players got it right</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="emoji-grid" key={animKey}>
           {gameRecord.answers.map((a,i)=>(
@@ -2681,7 +2767,7 @@ function AdminPreview({game,onBack}){
           </div>
         )}
         {view==="game"&&<GameScreen game={game} gameRecord={pr} onComplete={onComplete} onNav={()=>setView("home")} sound={dummySound} isReplay={true}/>}
-        {view==="score"&&<ScoreScreen gameRecord={pr} onNav={()=>setView("home")} sound={dummySound} isReplay={true}/>}
+        {view==="score"&&<ScoreScreen gameRecord={pr} game={game} onNav={()=>setView("home")} sound={dummySound} isReplay={true}/>}
       </div>
     </div>
   );
@@ -2900,15 +2986,16 @@ export default function WhatTheFudgeTrivia(){
           )}
 
           {view==="score"&&gameRecord&&(
-            <ScoreScreen gameRecord={gameRecord} onNav={setView} sound={sound}/>
+            <ScoreScreen gameRecord={gameRecord} game={todayGame} onNav={setView} sound={sound}/>
           )}
 
           {view==="replay-score"&&replayRecord&&(
-            <ScoreScreen
-              gameRecord={replayRecord}
-              onNav={v=>{if(v==="archive")setView("archive");else setView(v);}}
-              sound={sound}
-              isReplay={true}
+              <ScoreScreen
+                gameRecord={replayRecord}
+                game={replayGame}
+                onNav={v=>{if(v==="archive")setView("archive");else setView(v);}}
+                sound={sound}
+                isReplay={true}
             />
           )}
 
