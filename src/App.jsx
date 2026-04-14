@@ -1307,6 +1307,12 @@ const styles = `
     flex-shrink: 0;
     background: rgba(11, 26, 44, 0.12);
   }
+  .lightning-mark {
+    display: inline-block;
+    object-fit: contain;
+    vertical-align: middle;
+    filter: drop-shadow(0 2px 0 rgba(0,0,0,.16));
+  }
 
   /* ===== IMAGE UPLOADER ===== */
   .img-uploader {
@@ -1454,6 +1460,11 @@ const styles = `
   @keyframes slideUp { from { transform: translateY(18px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   .slide-up { animation: slideUp .3s ease; }
 `;
+
+const LIGHTNING_ICON_SRC = "/lightning-finished.png";
+function LightningMark({size=22, alt="Lightning", style={}}){
+  return <img src={LIGHTNING_ICON_SRC} alt={alt} className="lightning-mark" style={{width:size,height:size,...style}} />;
+}
 
 // ============================================================
 // SOUND ENGINE — Web Audio API, no external deps
@@ -2084,7 +2095,7 @@ function HomeScreen({game,gameRecord,stats,onPlay,onNav}){
     <div>
       <div className="streak-row">
         {stats.currentStreak>0&&<span className="badge badge-orange"><FI name="flame" size={28} style={{marginRight:6}}/>{stats.currentStreak}-day streak</span>}
-        {stats.bestCombo>=3&&<span className="badge badge-purple">⚡ Best combo: {stats.bestCombo}x</span>}
+        {stats.bestCombo>=3&&<span className="badge badge-purple"><LightningMark size={18} style={{marginRight:6}}/>Best combo: {stats.bestCombo}x</span>}
       </div>
       <div className="card" style={{position:"relative",overflow:"hidden"}}>
         {game.headerImage&&(
@@ -2376,7 +2387,7 @@ function StatsScreen({stats,onNav}){
           <div className="stat-tile"><div className="stat-val">{s.longestStreak}</div><div className="stat-lbl">Best Streak</div></div>
           <div className="stat-tile"><div className="stat-val">{s.totalPlayed}</div><div className="stat-lbl">Games</div></div>
           <div className="stat-tile"><div className="stat-val">{pct}%</div><div className="stat-lbl">Accuracy</div></div>
-          <div className="stat-tile"><div className="stat-val">⚡ {s.bestCombo}x</div><div className="stat-lbl">Best Combo Streak</div></div>
+          <div className="stat-tile"><div className="stat-val"><LightningMark size={34} style={{marginRight:6}}/>{s.bestCombo}x</div><div className="stat-lbl">Best Combo Streak</div></div>
         </div>
       </div>
       <div style={{marginTop:12}}><button className="btn-sm" onClick={()=>onNav("home")}>← Back</button></div>
