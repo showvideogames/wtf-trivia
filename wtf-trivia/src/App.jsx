@@ -1909,7 +1909,11 @@ function clearEditorDraft(id){
   return safeRemove(getEditorDraftKey(id));
 }
 function scoreMsg(s,t){const p=s/t;if(p===1)return"🏆 PERFECT!! Absolutely flawless. You are the champion.";if(p>=.875)return"Almost perfect!! Just one little slip.";if(p>=.75)return"Really solid! The theme tried hard. It mostly failed.";if(p>=.5)return"Decent showing! Some of those were genuinely sneaky.";if(p>=.25)return"The theme had you. It happens to everyone.";return"Wow okay. The theme absolutely won today. Tomorrow!";}
-function buildShare(gr){const g=gr.answers.map(a=>a.correct?"🟢":"🔴").join("");return`What The Fudge Trivia 🍬\n${gr.themeTitle}\n${gr.score}/${gr.totalQuestions} ${g}\nwhatthefudgetrivia.com`;}
+function buildShare(gr){
+  const answers = Array.isArray(gr?.answers) ? gr.answers : [];
+  const g=answers.map(a=>a.correct?"🟢":"🔴").join("");
+  return`What The Fudge Trivia 🍬\n${gr?.themeTitle||"Puzzle Results"}\n${gr?.score||0}/${gr?.totalQuestions||0} ${g}\nwhatthefudgetrivia.com`;
+}
 
 
 // ============================================================
@@ -2353,13 +2357,20 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,isR
 
 // ---- SCORE ----
 function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
+  const safeRecord = {
+    themeTitle: gameRecord?.themeTitle||"Puzzle Results",
+    score: Number.isFinite(gameRecord?.score) ? gameRecord.score : 0,
+    totalQuestions: Number.isFinite(gameRecord?.totalQuestions) ? gameRecord.totalQuestions : 0,
+    answers: Array.isArray(gameRecord?.answers) ? gameRecord.answers : [],
+    date: gameRecord?.date||null
+  };
   const[copied,setCopied]=useState(false);
   const[animKey,setAnimKey]=useState(0);
   const[communityStats,setCommunityStats]=useState(null);
   const[showAdvanced,setShowAdvanced]=useState(false);
   const{play}=sound;
   const{canvasRef,shoot}=useConfetti();
-  const isPerfect=gameRecord.score===gameRecord.totalQuestions;
+  const isPerfect=safeRecord.totalQuestions>0&&safeRecord.score===safeRecord.totalQuestions;
 
   useEffect(()=>{
     if(isPerfect){play("perfect");shoot("perfect");}
@@ -2374,14 +2385,14 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
   useEffect(()=>{
     let cancelled = false;
     (async()=>{
-      if(!gameRecord?.date) return;
-      const stats = await dbGetPuzzleCommunityStats(gameRecord.date, gameRecord.score);
+      if(!safeRecord.date) return;
+      const stats = await dbGetPuzzleCommunityStats(safeRecord.date, safeRecord.score);
       if(!cancelled) setCommunityStats(stats);
     })();
     return ()=>{cancelled = true;};
-  },[gameRecord?.date, gameRecord?.score]);
+  },[safeRecord.date, safeRecord.score]);
 
-  const txt=buildShare(gameRecord);
+  const txt=buildShare(safeRecord);
   const share=()=>{try{navigator.clipboard.writeText(txt);}catch{}setCopied(true);setTimeout(()=>setCopied(false),2000);};
 
   return(
@@ -2389,7 +2400,7 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
       <canvas ref={canvasRef} id="confetti-canvas-score" style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:9999}}/>
       <div className="score-card">
         {isReplay&&<div style={{background:"linear-gradient(160deg,#5EEAD4,#2DD4BF 55%,#0F9488)",color:"var(--black)",fontFamily:"'Fredoka One',cursive",fontSize:13,padding:"8px 16px",borderRadius:16,marginBottom:12,border:"2.5px solid var(--teal-dark)",boxShadow:"0 4px 0 var(--teal-dark)",position:"relative"}}>📼 Replay — not saved to your stats</div>}
-        <div className="score-theme-tag">🍬 {gameRecord.themeTitle}</div>
+        <div className="score-theme-tag">🍬 {safeRecord.themeTitle}</div>
 
         {isPerfect&&(
           <div className="perfect-banner">
@@ -2399,10 +2410,10 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
         )}
 
         <div className="score-big">
-          {gameRecord.score}<span className="score-denom">/{gameRecord.totalQuestions}</span>
+          {safeRecord.score}<span className="score-denom">/{safeRecord.totalQuestions}</span>
         </div>
         <div className="score-sublbl">questions correct</div>
-        <div className="score-msg">{scoreMsg(gameRecord.score,gameRecord.totalQuestions)}</div>
+        <div className="score-msg">{scoreMsg(safeRecord.score,safeRecord.totalQuestions||1)}</div>
 
         {communityStats&&(
           <div style={{marginTop:14,background:"rgba(255,255,255,.65)",border:"var(--ink)",borderRadius:18,padding:"14px 14px 12px",boxShadow:"var(--shadow-sm)"}}>
@@ -2413,7 +2424,7 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
               </div>
             )}
             <div style={{display:"grid",gap:8}}>
-              <div style={{fontSize:14,fontWeight:800,color:"var(--black)"}}>Average player scored {communityStats.averageScore}/{gameRecord.totalQuestions}</div>
+              <div style={{fontSize:14,fontWeight:800,color:"var(--black)"}}>Average player scored {communityStats.averageScore}/{safeRecord.totalQuestions}</div>
               <div style={{fontSize:14,fontWeight:800,color:"var(--black)"}}>You beat {communityStats.beatRate}% of players</div>
               <div style={{fontSize:14,fontWeight:800,color:"var(--black)"}}>{communityStats.perfectRate}% got a perfect score</div>
               <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)"}}>{communityStats.finishedPlayers} finished player{communityStats.finishedPlayers===1?"":"s"} counted</div>
@@ -2423,7 +2434,7 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
             </button>
             {showAdvanced&&(
               <div style={{marginTop:10,display:"grid",gap:8}}>
-                {communityStats.questionAccuracies.map((q,idx)=>(
+                {(Array.isArray(communityStats.questionAccuracies)?communityStats.questionAccuracies:[]).map((q,idx)=>(
                   <div key={q.index} style={{background:"rgba(255,255,255,.7)",border:"2px solid rgba(26,26,26,.12)",borderRadius:14,padding:"10px 12px"}}>
                     <div style={{fontSize:12,fontWeight:900,color:"var(--teal-dark)",textTransform:"uppercase",letterSpacing:.5}}>Question {idx+1}</div>
                     <div style={{fontSize:14,fontWeight:800,color:"var(--black)",marginTop:2}}>{game?.questions?.[idx]?.itemText||"Accuracy"}</div>
@@ -2436,7 +2447,7 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
         )}
 
         <div className="emoji-grid" key={animKey}>
-          {gameRecord.answers.map((a,i)=>(
+          {safeRecord.answers.map((a,i)=>(
             <div key={i} className={`emoji-cell ${a.correct?'correct-dot':'wrong-dot'}`} style={{animationDelay:`${i*65}ms`}}/>
           ))}
         </div>
