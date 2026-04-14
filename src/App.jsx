@@ -1016,6 +1016,214 @@ const styles = `
 
   .perfect-sub { font-size: 14px; font-weight: 800; color: rgba(255,255,255,.9); }
 
+  .results-jazz {
+    margin: 14px 0 18px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .results-marquee {
+    background: linear-gradient(135deg, #FF8C00 0%, #FFE347 40%, #FF5C8D 100%);
+    border: 3px solid var(--black);
+    border-radius: 18px;
+    box-shadow: 0 6px 0 rgba(0,0,0,0.22);
+    padding: 12px 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .results-marquee::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border-radius: 13px;
+    background:
+      radial-gradient(circle at 12% 30%, rgba(255,255,255,.55) 0 10px, transparent 11px),
+      radial-gradient(circle at 84% 26%, rgba(255,255,255,.45) 0 7px, transparent 8px),
+      linear-gradient(180deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,0) 70%);
+    pointer-events: none;
+  }
+  .results-marquee-top {
+    font-family: 'Fredoka One', cursive;
+    font-size: 12px;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+    color: rgba(26,26,26,.75);
+    margin-bottom: 4px;
+    position: relative;
+    z-index: 1;
+  }
+  .results-marquee-main {
+    font-family: 'Fredoka One', cursive;
+    font-size: 22px;
+    line-height: 1.08;
+    color: white;
+    -webkit-text-stroke: 1.2px var(--black);
+    text-shadow: 3px 3px 0 rgba(0,0,0,.24);
+    position: relative;
+    z-index: 1;
+  }
+
+  .crowd-wrap {
+    margin-top: 14px;
+    background: linear-gradient(160deg, #FFF6D9 0%, #FFE8F2 52%, #E6FFFB 100%);
+    border: 3px solid var(--black);
+    border-radius: 22px;
+    padding: 14px;
+    box-shadow: 0 6px 0 rgba(0,0,0,0.16);
+    position: relative;
+    overflow: hidden;
+  }
+  .crowd-wrap::before {
+    content: '';
+    position: absolute;
+    top: 4px; left: 12px; right: 12px;
+    height: 26%;
+    border-radius: 18px 18px 50% 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,0) 100%);
+    pointer-events: none;
+  }
+  .crowd-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+    position: relative;
+    z-index: 1;
+  }
+  .crowd-title {
+    font-family: 'Fredoka One', cursive;
+    font-size: 18px;
+    color: var(--black);
+    text-align: left;
+  }
+  .crowd-chip {
+    font-family: 'Fredoka One', cursive;
+    font-size: 11px;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+    color: var(--black);
+    padding: 4px 10px;
+    border-radius: var(--r-pill);
+    border: 2px solid var(--black);
+    background: linear-gradient(180deg, #FFF176 0%, #FFE347 55%, #E6C800 100%);
+    box-shadow: 0 3px 0 rgba(0,0,0,.2);
+    white-space: nowrap;
+  }
+  .crowd-warning {
+    font-size: 12px;
+    font-weight: 900;
+    color: var(--teal-dark);
+    margin-bottom: 10px;
+    background: rgba(255,255,255,.55);
+    border: 2px dashed rgba(15,148,136,.45);
+    border-radius: 14px;
+    padding: 8px 10px;
+    text-align: left;
+    position: relative;
+    z-index: 1;
+  }
+  .crowd-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    position: relative;
+    z-index: 1;
+  }
+  .crowd-stat {
+    border: 3px solid var(--black);
+    border-radius: 18px;
+    padding: 12px 12px 10px;
+    box-shadow: 0 5px 0 rgba(0,0,0,.16);
+    text-align: left;
+    position: relative;
+    overflow: hidden;
+  }
+  .crowd-stat::before {
+    content: '';
+    position: absolute;
+    top: 4px; left: 10px; right: 10px;
+    height: 32%;
+    border-radius: 12px 12px 50% 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,0) 100%);
+    pointer-events: none;
+  }
+  .crowd-stat-avg { background: linear-gradient(160deg, #5EEAD4 0%, #2DD4BF 55%, #0F9488 100%); border-color: var(--teal-dark); }
+  .crowd-stat-beat { background: linear-gradient(160deg, #FF85AA 0%, #FF5C8D 55%, #CC3366 100%); border-color: var(--pink-dark); }
+  .crowd-stat-perfect { background: linear-gradient(160deg, #FFF176 0%, #FFE347 55%, #FB923C 100%); border-color: var(--orange-dark); }
+  .crowd-stat-kicker {
+    font-family: 'Fredoka One', cursive;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    position: relative;
+    z-index: 1;
+  }
+  .crowd-stat-avg .crowd-stat-kicker,
+  .crowd-stat-beat .crowd-stat-kicker { color: rgba(255,255,255,.82); }
+  .crowd-stat-perfect .crowd-stat-kicker { color: rgba(26,26,26,.62); }
+  .crowd-stat-main {
+    font-family: 'Fredoka One', cursive;
+    font-size: 20px;
+    line-height: 1.12;
+    position: relative;
+    z-index: 1;
+  }
+  .crowd-stat-avg .crowd-stat-main,
+  .crowd-stat-beat .crowd-stat-main {
+    color: white;
+    text-shadow: 2px 2px 0 rgba(0,0,0,.2);
+  }
+  .crowd-stat-perfect .crowd-stat-main { color: var(--black); }
+  .crowd-foot {
+    margin-top: 10px;
+    font-size: 12px;
+    font-weight: 900;
+    color: rgba(26,26,26,.66);
+    text-align: center;
+    position: relative;
+    z-index: 1;
+  }
+  .advanced-toggle {
+    margin-top: 12px;
+    width: 100%;
+  }
+  .advanced-panel {
+    margin-top: 10px;
+    display: grid;
+    gap: 8px;
+    position: relative;
+    z-index: 1;
+  }
+  .advanced-card {
+    background: linear-gradient(160deg, rgba(255,255,255,.88) 0%, rgba(255,255,255,.72) 100%);
+    border: 3px solid rgba(26,26,26,.15);
+    border-radius: 16px;
+    padding: 10px 12px;
+    text-align: left;
+    box-shadow: 0 4px 0 rgba(0,0,0,.08);
+  }
+  .advanced-card-top {
+    font-family: 'Fredoka One', cursive;
+    font-size: 12px;
+    color: var(--purple-dark);
+    text-transform: uppercase;
+    letter-spacing: .6px;
+  }
+  .advanced-card-title {
+    font-size: 14px;
+    font-weight: 900;
+    color: var(--black);
+    margin-top: 2px;
+  }
+  .advanced-card-sub {
+    font-size: 13px;
+    font-weight: 800;
+    color: rgba(26,26,26,.72);
+    margin-top: 4px;
+  }
+
   /* ===== COUNTDOWN ===== */
   .cdown-box {
     margin-top: 16px;
@@ -1917,6 +2125,19 @@ function buildShare(gr){
   const g=answers.map(a=>a.correct?"🟢":"🔴").join("");
   return`What The Fudge Trivia 🍬\n${gr?.themeTitle||"Puzzle Results"}\n${gr?.score||0}/${gr?.totalQuestions||0} ${g}\nwhatthefudgetrivia.com`;
 }
+function averageScoreCopy(score,total){
+  return `Average chaos level: ${score}/${total}`;
+}
+function beatRateCopy(rate){
+  if(rate>=90) return `You crushed ${rate}% of the crowd`;
+  if(rate>=60) return `You out-weirded ${rate}% of players`;
+  if(rate>=35) return `You edged out ${rate}% of players`;
+  return `You survived better than ${rate}% of players`;
+}
+function perfectRateCopy(rate){
+  if(rate===0) return "Nobody else nailed a perfect score yet";
+  return `${rate}% joined the perfect goblin club`;
+}
 
 
 // ============================================================
@@ -2418,30 +2639,51 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
         <div className="score-sublbl">questions correct</div>
         <div className="score-msg">{scoreMsg(safeRecord.score,safeRecord.totalQuestions||1)}</div>
 
+        <div className="results-jazz">
+          <div className="results-marquee">
+            <div className="results-marquee-top">Game Show Recap</div>
+            <div className="results-marquee-main">
+              {isPerfect?"Jackpot round cleared!!":"Scoreboard drama delivered!!"}
+            </div>
+          </div>
+        </div>
+
         {communityStats&&(
-          <div style={{marginTop:14,background:"rgba(255,255,255,.65)",border:"var(--ink)",borderRadius:18,padding:"14px 14px 12px",boxShadow:"var(--shadow-sm)"}}>
-            <div style={{fontFamily:"'Fredoka One',cursive",fontSize:18,color:"var(--black)",marginBottom:8}}>How Other Players Did</div>
+          <div className="crowd-wrap">
+            <div className="crowd-head">
+              <div className="crowd-title">How The Crowd Survived</div>
+              <div className="crowd-chip">{communityStats.finishedPlayers} player{communityStats.finishedPlayers===1?"":"s"}</div>
+            </div>
             {communityStats.finishedPlayers<10&&(
-              <div style={{fontSize:12,fontWeight:800,color:"var(--teal-dark)",marginBottom:10}}>
+              <div className="crowd-warning">
                 You are one of the first players, so these stats may change. Come back later for more accurate results!
               </div>
             )}
-            <div style={{display:"grid",gap:8}}>
-              <div style={{fontSize:14,fontWeight:800,color:"var(--black)"}}>Average player scored {communityStats.averageScore}/{safeRecord.totalQuestions}</div>
-              <div style={{fontSize:14,fontWeight:800,color:"var(--black)"}}>You beat {communityStats.beatRate}% of players</div>
-              <div style={{fontSize:14,fontWeight:800,color:"var(--black)"}}>{communityStats.perfectRate}% got a perfect score</div>
-              <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)"}}>{communityStats.finishedPlayers} finished player{communityStats.finishedPlayers===1?"":"s"} counted</div>
+            <div className="crowd-grid">
+              <div className="crowd-stat crowd-stat-avg">
+                <div className="crowd-stat-kicker">Average Chaos</div>
+                <div className="crowd-stat-main">{averageScoreCopy(communityStats.averageScore, safeRecord.totalQuestions)}</div>
+              </div>
+              <div className="crowd-stat crowd-stat-beat">
+                <div className="crowd-stat-kicker">Crowd Showdown</div>
+                <div className="crowd-stat-main">{beatRateCopy(communityStats.beatRate)}</div>
+              </div>
+              <div className="crowd-stat crowd-stat-perfect">
+                <div className="crowd-stat-kicker">Perfect Goblins</div>
+                <div className="crowd-stat-main">{perfectRateCopy(communityStats.perfectRate)}</div>
+              </div>
             </div>
-            <button className="btn-sm" style={{marginTop:12,width:"100%"}} onClick={()=>setShowAdvanced(v=>!v)}>
-              {showAdvanced?"Hide advanced stats":"Show advanced stats"}
+            <div className="crowd-foot">Only finished first attempts count. Replays do not mess with the scoreboard.</div>
+            <button className="btn-sm advanced-toggle" onClick={()=>setShowAdvanced(v=>!v)}>
+              {showAdvanced?"Hide Nerd Mode":"Show Nerd Mode"}
             </button>
             {showAdvanced&&(
-              <div style={{marginTop:10,display:"grid",gap:8}}>
+              <div className="advanced-panel">
                 {(Array.isArray(communityStats.questionAccuracies)?communityStats.questionAccuracies:[]).map((q,idx)=>(
-                  <div key={q.index} style={{background:"rgba(255,255,255,.7)",border:"2px solid rgba(26,26,26,.12)",borderRadius:14,padding:"10px 12px"}}>
-                    <div style={{fontSize:12,fontWeight:900,color:"var(--teal-dark)",textTransform:"uppercase",letterSpacing:.5}}>Question {idx+1}</div>
-                    <div style={{fontSize:14,fontWeight:800,color:"var(--black)",marginTop:2}}>{game?.questions?.[idx]?.itemText||"Accuracy"}</div>
-                    <div style={{fontSize:13,fontWeight:800,color:"rgba(26,26,26,.72)",marginTop:4}}>{q.correctRate}% of players got it right</div>
+                  <div key={q.index} className="advanced-card">
+                    <div className="advanced-card-top">Question {idx+1}</div>
+                    <div className="advanced-card-title">{game?.questions?.[idx]?.itemText||"Accuracy"}</div>
+                    <div className="advanced-card-sub">{q.correctRate}% of players got it right</div>
                   </div>
                 ))}
               </div>
