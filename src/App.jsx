@@ -1829,9 +1829,34 @@ async function dbUpdateStats(playerId, date, score, totalQuestions, answers){
 const ADMIN_PASS = import.meta.env.VITE_ADMIN_PASSWORD?.trim() || "admin123";
 function safeRead(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch{return null;}}
 function safeWrite(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch{return false;}}
+function safeRemove(k){try{localStorage.removeItem(k);return true;}catch{return false;}}
 function calcBestCombo(answers){let best=0,cur=0;for(const a of answers){if(a.correct){cur++;best=Math.max(best,cur);}else cur=0;}return best;}
 function getLocalGameDay(){return new Date().toLocaleDateString("en-CA");}
 function getCountdown(){const n=new Date();const t=new Date(n);t.setDate(t.getDate()+1);t.setHours(0,0,0,0);const d=t-n;return`${String(Math.floor(d/3600000)).padStart(2,"0")}:${String(Math.floor((d%3600000)/60000)).padStart(2,"0")}:${String(Math.floor((d%60000)/1000)).padStart(2,"0")}`;}
+function getEditorDraftKey(id){return `wtf-editor-draft:${id||"unsaved"}`;}
+function normalizeEditorDraft(game){
+  return {
+    ...game,
+    status: game.status==="published" ? "published" : "draft",
+    questions: game.questions||[]
+  };
+}
+function loadEditorDraft(game){
+  if(!game?.id) return game;
+  const saved = safeRead(getEditorDraftKey(game.id));
+  return saved?.game ? {...game, ...saved.game, id: game.id} : game;
+}
+function saveEditorDraft(game){
+  if(!game?.id) return false;
+  return safeWrite(getEditorDraftKey(game.id), {
+    savedAt: Date.now(),
+    game: normalizeEditorDraft(game)
+  });
+}
+function clearEditorDraft(id){
+  if(!id) return false;
+  return safeRemove(getEditorDraftKey(id));
+}
 function scoreMsg(s,t){const p=s/t;if(p===1)return"🏆 PERFECT!! Absolutely flawless. You are the champion.";if(p>=.875)return"Almost perfect!! Just one little slip.";if(p>=.75)return"Really solid! The theme tried hard. It mostly failed.";if(p>=.5)return"Decent showing! Some of those were genuinely sneaky.";if(p>=.25)return"The theme had you. It happens to everyone.";return"Wow okay. The theme absolutely won today. Tomorrow!";}
 function buildShare(gr){const g=gr.answers.map(a=>a.correct?"🟢":"🔴").join("");return`What The Fudge Trivia 🍬\n${gr.themeTitle}\n${gr.score}/${gr.totalQuestions} ${g}\nwhatthefudgetrivia.com`;}
 
@@ -2476,18 +2501,47 @@ function AdminDash({games,onNew,onEdit,onLogout}){
 
 function AdminEditor({game:ig,onSave,onDelete,onBack}){
   const isNew=!ig.id;
-  const[game,setGame]=useState(ig);
+  const[game,setGame]=useState(()=>loadEditorDraft(ig));
   const[showQF,setShowQF]=useState(false);
   const[editQ,setEditQ]=useState(null);
   const[toast,setToast]=useState(null);
   const[preview,setPreview]=useState(false);
+  const[autoSaveState,setAutoSaveState]=useState("idle");
+  const[lastAutoSavedAt,setLastAutoSavedAt]=useState(()=>safeRead(getEditorDraftKey(ig.id))?.savedAt||null);
   const st=m=>{setToast(m);setTimeout(()=>setToast(null),2100);};
   const set=(f,v)=>setGame(g=>({...g,[f]:v}));
   const qc=game.questions?.length??0;
   const ok=qc>=4&&qc<=15;
 
-  const pub=async()=>{if(!ok){st(`Need 4–15 questions (have ${qc})`);return;}const s={...game,status:"published"};st("Saving... ⏳");try{await onSave(s);setGame(s);}catch(e){st("Save failed 😬");}};
-  const dft=async()=>{const s={...game,status:game.status==="published"?"published":"draft"};if(!s.id)s.id=`g-${Date.now()}`;if(!s.questions)s.questions=[];st("Saving... ⏳");try{await onSave(s);}catch(e){st("Save failed 😬");}};
+  useEffect(()=>{
+    const restored = loadEditorDraft(ig);
+    setGame(restored);
+    setShowQF(false);
+    setEditQ(null);
+    setAutoSaveState("idle");
+    setLastAutoSavedAt(safeRead(getEditorDraftKey(ig.id))?.savedAt||null);
+  },[ig]);
+
+  useEffect(()=>{
+    if(!game?.id) return;
+    if(game.status==="published"){
+      clearEditorDraft(game.id);
+      setLastAutoSavedAt(null);
+      setAutoSaveState("idle");
+      return;
+    }
+    setAutoSaveState("saving");
+    const timer = setTimeout(()=>{
+      if(saveEditorDraft(game)){
+        setLastAutoSavedAt(Date.now());
+        setAutoSaveState("saved");
+      }
+    }, 700);
+    return ()=>clearTimeout(timer);
+  },[game]);
+
+  const pub=async()=>{if(!ok){st(`Need 4–15 questions (have ${qc})`);return;}const s={...game,status:"published"};st("Saving... ⏳");try{await onSave(s);clearEditorDraft(s.id);setGame(s);setLastAutoSavedAt(null);setAutoSaveState("idle");}catch(e){st("Save failed 😬");}};
+  const dft=async()=>{const s={...game,status:game.status==="published"?"published":"draft"};if(!s.id)s.id=`g-${Date.now()}`;if(!s.questions)s.questions=[];st("Saving... ⏳");try{await onSave(s);clearEditorDraft(s.id);setGame(s);setLastAutoSavedAt(null);setAutoSaveState("idle");}catch(e){st("Save failed 😬");}};
   const addQ=q=>{setGame(g=>({...g,questions:[...(g.questions??[]),{...q,id:`q-${Date.now()}`,orderIndex:(g.questions?.length??0)+1}]}));setShowQF(false);setEditQ(null);};
   const updQ=u=>setGame(g=>({...g,questions:g.questions.map(q=>q.id===u.id?u:q)}));
   const delQ=id=>setGame(g=>({...g,questions:g.questions.filter(q=>q.id!==id).map((q,i)=>({...q,orderIndex:i+1}))}));
@@ -2506,6 +2560,9 @@ function AdminEditor({game:ig,onSave,onDelete,onBack}){
       <div className="adm-body">
         <div className="adm-card">
           <h3>Game Details</h3>
+          <div style={{fontSize:11,fontWeight:800,color:"rgba(255,255,255,.6)",marginBottom:10}}>
+            {autoSaveState==="saving"?"Auto-saving draft...":lastAutoSavedAt?`Draft auto-saved locally at ${new Date(lastAutoSavedAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}`:"Draft auto-save is on"}
+          </div>
           <div className="adm-field"><label>Date (YYYY-MM-DD)</label><input className="adm-input" value={game.date||""} placeholder="2025-06-11" onChange={e=>set("date",e.target.value)}/></div>
           <div className="adm-field"><label>Theme Title</label><input className="adm-input" value={game.themeTitle||""} placeholder="Board Game or Nicolas Cage Movie?" onChange={e=>set("themeTitle",e.target.value)}/></div>
           <div style={{display:"flex",gap:9}}>
