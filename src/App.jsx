@@ -2205,8 +2205,8 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,isR
   const cq=qs[idx];
   const isLast=idx===qs.length-1;
 
-  // Guard: if we're past the last question (transitioning to score screen), render nothing
-  if(!cq && phase!=="reveal") return null;
+  // Guard: once we've advanced past the last question, stop rendering question/reveal UI.
+  if(!cq) return null;
 
   // Pick a fresh suspense emoji each time a new question starts
   useEffect(()=>{
@@ -2892,12 +2892,12 @@ export default function WhatTheFudgeTrivia(){
   const handleComplete = async(finalRec) => {
     if(!player) return;
     setGameRecord(finalRec);
+    setView("score");
     try {
       await dbCompleteGame(player.id, finalRec.date, finalRec.answers, finalRec.score, finalRec.totalQuestions);
       const newStats = await dbGetStats(player.id);
       setStats(newStats);
     } catch(e){ console.error("Complete game error:", e); }
-    setView("score");
   };
 
   // Replay
