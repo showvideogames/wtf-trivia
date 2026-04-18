@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
 
 // ============================================================
 // WHAT THE FUDGE TRIVIA — FUDGE CANDY EDITION
@@ -1821,15 +1822,74 @@ function useConfetti() {
 // ============================================================
 // SUPABASE CLIENT
 // ============================================================
-const SB_URL = "https://ujhwjxjgrygchtnzwvjk.supabase.co";
-const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqaHdqeGpncnlnY2h0bnp3dmprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4NzUxMTQsImV4cCI6MjA5MTQ1MTExNH0.h_gvl60ZwMtOvZplHvvhiTiW_DKTjEqEz1r5QOPOTc4";
+const SB_URL = import.meta.env.VITE_SUPABASE_URL?.trim() || "";
+const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() || "";
+const SUPABASE_READY = Boolean(SB_URL && SB_KEY);
+const supabase = SUPABASE_READY ? createClient(SB_URL, SB_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+}) : null;
+
+function isAnonymousUser(user){
+  return Boolean(user?.is_anonymous ?? (!user?.email && (!Array.isArray(user?.identities) || user.identities.length===0)));
+}
+async function getAuthSession(){
+  if(!supabase) return null;
+  const { data, error } = await supabase.auth.getSession();
+  if(error) throw error;
+  return data.session;
+}
+async function authEnsureSession(){
+  if(!supabase) throw new Error("Supabase Auth is not configured.");
+  const existing = await getAuthSession();
+  if(existing?.user) return existing;
+  const { data, error } = await supabase.auth.signInAnonymously();
+  if(error) throw error;
+  return data.session;
+}
+async function authSendMagicLink(email){
+  if(!supabase) throw new Error("Supabase Auth is not configured.");
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.origin }
+  });
+  if(error) throw error;
+}
+async function authUpgradeAnonymousUser(email){
+  if(!supabase) throw new Error("Supabase Auth is not configured.");
+  const { data, error } = await supabase.auth.updateUser({ email });
+  if(error) throw error;
+  return data.user;
+}
+async function authSignOutToGuest(){
+  if(!supabase) return null;
+  const { error } = await supabase.auth.signOut();
+  if(error) throw error;
+  return authEnsureSession();
+}
+function authSubscribe(onChange){
+  if(!supabase) return { data: { subscription: { unsubscribe(){} } } };
+  return supabase.auth.onAuthStateChange((_event, session)=>onChange(session));
+}
+function formatAuthError(err){
+  const msg = err?.message||"Something went sideways.";
+  if(msg.toLowerCase().includes("anonymous sign-ins")) return "Enable Anonymous Sign-Ins in Supabase Auth first.";
+  if(msg.toLowerCase().includes("email rate limit")) return "Too many email requests. Try again in a minute.";
+  return msg;
+}
 
 async function sbFetch(path, opts={}){
+  if(!SUPABASE_READY) throw new Error("Supabase is not configured.");
+  const session = await getAuthSession();
+  const accessToken = session?.access_token || SB_KEY;
   const res = await fetch(`${SB_URL}${path}`, {
     ...opts,
     headers:{
       "apikey": SB_KEY,
-      "Authorization": `Bearer ${SB_KEY}`,
+      "Authorization": `Bearer ${accessToken}`,
       "Content-Type": "application/json",
       "Prefer": "return=representation",
       ...(opts.headers||{})
@@ -1846,6 +1906,7 @@ async function sbFetch(path, opts={}){
 // ===== IMAGE UPLOAD to Supabase Storage =====
 async function uploadImage(dataUri, folder="images"){
   if(!dataUri || !dataUri.startsWith("data:")) return dataUri; // already a URL
+  if(!SUPABASE_READY) throw new Error("Supabase is not configured.");
   const [meta, b64] = dataUri.split(",");
   const mime = meta.match(/:(.*?);/)[1];
   const ext = mime.split("/")[1] || "png";
@@ -1939,21 +2000,24 @@ async function dbDeleteGame(id){
 }
 
 // ===== DB FUNCTIONS — PLAYERS =====
-async function dbGetOrCreatePlayer(){
-  let player = safeRead("wtf_player");
-  if(!player){
-    player = {id: crypto.randomUUID(), createdAt: new Date().toISOString()};
-    safeWrite("wtf_player", player);
-  }
-  // Upsert to DB
-  try {
-    await sbFetch("/rest/v1/players", {
-      method:"POST",
-      headers:{"Prefer":"resolution=ignore-duplicates"},
-      body: JSON.stringify({id: player.id})
-    });
-  } catch(e){ /* ignore if already exists */ }
-  return player;
+async function dbGetOrCreatePlayer(user){
+  if(!user) return null;
+  await sbFetch("/rest/v1/players", {
+    method:"POST",
+    headers:{"Prefer":"resolution=merge-duplicates"},
+    body: JSON.stringify({
+      id: user.id,
+      email: user.email||null,
+      is_guest: isAnonymousUser(user),
+      last_seen_at: new Date().toISOString()
+    })
+  });
+  return {
+    id: user.id,
+    email: user.email||null,
+    isGuest: isAnonymousUser(user),
+    createdAt: user.created_at||new Date().toISOString()
+  };
 }
 
 // ===== DB FUNCTIONS — GAME RECORDS =====
@@ -2004,9 +2068,9 @@ async function dbCompleteGame(playerId, date, answers, score, totalQuestions){
 }
 async function dbGetPuzzleCommunityStats(date, userScore){
   try {
-    const rows = await sbFetch(`/rest/v1/game_records?game_date=eq.${date}&completed=eq.true&select=score,total_questions,answers`);
-    const finished = rows||[];
-    if(!finished.length){
+    const rows = await sbFetch(`/rest/v1/puzzle_stats?game_date=eq.${date}&select=*`);
+    const stats = rows?.[0];
+    if(!stats){
       return {
         finishedPlayers: 0,
         averageScore: 0,
@@ -2015,30 +2079,26 @@ async function dbGetPuzzleCommunityStats(date, userScore){
         questionAccuracies: []
       };
     }
-    const totalQuestions = finished[0]?.total_questions||0;
-    const totalScore = finished.reduce((sum,r)=>sum+(r.score||0),0);
-    const perfectCount = finished.filter(r=>(r.score||0)===(r.total_questions||0)).length;
-    const beatenCount = finished.filter(r=>(r.score||0)<=userScore).length;
+    const totalQuestions = stats.total_questions||0;
+    const histogram = stats.score_histogram||{};
+    const beatenCount = Object.entries(histogram).reduce((sum,[score,count])=>{
+      return Number(score)<=userScore ? sum + (Number(count)||0) : sum;
+    },0);
+    const correctCounts = Array.isArray(stats.question_correct_counts) ? stats.question_correct_counts : [];
+    const answerCounts = Array.isArray(stats.question_answer_counts) ? stats.question_answer_counts : [];
     const questionAccuracies = Array.from({length:totalQuestions},(_,idx)=>{
-      let answered = 0;
-      let correct = 0;
-      finished.forEach(r=>{
-        const ans = Array.isArray(r.answers) ? r.answers[idx] : null;
-        if(ans){
-          answered += 1;
-          if(ans.correct) correct += 1;
-        }
-      });
+      const answered = Number(answerCounts[idx]||0);
+      const correct = Number(correctCounts[idx]||0);
       return {
         index: idx,
         correctRate: answered ? Math.round(correct/answered*100) : 0
       };
     });
     return {
-      finishedPlayers: finished.length,
-      averageScore: Math.round(totalScore/finished.length),
-      beatRate: Math.round(beatenCount/finished.length*100),
-      perfectRate: Math.round(perfectCount/finished.length*100),
+      finishedPlayers: stats.total_finished||0,
+      averageScore: stats.total_finished ? Math.round((stats.total_score||0)/stats.total_finished) : 0,
+      beatRate: stats.total_finished ? Math.round(beatenCount/stats.total_finished*100) : 0,
+      perfectRate: stats.total_finished ? Math.round((stats.perfect_count||0)/stats.total_finished*100) : 0,
       questionAccuracies
     };
   } catch(e){
@@ -2846,6 +2906,68 @@ function ArchiveScreen({games,playerId,onNav,onReplay}){
   );
 }
 
+function AccountScreen({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy}){
+  const[email,setEmail]=useState(player?.email||"");
+  const guest = player?.isGuest;
+
+  const submitUpgrade=()=>{
+    const trimmed = email.trim();
+    if(trimmed) onUpgrade(trimmed);
+  };
+  const submitMagic=()=>{
+    const trimmed = email.trim();
+    if(trimmed) onMagicLink(trimmed);
+  };
+
+  return(
+    <div>
+      <div className="sec-head">Account</div>
+      <div className="sec-sub">Play as a guest first, then lock in your streak whenever you want.</div>
+      <div className="card">
+        <div style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Fredoka One',cursive",fontSize:12,padding:"6px 14px",borderRadius:999,border:"2px solid var(--black)",boxShadow:"var(--shadow-sm)",background:guest?"linear-gradient(180deg,#FFF176 0%,#FFE347 55%,#E6C800 100%)":"linear-gradient(180deg,#C084FC 0%,#A855F7 55%,#7E22CE 100%)",color:guest?"var(--black)":"white",marginBottom:14}}>
+          {guest?"Guest Mode":"Account Ready"}
+        </div>
+        <div style={{fontSize:14,fontWeight:800,color:"var(--black)",marginBottom:8}}>
+          {guest?"You're playing as a guest right now.":"You're signed in and your progress can follow you across devices."}
+        </div>
+        <div style={{fontSize:13,fontWeight:700,color:"#666",lineHeight:1.5,marginBottom:16}}>
+          {guest?"Upgrade this guest to a real account by attaching an email.":"Magic links let you pop back into this same account without passwords."}
+        </div>
+
+        <div className="adm-field" style={{marginBottom:12}}>
+          <label>Email</label>
+          <input className="adm-input" value={email} placeholder="you@example.com" onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submitUpgrade()}/>
+        </div>
+
+        {guest?(
+          <>
+            <button className="btn btn-yellow" onClick={submitUpgrade} disabled={authBusy||!email.trim()} style={{marginBottom:10}}>
+              {authBusy?"Working on it...":"Save This Guest To My Email"}
+            </button>
+            <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",marginBottom:16}}>
+              We'll email you a confirmation link so this guest account becomes permanent.
+            </div>
+            <div style={{borderTop:"2px dashed rgba(45,212,191,0.3)",paddingTop:14}}>
+              <div style={{fontFamily:"'Fredoka One',cursive",fontSize:13,color:"var(--teal-dark)",marginBottom:8}}>Already have an account?</div>
+              <button className="btn btn-teal" onClick={submitMagic} disabled={authBusy||!email.trim()}>
+                {authBusy?"Sending..." :"Email Me A Magic Link"}
+              </button>
+            </div>
+          </>
+        ):(
+          <>
+            <div style={{fontSize:14,fontWeight:900,color:"var(--black)",marginBottom:14}}>{player?.email||"Signed in"}</div>
+            <button className="btn btn-pink" onClick={onSignOut} disabled={authBusy}>
+              {authBusy?"Switching..." :"Sign Out To Guest Mode"}
+            </button>
+          </>
+        )}
+      </div>
+      <div style={{marginTop:12}}><button className="btn-sm" onClick={()=>onNav("home")}>← Back</button></div>
+    </div>
+  );
+}
+
 // ============================================================
 // ADMIN
 // ============================================================
@@ -3104,41 +3226,106 @@ export default function WhatTheFudgeTrivia(){
   const[gameRecord,setGameRecord]=useState(null);
   const[loading,setLoading]=useState(true);
   const[error,setError]=useState(null);
+  const[authBusy,setAuthBusy]=useState(false);
 
   const sound=useSoundEngine();
   const today=getLocalGameDay();
 
-  // Boot: load player, games, stats, today's record
+  const loadAppData = useCallback(async(sessionOverride=null)=>{
+    const session = sessionOverride || await authEnsureSession();
+    const p = await dbGetOrCreatePlayer(session?.user);
+    setPlayer(p);
+    const [allGames, playerStats] = await Promise.all([
+      dbLoadGames(),
+      dbGetStats(p.id)
+    ]);
+    setGames(allGames);
+    setStats(playerStats);
+    const todayG = allGames.find(g=>g.date===today&&g.status==="published");
+    if(todayG){
+      const rec = await dbGetGameRecord(p.id, today);
+      setGameRecord(rec);
+    } else {
+      setGameRecord(null);
+    }
+  },[today]);
+
+  // Boot and listen for auth session changes
   useEffect(()=>{
-    (async()=>{
+    let active = true;
+    const boot = async()=>{
       try {
         setLoading(true);
-        const p = await dbGetOrCreatePlayer();
-        setPlayer(p);
-        const [allGames, playerStats] = await Promise.all([
-          dbLoadGames(),
-          dbGetStats(p.id)
-        ]);
-        setGames(allGames);
-        setStats(playerStats);
-        // Load today's game record if exists
-        const todayG = allGames.find(g=>g.date===today&&g.status==="published");
-        if(todayG){
-          const rec = await dbGetGameRecord(p.id, today);
-          setGameRecord(rec);
-        }
+        setError(null);
+        await loadAppData();
       } catch(e){
         setError("Couldn't connect to server. Check your connection.");
         console.error(e);
       } finally {
-        setLoading(false);
+        if(active) setLoading(false);
       }
-    })();
-  },[]);
+    };
+    boot();
+    const { data:{ subscription } } = authSubscribe(async session=>{
+      if(!active) return;
+      try{
+        setLoading(true);
+        setError(null);
+        const ensured = session?.user ? session : await authEnsureSession();
+        await loadAppData(ensured);
+      }catch(e){
+        setError("Couldn't connect to server. Check your connection.");
+        console.error(e);
+      }finally{
+        if(active) setLoading(false);
+      }
+    });
+    return ()=>{
+      active = false;
+      subscription.unsubscribe();
+    };
+  },[loadAppData]);
 
   const todayGame = games.find(g=>g.date===today&&g.status==="published") || null;
 
   const showToast = m => { setToast(m); setTimeout(()=>setToast(null),2100); };
+
+  const handleUpgradeAccount = async email => {
+    try{
+      setAuthBusy(true);
+      await authUpgradeAnonymousUser(email);
+      showToast("Check your email to confirm this account.");
+    }catch(e){
+      showToast(formatAuthError(e));
+    }finally{
+      setAuthBusy(false);
+    }
+  };
+
+  const handleMagicLink = async email => {
+    try{
+      setAuthBusy(true);
+      await authSendMagicLink(email);
+      showToast("Magic link sent! Check your email.");
+    }catch(e){
+      showToast(formatAuthError(e));
+    }finally{
+      setAuthBusy(false);
+    }
+  };
+
+  const handleSignOut = async() => {
+    try{
+      setAuthBusy(true);
+      await authSignOutToGuest();
+      setView("home");
+      showToast("Signed out. You're back in guest mode.");
+    }catch(e){
+      showToast(formatAuthError(e));
+    }finally{
+      setAuthBusy(false);
+    }
+  };
 
   // Refresh games from DB (called after admin saves)
   const refreshGames = async() => {
@@ -3253,6 +3440,9 @@ export default function WhatTheFudgeTrivia(){
               {sound.muted?"🔇":"🔊"}
             </button>
             <button className="nav-btn" style={{background:"linear-gradient(180deg,#5EEAD4,#2DD4BF 60%,#0F9488)",color:"var(--black)",borderColor:"var(--teal-dark)",boxShadow:"0 3px 0 var(--teal-dark)"}} onClick={()=>setView("home")}>Home</button>
+            <button className="nav-btn" style={{background:player?.isGuest?"linear-gradient(180deg,#FFF176,#FFE347 60%,#E6C800)":"linear-gradient(180deg,#C084FC,#A855F7 60%,#7E22CE)",color:player?.isGuest?"var(--black)":"white",borderColor:player?.isGuest?"var(--yellow-dark)":"var(--purple-dark)",boxShadow:player?.isGuest?"0 3px 0 var(--yellow-dark)":"0 3px 0 var(--purple-dark)"}} onClick={()=>setView("account")}>
+              {player?.isGuest?"Guest":"Account"}
+            </button>
             <button className="nav-btn" style={{background:"linear-gradient(180deg,#FF85AA,#FF5C8D 60%,#CC3366)",color:"white",borderColor:"var(--pink-dark)",boxShadow:"0 3px 0 var(--pink-dark)"}} onClick={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}><FI name="gear" size={26} style={{marginRight:6}}/>Admin</button>
           </div>
         </div>
@@ -3312,6 +3502,7 @@ export default function WhatTheFudgeTrivia(){
           )}
 
           {view==="stats"&&<StatsScreen stats={stats} onNav={setView}/>}
+          {view==="account"&&<AccountScreen player={player} onNav={setView} onUpgrade={handleUpgradeAccount} onMagicLink={handleMagicLink} onSignOut={handleSignOut} authBusy={authBusy}/>}
 
           {view==="archive"&&(
             <ArchiveScreen

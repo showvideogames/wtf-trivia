@@ -5,6 +5,7 @@ WTF Trivia is a React + Vite trivia game with:
 - a public daily game experience
 - an archive/replay flow
 - an admin editor for creating and publishing games
+- guest-first Supabase Auth with optional email upgrade later
 - Supabase persistence for games, players, records, stats, and uploaded images
 
 ## Local setup
@@ -31,9 +32,21 @@ Add the same environment variables in Vercel for Production, Preview, and Develo
 
 Run the SQL in [supabase/schema.sql](C:\Users\leviw\wtf-trivia-fix\wtf-trivia\supabase\schema.sql) in the Supabase SQL editor.
 
-This app currently uses the public anon key from the browser, so your Row Level Security policies matter. The included schema enables the reads and writes this app expects.
+In `Authentication > Providers`, enable:
+
+- `Anonymous Sign-Ins`
+- `Email` sign-in
+
+In `Authentication > URL Configuration`, add your site URL and any local dev URL you use so magic-link redirects land back in the app.
+
+This app now uses Supabase Auth from the browser, so Row Level Security is the real ownership boundary. The included schema is designed for:
+
+- guest players getting an anonymous auth user automatically
+- upgrading that guest later with an email login
+- player-owned game records and lifetime stats tied to `auth.uid()`
+- public aggregate puzzle stats for results pages
 
 ## Notes
 
 - The admin login is still client-side, so `VITE_ADMIN_PASSWORD` is obfuscation rather than true security.
-- If you want, the next hardening step is to move admin writes and image uploads behind Vercel serverless functions with a real server-side secret.
+- The current admin write path is still browser-side. Long term, the next hardening step is moving admin writes and image uploads behind Vercel serverless functions with a real server-side secret or a proper admin role.
