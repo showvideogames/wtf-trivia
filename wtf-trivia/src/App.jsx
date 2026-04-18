@@ -2009,21 +2009,27 @@ async function dbDeleteGame(id){
 // ===== DB FUNCTIONS — PLAYERS =====
 async function dbGetOrCreatePlayer(user){
   if(!user) return null;
-  await sbFetch("/rest/v1/players", {
-    method:"POST",
-    headers:{"Prefer":"resolution=merge-duplicates"},
-    body: JSON.stringify({
-      id: user.id,
-      email: user.email||null,
-      is_guest: isAnonymousUser(user),
-      last_seen_at: new Date().toISOString()
-    })
-  });
+  try{
+    await sbFetch("/rest/v1/players", {
+      method:"POST",
+      headers:{"Prefer":"resolution=ignore-duplicates"},
+      body: JSON.stringify({
+        id: user.id,
+        email: user.email||null,
+        is_guest: isAnonymousUser(user),
+        last_seen_at: new Date().toISOString()
+      })
+    });
+  }catch(e){
+    if(!String(e?.message||"").includes("duplicate key")) throw e;
+  }
+  const rows = await sbFetch(`/rest/v1/players?id=eq.${user.id}&select=*`);
+  const row = rows?.[0];
   return {
     id: user.id,
-    email: user.email||null,
-    isGuest: isAnonymousUser(user),
-    createdAt: user.created_at||new Date().toISOString()
+    email: row?.email ?? user.email ?? null,
+    isGuest: row?.is_guest ?? isAnonymousUser(user),
+    createdAt: row?.created_at ?? user.created_at ?? new Date().toISOString()
   };
 }
 
