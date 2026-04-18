@@ -2698,6 +2698,17 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
         <div className="score-sublbl">questions correct</div>
         <div className="score-msg">{scoreMsg(safeRecord.score,safeRecord.totalQuestions||1)}</div>
 
+        <div className="emoji-grid" key={animKey}>
+          {safeRecord.answers.map((a,i)=>(
+            <div key={i} className={`emoji-cell ${a.correct?'correct-dot':'wrong-dot'}`} style={{animationDelay:`${i*65}ms`}}/>
+          ))}
+        </div>
+
+        {!isReplay&&<><div className="share-box">{txt}</div>
+        <button className="btn btn-pink" onClick={share} style={{marginBottom:10}}>
+          {copied?"✓ Copied to clipboard!!":"Copy & Share 📋"}
+        </button></>}
+
         <div className="results-jazz">
           <div className="results-marquee">
             <div className="results-marquee-top">Game Show Recap</div>
@@ -2749,17 +2760,6 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
             )}
           </div>
         )}
-
-        <div className="emoji-grid" key={animKey}>
-          {safeRecord.answers.map((a,i)=>(
-            <div key={i} className={`emoji-cell ${a.correct?'correct-dot':'wrong-dot'}`} style={{animationDelay:`${i*65}ms`}}/>
-          ))}
-        </div>
-
-        {!isReplay&&<><div className="share-box">{txt}</div>
-        <button className="btn btn-pink" onClick={share} style={{marginBottom:10}}>
-          {copied?"✓ Copied to clipboard!!":"Copy & Share 📋"}
-        </button></>}
 
         <button className="btn btn-yellow" onClick={()=>onNav(isReplay?"archive":"home")}>
           {isReplay?"← Back to archive":"← Back to home"}
