@@ -1883,7 +1883,14 @@ function formatAuthError(err){
 
 async function sbFetch(path, opts={}){
   if(!SUPABASE_READY) throw new Error("Supabase is not configured.");
-  const session = await getAuthSession();
+  let session = await getAuthSession();
+  if(!session?.access_token && supabase){
+    try{
+      session = await authEnsureSession();
+    }catch{
+      session = null;
+    }
+  }
   const accessToken = session?.access_token || SB_KEY;
   const res = await fetch(`${SB_URL}${path}`, {
     ...opts,
