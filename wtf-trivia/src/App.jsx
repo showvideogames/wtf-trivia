@@ -3005,21 +3005,21 @@ function AccountScreenV2({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy,
 
   return(
     <div>
-      <div className="sec-head">Account</div>
-      <div className="sec-sub">Keep your trivia stats safe and hop between devices without losing your streak.</div>
+      <div className="sec-head">{guest?"Sign In":"Account"}</div>
+      <div className="sec-sub">{guest?"Sign in to save your streak and sync it across devices.":"You're signed in, so your stats can follow you across devices."}</div>
       <div className="card">
         {guest?(
           <div style={{maxWidth:430,margin:"0 auto",textAlign:"center"}}>
             <div style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Fredoka One',cursive",fontSize:12,padding:"6px 14px",borderRadius:999,border:"2px solid var(--black)",boxShadow:"var(--shadow-sm)",background:"linear-gradient(180deg,#FFF176 0%,#FFE347 55%,#E6C800 100%)",color:"var(--black)",marginBottom:16}}>
-              Guest Mode
+              Not Signed In
             </div>
             <div style={{fontFamily:"'Fredoka One',cursive",fontSize:32,lineHeight:1.15,color:"var(--black)",marginBottom:14}}>
-              Secure your stats
+              Save your stats
               <br/>
               with an account
             </div>
             <div style={{fontSize:14,fontWeight:700,color:"#666",lineHeight:1.6,margin:"0 auto 18px",maxWidth:380}}>
-              Use your email to save this guest run or jump back into an existing trivia account. Your streak and stats will follow you across logged-in devices.
+              Use your email to save this device's progress or sign back into an existing trivia account. Your streak and stats will sync anywhere you're signed in.
             </div>
             <input
               className="adm-input"
@@ -3030,10 +3030,10 @@ function AccountScreenV2({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy,
               style={{textAlign:"center",fontSize:18,fontWeight:900,padding:"18px 16px",marginBottom:12}}
             />
             <button className="btn btn-yellow" onClick={submitUpgrade} disabled={authBusy||!email.trim()} style={{fontSize:24,marginBottom:12}}>
-              {isUpgrading?"Sending guest-save email...":"Continue"}
+              {isUpgrading?"Sending sign-in email...":"Continue"}
             </button>
             <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",lineHeight:1.5,marginBottom:18}}>
-              We'll email you a link to save this guest progress. It does not set or change a password.
+              We'll email you a sign-in link. If this email is new, we'll create your account and keep this device's current progress with it.
             </div>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
               <div style={{flex:1,height:2,background:"rgba(26,26,26,.12)"}}/>
@@ -3044,13 +3044,13 @@ function AccountScreenV2({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy,
               {isMagicLink?"Sending magic link..." :"Continue with existing account"}
             </button>
             <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",lineHeight:1.5}}>
-              Already used this email before? We'll send a sign-in link instead.
+              Already have an account? Use this to sign back in without a password.
             </div>
           </div>
         ):(
           <div style={{maxWidth:430,margin:"0 auto",textAlign:"center"}}>
             <div style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Fredoka One',cursive",fontSize:12,padding:"6px 14px",borderRadius:999,border:"2px solid var(--black)",boxShadow:"var(--shadow-sm)",background:"linear-gradient(180deg,#C084FC 0%,#A855F7 55%,#7E22CE 100%)",color:"white",marginBottom:16}}>
-              Account Ready
+              Signed In
             </div>
             <div style={{fontFamily:"'Fredoka One',cursive",fontSize:30,lineHeight:1.15,color:"var(--black)",marginBottom:14}}>
               Your stats are
@@ -3061,10 +3061,10 @@ function AccountScreenV2({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy,
               You're signed in as <strong style={{color:"var(--black)"}}>{player?.email||"this account"}</strong>. Your progress can now follow you across devices.
             </div>
             <button className="btn btn-pink" onClick={onSignOut} disabled={authBusy} style={{marginBottom:10}}>
-              {isSigningOut?"Switching to guest mode..." :"Sign Out To Guest Mode"}
+              {isSigningOut?"Signing out..." :"Sign Out"}
             </button>
             <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",lineHeight:1.5}}>
-              Signing out puts this browser back into guest mode until you use another email link.
+              After signing out, you can still play on this device without being signed in.
             </div>
           </div>
         )}
@@ -3403,7 +3403,7 @@ export default function WhatTheFudgeTrivia(){
       setAuthMode("upgrade");
       setAuthBusy(true);
       await authUpgradeAnonymousUser(email);
-      showToast("Check your email to save this guest account.");
+      showToast("Check your email to finish signing in.");
     }catch(e){
       showToast(formatAuthError(e));
     }finally{
@@ -3432,7 +3432,7 @@ export default function WhatTheFudgeTrivia(){
       setAuthBusy(true);
       await authSignOutToGuest();
       setView("home");
-      showToast("Signed out. You're back in guest mode.");
+      showToast("Signed out.");
     }catch(e){
       showToast(formatAuthError(e));
     }finally{
@@ -3568,7 +3568,7 @@ export default function WhatTheFudgeTrivia(){
             </button>
             <button className="nav-btn" style={{background:"linear-gradient(180deg,#5EEAD4,#2DD4BF 60%,#0F9488)",color:"var(--black)",borderColor:"var(--teal-dark)",boxShadow:"0 3px 0 var(--teal-dark)"}} onClick={()=>setView("home")}>Home</button>
             <button className="nav-btn" style={{background:player?.isGuest?"linear-gradient(180deg,#FFF176,#FFE347 60%,#E6C800)":"linear-gradient(180deg,#C084FC,#A855F7 60%,#7E22CE)",color:player?.isGuest?"var(--black)":"white",borderColor:player?.isGuest?"var(--yellow-dark)":"var(--purple-dark)",boxShadow:player?.isGuest?"0 3px 0 var(--yellow-dark)":"0 3px 0 var(--purple-dark)"}} onClick={()=>setView("account")}>
-              {player?.isGuest?"Guest":"Account"}
+              {player?.isGuest?"Sign In":"Account"}
             </button>
             <button className="nav-btn" style={{background:"linear-gradient(180deg,#FF85AA,#FF5C8D 60%,#CC3366)",color:"white",borderColor:"var(--pink-dark)",boxShadow:"0 3px 0 var(--pink-dark)"}} onClick={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}><FI name="gear" size={26} style={{marginRight:6}}/>Admin</button>
           </div>
