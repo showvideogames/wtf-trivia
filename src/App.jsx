@@ -3369,13 +3369,26 @@ export default function WhatTheFudgeTrivia(){
 
   // Start game
   const handlePlay = async() => {
-    if(!todayGame||!player) return;
+    if(!todayGame) return;
     sound.play("click");
     try {
-      const rec = await dbInitGameRecord(player.id, today, todayGame.themeTitle, todayGame.questions.length);
+      let activePlayer = player;
+      if(!activePlayer){
+        const session = await authEnsureSession();
+        activePlayer = await dbGetOrCreatePlayer(session?.user);
+        setPlayer(activePlayer);
+      }
+      if(!activePlayer){
+        showToast("Still connecting... try again in a sec.");
+        return;
+      }
+      const rec = await dbInitGameRecord(activePlayer.id, today, todayGame.themeTitle, todayGame.questions.length);
       setGameRecord(rec);
       setView("game");
-    } catch(e){ showToast("Couldn't start game 😬"); }
+    } catch(e){
+      console.error("Start game error:", e);
+      showToast("Couldn't start game 😬");
+    }
   };
 
   // Record an answer mid-game
