@@ -1872,7 +1872,7 @@ async function authSignOutToGuest(){
 }
 function authSubscribe(onChange){
   if(!supabase) return { data: { subscription: { unsubscribe(){} } } };
-  return supabase.auth.onAuthStateChange((_event, session)=>onChange(session));
+  return supabase.auth.onAuthStateChange((event, session)=>onChange(event, session));
 }
 function formatAuthError(err){
   const msg = err?.message||"Something went sideways.";
@@ -3279,18 +3279,16 @@ export default function WhatTheFudgeTrivia(){
       }
     };
     boot();
-    const { data:{ subscription } } = authSubscribe(async session=>{
+    const { data:{ subscription } } = authSubscribe(async (event, session)=>{
       if(!active) return;
+      if(event==="TOKEN_REFRESHED") return;
       try{
-        setLoading(true);
         setError(null);
         const ensured = session?.user ? session : await authEnsureSession();
         await loadAppData(ensured);
       }catch(e){
         setError("Couldn't connect to server. Check your connection.");
         console.error(e);
-      }finally{
-        if(active) setLoading(false);
       }
     });
     return ()=>{
