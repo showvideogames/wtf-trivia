@@ -128,17 +128,16 @@ as $$
   );
 $$;
 
-create or replace function public.apply_completed_game_to_puzzle_stats(target_record public.game_records)
+create or replace function public.rebuild_single_puzzle_stats(target_game_date date)
 returns void
 language plpgsql
+security definer
+set search_path = public
 as $$
-declare
-  answer jsonb;
-  answer_index integer := 0;
-  working_correct jsonb := '[]'::jsonb;
-  working_answered jsonb := '[]'::jsonb;
-  working_histogram jsonb := '{}'::jsonb;
 begin
+  delete from public.puzzle_stats
+  where game_date = target_game_date;
+
   insert into public.puzzle_stats (
     game_date,
     total_finished,
@@ -147,58 +146,100 @@ begin
     total_questions,
     question_correct_counts,
     question_answer_counts,
-    score_histogram
+    score_histogram,
+    updated_at
   )
-  values (
-    target_record.game_date,
-    0,
-    0,
-    0,
-    target_record.total_questions,
-    '[]'::jsonb,
-    '[]'::jsonb,
-    '{}'::jsonb
+  with completed_records as (
+    select *
+    from public.game_records
+    where completed = true
+      and game_date::date = target_game_date
+  ),
+  base as (
+    select
+      target_game_date::date as game_date,
+      count(*)::int as total_finished,
+      coalesce(sum(score), 0)::int as total_score,
+      count(*) filter (
+        where total_questions > 0 and score = total_questions
+      )::int as perfect_count,
+      coalesce(max(total_questions), 0)::int as total_questions
+    from completed_records
+  ),
+  idxs as (
+    select generate_series(
+      0,
+      greatest((select total_questions from base) - 1, 0)
+    ) as idx
+  ),
+  question_rollup as (
+    select
+      i.idx,
+      count(a.elem)::int as answered_count,
+      count(*) filter (
+        where coalesce((a.elem ->> 'correct')::boolean, false)
+      )::int as correct_count
+    from idxs i
+    left join completed_records cr on true
+    left join lateral (
+      select elem
+      from jsonb_array_elements(cr.answers) with ordinality arr(elem, ord)
+      where ord = i.idx + 1
+    ) a on true
+    group by i.idx
+    order by i.idx
+  ),
+  score_rollup as (
+    select score::text as bucket, count(*)::int as count_value
+    from completed_records
+    group by score
+    order by score
   )
-  on conflict (game_date) do nothing;
-
-  select question_correct_counts, question_answer_counts, score_histogram
-  into working_correct, working_answered, working_histogram
-  from public.puzzle_stats
-  where game_date = target_record.game_date;
-
-  if jsonb_typeof(target_record.answers) = 'array' then
-    for answer in select value from jsonb_array_elements(target_record.answers)
-    loop
-      working_answered := public.bump_jsonb_array_value(working_answered, answer_index, 1);
-      if coalesce((answer ->> 'correct')::boolean, false) then
-        working_correct := public.bump_jsonb_array_value(working_correct, answer_index, 1);
-      end if;
-      answer_index := answer_index + 1;
-    end loop;
-  end if;
-
-  working_histogram := public.bump_jsonb_object_count(working_histogram, target_record.score::text, 1);
-
-  update public.puzzle_stats
-  set total_finished = total_finished + 1,
-      total_score = total_score + target_record.score,
-      perfect_count = perfect_count + case when target_record.total_questions > 0 and target_record.score = target_record.total_questions then 1 else 0 end,
-      total_questions = greatest(total_questions, target_record.total_questions),
-      question_correct_counts = working_correct,
-      question_answer_counts = working_answered,
-      score_histogram = working_histogram,
-      updated_at = now()
-  where game_date = target_record.game_date;
+  select
+    b.game_date,
+    b.total_finished,
+    b.total_score,
+    b.perfect_count,
+    b.total_questions,
+    case
+      when b.total_questions > 0 then (
+        select jsonb_agg(q.correct_count order by q.idx)
+        from question_rollup q
+      )
+      else '[]'::jsonb
+    end as question_correct_counts,
+    case
+      when b.total_questions > 0 then (
+        select jsonb_agg(q.answered_count order by q.idx)
+        from question_rollup q
+      )
+      else '[]'::jsonb
+    end as question_answer_counts,
+    coalesce(
+      (select jsonb_object_agg(s.bucket, s.count_value) from score_rollup s),
+      '{}'::jsonb
+    ) as score_histogram,
+    now()
+  from base b
+  where b.total_finished > 0;
 end;
 $$;
 
 create or replace function public.handle_completed_game_record()
 returns trigger
 language plpgsql
+security definer
+set search_path = public
 as $$
 begin
-  if new.completed and (tg_op = 'INSERT' or not coalesce(old.completed, false)) then
-    perform public.apply_completed_game_to_puzzle_stats(new);
+  if new.completed and (
+    tg_op = 'insert'
+    or not coalesce(old.completed, false)
+    or old.score is distinct from new.score
+    or old.answers is distinct from new.answers
+    or old.total_questions is distinct from new.total_questions
+  ) then
+    perform public.rebuild_single_puzzle_stats(new.game_date::date);
   end if;
   return new;
 end;
@@ -207,19 +248,21 @@ $$;
 create or replace function public.rebuild_puzzle_stats()
 returns void
 language plpgsql
+security definer
+set search_path = public
 as $$
 declare
-  record_row public.game_records%rowtype;
+  d date;
 begin
   truncate table public.puzzle_stats;
 
-  for record_row in
-    select *
+  for d in
+    select distinct game_date
     from public.game_records
     where completed = true
-    order by game_date, completed_at nulls last, started_at
+    order by game_date
   loop
-    perform public.apply_completed_game_to_puzzle_stats(record_row);
+    perform public.rebuild_single_puzzle_stats(d::date);
   end loop;
 end;
 $$;
