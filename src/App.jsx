@@ -2987,6 +2987,93 @@ function AccountScreen({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy,au
   );
 }
 
+function AccountScreenV2({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy,authMode}){
+  const[email,setEmail]=useState(player?.email||"");
+  const guest = player?.isGuest;
+  const isUpgrading = authBusy&&authMode==="upgrade";
+  const isMagicLink = authBusy&&authMode==="magic";
+  const isSigningOut = authBusy&&authMode==="signout";
+
+  const submitUpgrade=()=>{
+    const trimmed = email.trim();
+    if(trimmed) onUpgrade(trimmed);
+  };
+  const submitMagic=()=>{
+    const trimmed = email.trim();
+    if(trimmed) onMagicLink(trimmed);
+  };
+
+  return(
+    <div>
+      <div className="sec-head">Account</div>
+      <div className="sec-sub">Keep your trivia stats safe and hop between devices without losing your streak.</div>
+      <div className="card">
+        {guest?(
+          <div style={{maxWidth:430,margin:"0 auto",textAlign:"center"}}>
+            <div style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Fredoka One',cursive",fontSize:12,padding:"6px 14px",borderRadius:999,border:"2px solid var(--black)",boxShadow:"var(--shadow-sm)",background:"linear-gradient(180deg,#FFF176 0%,#FFE347 55%,#E6C800 100%)",color:"var(--black)",marginBottom:16}}>
+              Guest Mode
+            </div>
+            <div style={{fontFamily:"'Fredoka One',cursive",fontSize:32,lineHeight:1.15,color:"var(--black)",marginBottom:14}}>
+              Secure your stats
+              <br/>
+              with an account
+            </div>
+            <div style={{fontSize:14,fontWeight:700,color:"#666",lineHeight:1.6,margin:"0 auto 18px",maxWidth:380}}>
+              Use your email to save this guest run or jump back into an existing trivia account. Your streak and stats will follow you across logged-in devices.
+            </div>
+            <input
+              className="adm-input"
+              value={email}
+              placeholder="example@email.com"
+              onChange={e=>setEmail(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&submitUpgrade()}
+              style={{textAlign:"center",fontSize:18,fontWeight:900,padding:"18px 16px",marginBottom:12}}
+            />
+            <button className="btn btn-yellow" onClick={submitUpgrade} disabled={authBusy||!email.trim()} style={{fontSize:24,marginBottom:12}}>
+              {isUpgrading?"Sending guest-save email...":"Continue"}
+            </button>
+            <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",lineHeight:1.5,marginBottom:18}}>
+              We'll email you a link to save this guest progress. It does not set or change a password.
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+              <div style={{flex:1,height:2,background:"rgba(26,26,26,.12)"}}/>
+              <div style={{fontFamily:"'Fredoka One',cursive",fontSize:13,color:"rgba(26,26,26,.55)"}}>or</div>
+              <div style={{flex:1,height:2,background:"rgba(26,26,26,.12)"}}/>
+            </div>
+            <button className="btn btn-teal" onClick={submitMagic} disabled={authBusy||!email.trim()} style={{marginBottom:10}}>
+              {isMagicLink?"Sending magic link..." :"Continue with existing account"}
+            </button>
+            <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",lineHeight:1.5}}>
+              Already used this email before? We'll send a sign-in link instead.
+            </div>
+          </div>
+        ):(
+          <div style={{maxWidth:430,margin:"0 auto",textAlign:"center"}}>
+            <div style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Fredoka One',cursive",fontSize:12,padding:"6px 14px",borderRadius:999,border:"2px solid var(--black)",boxShadow:"var(--shadow-sm)",background:"linear-gradient(180deg,#C084FC 0%,#A855F7 55%,#7E22CE 100%)",color:"white",marginBottom:16}}>
+              Account Ready
+            </div>
+            <div style={{fontFamily:"'Fredoka One',cursive",fontSize:30,lineHeight:1.15,color:"var(--black)",marginBottom:14}}>
+              Your stats are
+              <br/>
+              locked in
+            </div>
+            <div style={{fontSize:14,fontWeight:700,color:"#666",lineHeight:1.6,margin:"0 auto 18px",maxWidth:360}}>
+              You're signed in as <strong style={{color:"var(--black)"}}>{player?.email||"this account"}</strong>. Your progress can now follow you across devices.
+            </div>
+            <button className="btn btn-pink" onClick={onSignOut} disabled={authBusy} style={{marginBottom:10}}>
+              {isSigningOut?"Switching to guest mode..." :"Sign Out To Guest Mode"}
+            </button>
+            <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",lineHeight:1.5}}>
+              Signing out puts this browser back into guest mode until you use another email link.
+            </div>
+          </div>
+        )}
+      </div>
+      <div style={{marginTop:12}}><button className="btn-sm" onClick={()=>onNav("home")}>{"<- Back"}</button></div>
+    </div>
+  );
+}
+
 // ============================================================
 // ADMIN
 // ============================================================
@@ -3542,7 +3629,7 @@ export default function WhatTheFudgeTrivia(){
           )}
 
           {view==="stats"&&<StatsScreen stats={stats} onNav={setView}/>}
-          {view==="account"&&<AccountScreen player={player} onNav={setView} onUpgrade={handleUpgradeAccount} onMagicLink={handleMagicLink} onSignOut={handleSignOut} authBusy={authBusy} authMode={authMode}/>}
+          {view==="account"&&<AccountScreenV2 player={player} onNav={setView} onUpgrade={handleUpgradeAccount} onMagicLink={handleMagicLink} onSignOut={handleSignOut} authBusy={authBusy} authMode={authMode}/>}
 
           {view==="archive"&&(
             <ArchiveScreen
