@@ -2919,9 +2919,12 @@ function ArchiveScreen({games,playerId,onNav,onReplay}){
   );
 }
 
-function AccountScreen({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy}){
+function AccountScreen({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy,authMode}){
   const[email,setEmail]=useState(player?.email||"");
   const guest = player?.isGuest;
+  const isUpgrading = authBusy&&authMode==="upgrade";
+  const isMagicLink = authBusy&&authMode==="magic";
+  const isSigningOut = authBusy&&authMode==="signout";
 
   const submitUpgrade=()=>{
     const trimmed = email.trim();
@@ -2944,7 +2947,7 @@ function AccountScreen({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy}){
           {guest?"You're playing as a guest right now.":"You're signed in and your progress can follow you across devices."}
         </div>
         <div style={{fontSize:13,fontWeight:700,color:"#666",lineHeight:1.5,marginBottom:16}}>
-          {guest?"Upgrade this guest to a real account by attaching an email.":"Magic links let you pop back into this same account without passwords."}
+          {guest?"Save this guest profile to an email so you can keep your streak across devices.":"Magic links let you hop back into this same account without a password."}
         </div>
 
         <div className="adm-field" style={{marginBottom:12}}>
@@ -2955,23 +2958,26 @@ function AccountScreen({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy}){
         {guest?(
           <>
             <button className="btn btn-yellow" onClick={submitUpgrade} disabled={authBusy||!email.trim()} style={{marginBottom:10}}>
-              {authBusy?"Working on it...":"Save This Guest To My Email"}
+              {isUpgrading?"Sending guest-save email...":"Save This Guest To My Email"}
             </button>
             <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",marginBottom:16}}>
-              We'll email you a confirmation link so this guest account becomes permanent.
+              We'll send a confirmation email that saves this guest progress to that address. It does not set or change a password.
             </div>
             <div style={{borderTop:"2px dashed rgba(45,212,191,0.3)",paddingTop:14}}>
               <div style={{fontFamily:"'Fredoka One',cursive",fontSize:13,color:"var(--teal-dark)",marginBottom:8}}>Already have an account?</div>
               <button className="btn btn-teal" onClick={submitMagic} disabled={authBusy||!email.trim()}>
-                {authBusy?"Sending..." :"Email Me A Magic Link"}
+                {isMagicLink?"Sending magic link..." :"Email Me A Magic Link"}
               </button>
+              <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",marginTop:10}}>
+                Use this if that email already has a trivia account and you want to sign back into it.
+              </div>
             </div>
           </>
         ):(
           <>
             <div style={{fontSize:14,fontWeight:900,color:"var(--black)",marginBottom:14}}>{player?.email||"Signed in"}</div>
             <button className="btn btn-pink" onClick={onSignOut} disabled={authBusy}>
-              {authBusy?"Switching..." :"Sign Out To Guest Mode"}
+              {isSigningOut?"Switching to guest mode..." :"Sign Out To Guest Mode"}
             </button>
           </>
         )}
@@ -3240,6 +3246,7 @@ export default function WhatTheFudgeTrivia(){
   const[loading,setLoading]=useState(true);
   const[error,setError]=useState(null);
   const[authBusy,setAuthBusy]=useState(false);
+  const[authMode,setAuthMode]=useState(null);
   const authUserIdRef = useRef(null);
 
   const sound=useSoundEngine();
@@ -3306,18 +3313,21 @@ export default function WhatTheFudgeTrivia(){
 
   const handleUpgradeAccount = async email => {
     try{
+      setAuthMode("upgrade");
       setAuthBusy(true);
       await authUpgradeAnonymousUser(email);
-      showToast("Check your email to confirm this account.");
+      showToast("Check your email to save this guest account.");
     }catch(e){
       showToast(formatAuthError(e));
     }finally{
       setAuthBusy(false);
+      setAuthMode(null);
     }
   };
 
   const handleMagicLink = async email => {
     try{
+      setAuthMode("magic");
       setAuthBusy(true);
       await authSendMagicLink(email);
       showToast("Magic link sent! Check your email.");
@@ -3325,11 +3335,13 @@ export default function WhatTheFudgeTrivia(){
       showToast(formatAuthError(e));
     }finally{
       setAuthBusy(false);
+      setAuthMode(null);
     }
   };
 
   const handleSignOut = async() => {
     try{
+      setAuthMode("signout");
       setAuthBusy(true);
       await authSignOutToGuest();
       setView("home");
@@ -3338,6 +3350,7 @@ export default function WhatTheFudgeTrivia(){
       showToast(formatAuthError(e));
     }finally{
       setAuthBusy(false);
+      setAuthMode(null);
     }
   };
 
@@ -3529,7 +3542,7 @@ export default function WhatTheFudgeTrivia(){
           )}
 
           {view==="stats"&&<StatsScreen stats={stats} onNav={setView}/>}
-          {view==="account"&&<AccountScreen player={player} onNav={setView} onUpgrade={handleUpgradeAccount} onMagicLink={handleMagicLink} onSignOut={handleSignOut} authBusy={authBusy}/>}
+          {view==="account"&&<AccountScreen player={player} onNav={setView} onUpgrade={handleUpgradeAccount} onMagicLink={handleMagicLink} onSignOut={handleSignOut} authBusy={authBusy} authMode={authMode}/>}
 
           {view==="archive"&&(
             <ArchiveScreen
