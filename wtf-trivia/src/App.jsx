@@ -3240,6 +3240,7 @@ export default function WhatTheFudgeTrivia(){
   const[loading,setLoading]=useState(true);
   const[error,setError]=useState(null);
   const[authBusy,setAuthBusy]=useState(false);
+  const authUserIdRef = useRef(null);
 
   const sound=useSoundEngine();
   const today=getLocalGameDay();
@@ -3247,6 +3248,7 @@ export default function WhatTheFudgeTrivia(){
   const loadAppData = useCallback(async(sessionOverride=null)=>{
     const session = sessionOverride || await authEnsureSession();
     const p = await dbGetOrCreatePlayer(session?.user);
+    authUserIdRef.current = p?.id || null;
     setPlayer(p);
     const [allGames, playerStats] = await Promise.all([
       dbLoadGames(),
@@ -3281,7 +3283,8 @@ export default function WhatTheFudgeTrivia(){
     boot();
     const { data:{ subscription } } = authSubscribe(async (event, session)=>{
       if(!active) return;
-      if(event==="TOKEN_REFRESHED") return;
+      if(event==="TOKEN_REFRESHED"||event==="INITIAL_SESSION") return;
+      if(event==="SIGNED_IN" && session?.user?.id===authUserIdRef.current) return;
       try{
         setError(null);
         const ensured = session?.user ? session : await authEnsureSession();
