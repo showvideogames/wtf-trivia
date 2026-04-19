@@ -1858,9 +1858,31 @@ async function authSendMagicLink(email){
   });
   if(error) throw error;
 }
-async function authUpgradeAnonymousUser(email){
+async function authCreatePasswordAccount(email, password){
   if(!supabase) throw new Error("Supabase Auth is not configured.");
-  const { data, error } = await supabase.auth.updateUser({ email });
+  const existing = await getAuthSession();
+  if(isAnonymousUser(existing?.user)){
+    const { error: signOutError } = await supabase.auth.signOut();
+    if(signOutError) throw signOutError;
+  }
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password
+  });
+  if(error) throw error;
+  return data.user;
+}
+async function authSignInWithPassword(email, password){
+  if(!supabase) throw new Error("Supabase Auth is not configured.");
+  const existing = await getAuthSession();
+  if(isAnonymousUser(existing?.user)){
+    const { error: signOutError } = await supabase.auth.signOut();
+    if(signOutError) throw signOutError;
+  }
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password
+  });
   if(error) throw error;
   return data.user;
 }
@@ -1878,6 +1900,10 @@ function formatAuthError(err){
   const msg = err?.message||"Something went sideways.";
   if(msg.toLowerCase().includes("anonymous sign-ins")) return "Enable Anonymous Sign-Ins in Supabase Auth first.";
   if(msg.toLowerCase().includes("email rate limit")) return "Too many email requests. Try again in a minute.";
+  if(msg.toLowerCase().includes("invalid login credentials")) return "That email and password do not match an account.";
+  if(msg.toLowerCase().includes("user already registered")) return "That email already has an account. Try signing in instead.";
+  if(msg.toLowerCase().includes("password should be at least")) return "Passwords need at least 6 characters.";
+  if(msg.toLowerCase().includes("email not confirmed")) return "That account still needs to be confirmed before it can sign in.";
   return msg;
 }
 
@@ -2165,6 +2191,13 @@ function safeRemove(k){try{localStorage.removeItem(k);return true;}catch{return 
 function calcBestCombo(answers){let best=0,cur=0;for(const a of answers){if(a.correct){cur++;best=Math.max(best,cur);}else cur=0;}return best;}
 function getLocalGameDay(){return new Date().toLocaleDateString("en-CA");}
 function getCountdown(){const n=new Date();const t=new Date(n);t.setDate(t.getDate()+1);t.setHours(0,0,0,0);const d=t-n;return`${String(Math.floor(d/3600000)).padStart(2,"0")}:${String(Math.floor((d%3600000)/60000)).padStart(2,"0")}:${String(Math.floor((d%60000)/1000)).padStart(2,"0")}`;}
+function formatAccountLabel(email){
+  if(!email) return "Account";
+  if(email.length<=18) return email;
+  const parts = email.split("@");
+  if(parts.length!==2) return `${email.slice(0,15)}...`;
+  return `${parts[0].slice(0,10)}...@${parts[1]}`;
+}
 function getEditorDraftKey(id){return `wtf-editor-draft:${id||"unsaved"}`;}
 function normalizeEditorDraft(game){
   return {
@@ -2922,7 +2955,7 @@ function ArchiveScreen({games,playerId,onNav,onReplay}){
 function AccountScreen({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy,authMode}){
   const[email,setEmail]=useState(player?.email||"");
   const guest = player?.isGuest;
-  const isUpgrading = authBusy&&authMode==="upgrade";
+  const isCreating = authBusy&&authMode==="create";
   const isMagicLink = authBusy&&authMode==="magic";
   const isSigningOut = authBusy&&authMode==="signout";
 
@@ -2987,18 +3020,25 @@ function AccountScreen({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy,au
   );
 }
 
-function AccountScreenV2({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy,authMode}){
+function AccountScreenV2({player,onNav,onCreateAccount,onPasswordSignIn,onMagicLink,onSignOut,authBusy,authMode}){
   const[email,setEmail]=useState(player?.email||"");
+  const[password,setPassword]=useState("");
+  const[accountMode,setAccountMode]=useState("signin");
   const guest = player?.isGuest;
-  const isUpgrading = authBusy&&authMode==="upgrade";
+  const isCreating = authBusy&&authMode==="create";
+  const isPasswordSignIn = authBusy&&authMode==="password";
   const isMagicLink = authBusy&&authMode==="magic";
   const isSigningOut = authBusy&&authMode==="signout";
 
-  const submitUpgrade=()=>{
+  const submitCreate=()=>{
     const trimmed = email.trim();
-    if(trimmed) onUpgrade(trimmed);
+    if(trimmed&&password.trim()) onCreateAccount(trimmed,password);
   };
-  const submitMagic=()=>{
+  const submitPasswordSignIn=()=>{
+    const trimmed = email.trim();
+    if(trimmed&&password.trim()) onPasswordSignIn(trimmed,password);
+  };
+  const submitEmailLink=()=>{
     const trimmed = email.trim();
     if(trimmed) onMagicLink(trimmed);
   };
@@ -3019,32 +3059,58 @@ function AccountScreenV2({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy,
               with an account
             </div>
             <div style={{fontSize:14,fontWeight:700,color:"#666",lineHeight:1.6,margin:"0 auto 18px",maxWidth:380}}>
-              Use your email to save this device's progress or sign back into an existing trivia account. Your streak and stats will sync anywhere you're signed in.
+              Use your email and password to sign in or create an account. Your streak and stats will sync anywhere you're signed in.
+            </div>
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              <button className={`btn ${accountMode==="signin"?"btn-teal":"btn-pink"}`} style={{flex:1,fontSize:16}} onClick={()=>setAccountMode("signin")}>
+                Sign In
+              </button>
+              <button className={`btn ${accountMode==="create"?"btn-yellow":"btn-pink"}`} style={{flex:1,fontSize:16}} onClick={()=>setAccountMode("create")}>
+                Create Account
+              </button>
             </div>
             <input
               className="adm-input"
               value={email}
-              placeholder="example@email.com"
+              placeholder="Email address"
               onChange={e=>setEmail(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&submitUpgrade()}
+              onKeyDown={e=>e.key==="Enter"&&(accountMode==="create"?submitCreate():submitPasswordSignIn())}
               style={{textAlign:"center",fontSize:18,fontWeight:900,padding:"18px 16px",marginBottom:12}}
             />
-            <button className="btn btn-yellow" onClick={submitUpgrade} disabled={authBusy||!email.trim()} style={{fontSize:24,marginBottom:12}}>
-              {isUpgrading?"Sending sign-in email...":"Continue"}
+            <input
+              className="adm-input"
+              type="password"
+              value={password}
+              placeholder={accountMode==="create"?"Create a password":"Password"}
+              onChange={e=>setPassword(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&(accountMode==="create"?submitCreate():submitPasswordSignIn())}
+              style={{textAlign:"center",fontSize:18,fontWeight:900,padding:"18px 16px",marginBottom:12}}
+            />
+            <button
+              className={`btn ${accountMode==="create"?"btn-yellow":"btn-teal"}`}
+              onClick={accountMode==="create"?submitCreate:submitPasswordSignIn}
+              disabled={authBusy||!email.trim()||!password.trim()}
+              style={{fontSize:24,marginBottom:12}}
+            >
+              {accountMode==="create"
+                ? (isCreating?"Creating account...":"Create Account")
+                : (isPasswordSignIn?"Signing in...":"Sign In")}
             </button>
             <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",lineHeight:1.5,marginBottom:18}}>
-              We'll email you a sign-in link. If this email is new, we'll create your account and keep this device's current progress with it.
+              {accountMode==="create"
+                ? "New accounts start here. We can add smarter device-progress carryover next."
+                : "If you already have an account, sign in here with your email and password."}
             </div>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
               <div style={{flex:1,height:2,background:"rgba(26,26,26,.12)"}}/>
-              <div style={{fontFamily:"'Fredoka One',cursive",fontSize:13,color:"rgba(26,26,26,.55)"}}>or</div>
+              <div style={{fontFamily:"'Fredoka One',cursive",fontSize:13,color:"rgba(26,26,26,.55)"}}>email link</div>
               <div style={{flex:1,height:2,background:"rgba(26,26,26,.12)"}}/>
             </div>
-            <button className="btn btn-teal" onClick={submitMagic} disabled={authBusy||!email.trim()} style={{marginBottom:10}}>
+            <button className="btn btn-pink" onClick={submitEmailLink} disabled={authBusy||!email.trim()} style={{marginBottom:10}}>
               {isMagicLink?"Sending magic link..." :"Continue with existing account"}
             </button>
             <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",lineHeight:1.5}}>
-              Already have an account? Use this to sign back in without a password.
+              Prefer not to type a password? We'll email you a sign-in link instead.
             </div>
           </div>
         ):(
@@ -3398,12 +3464,26 @@ export default function WhatTheFudgeTrivia(){
 
   const showToast = m => { setToast(m); setTimeout(()=>setToast(null),2100); };
 
-  const handleUpgradeAccount = async email => {
+  const handleCreateAccount = async(email,password) => {
     try{
-      setAuthMode("upgrade");
+      setAuthMode("create");
       setAuthBusy(true);
-      await authUpgradeAnonymousUser(email);
-      showToast("Check your email to finish signing in.");
+      await authCreatePasswordAccount(email,password);
+      showToast("Account created.");
+    }catch(e){
+      showToast(formatAuthError(e));
+    }finally{
+      setAuthBusy(false);
+      setAuthMode(null);
+    }
+  };
+
+  const handlePasswordSignIn = async(email,password) => {
+    try{
+      setAuthMode("password");
+      setAuthBusy(true);
+      await authSignInWithPassword(email,password);
+      showToast("Signed in.");
     }catch(e){
       showToast(formatAuthError(e));
     }finally{
@@ -3567,8 +3647,8 @@ export default function WhatTheFudgeTrivia(){
               {sound.muted?"🔇":"🔊"}
             </button>
             <button className="nav-btn" style={{background:"linear-gradient(180deg,#5EEAD4,#2DD4BF 60%,#0F9488)",color:"var(--black)",borderColor:"var(--teal-dark)",boxShadow:"0 3px 0 var(--teal-dark)"}} onClick={()=>setView("home")}>Home</button>
-            <button className="nav-btn" style={{background:player?.isGuest?"linear-gradient(180deg,#FFF176,#FFE347 60%,#E6C800)":"linear-gradient(180deg,#C084FC,#A855F7 60%,#7E22CE)",color:player?.isGuest?"var(--black)":"white",borderColor:player?.isGuest?"var(--yellow-dark)":"var(--purple-dark)",boxShadow:player?.isGuest?"0 3px 0 var(--yellow-dark)":"0 3px 0 var(--purple-dark)"}} onClick={()=>setView("account")}>
-              {player?.isGuest?"Sign In":"Account"}
+            <button className="nav-btn" title={player?.isGuest?"Sign In":(player?.email||"Account")} style={{background:player?.isGuest?"linear-gradient(180deg,#FFF176,#FFE347 60%,#E6C800)":"linear-gradient(180deg,#C084FC,#A855F7 60%,#7E22CE)",color:player?.isGuest?"var(--black)":"white",borderColor:player?.isGuest?"var(--yellow-dark)":"var(--purple-dark)",boxShadow:player?.isGuest?"0 3px 0 var(--yellow-dark)":"0 3px 0 var(--purple-dark)"}} onClick={()=>setView("account")}>
+              {player?.isGuest?"Sign In":formatAccountLabel(player?.email)}
             </button>
             <button className="nav-btn" style={{background:"linear-gradient(180deg,#FF85AA,#FF5C8D 60%,#CC3366)",color:"white",borderColor:"var(--pink-dark)",boxShadow:"0 3px 0 var(--pink-dark)"}} onClick={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}><FI name="gear" size={26} style={{marginRight:6}}/>Admin</button>
           </div>
@@ -3629,7 +3709,7 @@ export default function WhatTheFudgeTrivia(){
           )}
 
           {view==="stats"&&<StatsScreen stats={stats} onNav={setView}/>}
-          {view==="account"&&<AccountScreenV2 player={player} onNav={setView} onUpgrade={handleUpgradeAccount} onMagicLink={handleMagicLink} onSignOut={handleSignOut} authBusy={authBusy} authMode={authMode}/>}
+          {view==="account"&&<AccountScreenV2 player={player} onNav={setView} onCreateAccount={handleCreateAccount} onPasswordSignIn={handlePasswordSignIn} onMagicLink={handleMagicLink} onSignOut={handleSignOut} authBusy={authBusy} authMode={authMode}/>}
 
           {view==="archive"&&(
             <ArchiveScreen
