@@ -1496,7 +1496,8 @@ const styles = `
   /* ===== GAME HEADER IMAGE ===== */
   .game-header-img {
     width: 100%;
-    height: 160px;
+    height: auto;
+    max-height: clamp(280px, 62vw, 520px);
     object-fit: contain;
     border-radius: 14px 14px 0 0;
     border-bottom: var(--ink);
