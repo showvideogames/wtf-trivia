@@ -789,6 +789,13 @@ const styles = `
     background: linear-gradient(0deg, rgba(0,0,0,0.55) 0%, transparent 100%);
     padding: 10px 14px 8px;
   }
+  .reveal-video {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+    background: #1A1A1A;
+  }
 
   /* No-image placeholder */
   .reveal-placeholder {
@@ -1582,6 +1589,7 @@ const styles = `
     position: relative;
   }
   .img-preview img { width: 100%; max-height: 140px; object-fit: cover; display: block; }
+  .img-preview iframe { width: 100%; aspect-ratio: 16/9; min-height: 160px; display: block; border: 0; background: #000; }
   .img-preview-label {
     position: absolute;
     top: 6px; left: 6px;
@@ -2191,6 +2199,43 @@ function safeRemove(k){try{localStorage.removeItem(k);return true;}catch{return 
 function calcBestCombo(answers){let best=0,cur=0;for(const a of answers){if(a.correct){cur++;best=Math.max(best,cur);}else cur=0;}return best;}
 function getLocalGameDay(){return new Date().toLocaleDateString("en-CA");}
 function getCountdown(){const n=new Date();const t=new Date(n);t.setDate(t.getDate()+1);t.setHours(0,0,0,0);const d=t-n;return`${String(Math.floor(d/3600000)).padStart(2,"0")}:${String(Math.floor((d%3600000)/60000)).padStart(2,"0")}:${String(Math.floor((d%60000)/1000)).padStart(2,"0")}`;}
+function parseYouTubeStart(value){
+  const raw = String(value||"").trim();
+  if(!raw) return 0;
+  if(/^\d+$/.test(raw)) return Number(raw);
+  let total = 0;
+  let matched = false;
+  raw.replace(/(\d+)(h|m|s)/gi,(_,amount,unit)=>{
+    matched = true;
+    const n = Number(amount)||0;
+    if(unit.toLowerCase()==="h") total += n*3600;
+    if(unit.toLowerCase()==="m") total += n*60;
+    if(unit.toLowerCase()==="s") total += n;
+    return "";
+  });
+  return matched ? total : 0;
+}
+function getYouTubeEmbedUrl(value){
+  if(!value) return null;
+  try{
+    const url = new URL(value);
+    const host = url.hostname.replace(/^www\./,"").toLowerCase();
+    let id = "";
+    if(host==="youtu.be"){
+      id = url.pathname.split("/").filter(Boolean)[0]||"";
+    }else if(host==="youtube.com"||host==="m.youtube.com"||host==="music.youtube.com"||host==="youtube-nocookie.com"){
+      const parts = url.pathname.split("/").filter(Boolean);
+      if(url.pathname==="/watch") id = url.searchParams.get("v")||"";
+      else if(["embed","shorts","live"].includes(parts[0])) id = parts[1]||"";
+    }
+    if(!/^[a-zA-Z0-9_-]{11}$/.test(id)) return null;
+    const start = parseYouTubeStart(url.searchParams.get("start")||url.searchParams.get("t")||"");
+    return `https://www.youtube-nocookie.com/embed/${id}${start?`?start=${start}`:""}`;
+  }catch{
+    return null;
+  }
+}
+function isYouTubeUrl(value){return Boolean(getYouTubeEmbedUrl(value));}
 function formatAccountLabel(email){
   if(!email) return "Account";
   if(email.length<=18) return email;
@@ -2431,12 +2476,13 @@ function ColorPicker({value, onChange, label}){
 // ============================================================
 // IMAGE UPLOADER — upload file or paste URL, with live preview
 // ============================================================
-function ImageUploader({value, onChange, label="Image", compact=false, preset="default"}){
+function ImageUploader({value, onChange, label="Image", compact=false, preset="default", allowYouTube=false}){
   const[tab,setTab]=useState(value&&!value.startsWith("data:")?"url":"upload");
   const[urlDraft,setUrlDraft]=useState(value&&!value.startsWith("data:")?value:"");
   const[err,setErr]=useState(false);
   const[loading,setLoading]=useState(false);
   const fileRef=useRef(null);
+  const youtubePreview = allowYouTube ? getYouTubeEmbedUrl(value) : null;
 
   const handleFile=async e=>{
     const f=e.target.files?.[0];
@@ -2491,19 +2537,23 @@ function ImageUploader({value, onChange, label="Image", compact=false, preset="d
             <input
               className="adm-input"
               value={urlDraft}
-              placeholder="https://example.com/image.jpg"
+              placeholder={allowYouTube?"Paste an image URL or YouTube link":"https://example.com/image.jpg"}
               onChange={e=>handleUrl(e.target.value)}
               onBlur={applyUrl}
               onKeyDown={e=>e.key==="Enter"&&applyUrl()}
               style={{marginBottom:0}}
             />
-            <div style={{fontSize:11,color:"rgba(255,255,255,.25)",marginTop:4,fontWeight:600}}>Press Enter or click away to preview</div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,.25)",marginTop:4,fontWeight:600}}>{allowYouTube?"Supports youtube.com, youtu.be, Shorts, and timestamp links":"Press Enter or click away to preview"}</div>
           </div>
         )}
 
         {value&&(
           <div className="img-preview">
-            <img src={value} alt="preview" onError={()=>onChange("")}/>
+            {youtubePreview?(
+              <iframe className="reveal-video" src={youtubePreview} title="YouTube preview" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen/>
+            ):(
+              <img src={value} alt="preview" onError={()=>onChange("")}/>
+            )}
             <div className="img-preview-label">Preview ✓</div>
             <button className="img-clear-btn" onClick={clear} title="Remove image">✕</button>
           </div>
@@ -2511,6 +2561,42 @@ function ImageUploader({value, onChange, label="Image", compact=false, preset="d
       </div>
     </div>
   );
+}
+
+function RevealMedia({question, placeholder}){
+  const mediaUrl = question?.imageUrl||"";
+  const embedUrl = getYouTubeEmbedUrl(mediaUrl);
+  if(embedUrl){
+    return (
+      <div className="reveal-img-zone">
+        <iframe
+          className="reveal-video"
+          src={embedUrl}
+          title={question?.imageAlt||question?.itemText||"Question video"}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+        />
+        <div className="reveal-img-overlay">
+          <div className="img-source" style={{color:"rgba(255,255,255,.82)"}}>
+            ▶ YouTube {question?.imageSource?`• ${question.imageSource}`:""}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if(mediaUrl){
+    return (
+      <div className="reveal-img-zone">
+        <img src={mediaUrl} alt={question?.imageAlt||question?.itemText} className="reveal-img"/>
+        {question?.imageSource&&(
+          <div className="reveal-img-overlay">
+            <div className="img-source" style={{color:"rgba(255,255,255,.7)"}}>📷 {question.imageSource}</div>
+          </div>
+        )}
+      </div>
+    );
+  }
+  return <div className="reveal-placeholder">{placeholder}</div>;
 }
 
 // ============================================================
@@ -2709,7 +2795,11 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,isR
           {/* Image zone — 60% */}
           {cq.imageUrl ? (
             <div className="reveal-img-zone">
-              <img src={cq.imageUrl} alt={cq.imageAlt||cq.itemText} className="reveal-img"/>
+              {getYouTubeEmbedUrl(cq.imageUrl)?(
+                <iframe className="reveal-video" src={getYouTubeEmbedUrl(cq.imageUrl)} title={cq.imageAlt||cq.itemText} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen/>
+              ):(
+                <img src={cq.imageUrl} alt={cq.imageAlt||cq.itemText} className="reveal-img"/>
+              )}
               {cq.imageSource&&(
                 <div className="reveal-img-overlay">
                   <div className="img-source" style={{color:"rgba(255,255,255,.7)"}}>📷 {cq.imageSource}</div>
@@ -3299,7 +3389,7 @@ function AdminEditor({game:ig,onSave,onDelete,onBack}){
               <div className="q-num">{i+1}</div>
               <div className="q-inf">
                 <div className="q-txt">{q.itemText}</div>
-                <div className="q-meta">{q.flavorCopy?"flavor ✓":"no flavor"} · {q.imageUrl?"image ✓":"no image"}</div>
+                <div className="q-meta">{q.flavorCopy?"flavor ✓":"no flavor"} · {q.imageUrl?(isYouTubeUrl(q.imageUrl)?"video ✓":"image ✓"):"no media"}</div>
                 <span className="q-correct">✓ {q.correctCategory==="A"?game.categoryA:game.categoryB}</span>
               </div>
               <div style={{display:"flex",gap:5}}>
@@ -3334,9 +3424,9 @@ function QForm({initial,catA,catB,onSave,onCancel}){
       </div>
       <div className="adm-field"><label>Flavor Copy</label><textarea className="adm-input adm-ta" value={q.flavorCopy} placeholder="The funny, warm, goofy reaction line..." onChange={e=>up("flavorCopy",e.target.value)}/></div>
       <div className="adm-field"><label>Explanation Copy</label><textarea className="adm-input adm-ta" value={q.explanationCopy} placeholder="One straight factual sentence..." onChange={e=>up("explanationCopy",e.target.value)}/></div>
-      <ImageUploader label="Question Image (shown on reveal screen)" value={q.imageUrl||""} onChange={v=>up("imageUrl",v)} preset="question"/>
-      {q.imageUrl&&<div className="adm-field"><label>Alt Text *</label><input className="adm-input" value={q.imageAlt} placeholder="Screen reader description..." onChange={e=>up("imageAlt",e.target.value)}/></div>}
-      {q.imageUrl&&<div className="adm-field"><label>Image Source</label><input className="adm-input" value={q.imageSource} placeholder="Via Wikimedia Commons" onChange={e=>up("imageSource",e.target.value)}/></div>}
+      <ImageUploader label="Reveal Media (image or YouTube link)" value={q.imageUrl||""} onChange={v=>up("imageUrl",v)} preset="question" allowYouTube={true}/>
+      {q.imageUrl&&!isYouTubeUrl(q.imageUrl)&&<div className="adm-field"><label>Alt Text *</label><input className="adm-input" value={q.imageAlt} placeholder="Screen reader description..." onChange={e=>up("imageAlt",e.target.value)}/></div>}
+      {q.imageUrl&&<div className="adm-field"><label>Media Source</label><input className="adm-input" value={q.imageSource} placeholder={isYouTubeUrl(q.imageUrl)?"Official music video, lyric video, etc.":"Via Wikimedia Commons"} onChange={e=>up("imageSource",e.target.value)}/></div>}
       <div style={{display:"flex",gap:7,marginTop:7}}>
         <button className="btn-adm btn-adm-y" onClick={()=>q.itemText.trim()&&onSave({...q})}>{initial?"Update":"Add"}</button>
         <button className="btn-adm btn-adm-g" onClick={onCancel}>Cancel</button>
