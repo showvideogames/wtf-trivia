@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ============================================================
@@ -269,6 +269,10 @@ const styles = `
     border: 2.5px solid var(--black);
     box-shadow: 3px 3px 0 var(--black);
     position: relative;
+    max-width: min(46vw, 220px);
+    min-height: 32px;
+    box-sizing: border-box;
+    overflow: hidden;
   }
   .cat-chip::after {
     content: '';
@@ -284,6 +288,25 @@ const styles = `
   .vs-word { font-family: 'Fredoka One', cursive; font-size: 16px; color: var(--orange); transform: rotate(-5deg); display: inline-block; -webkit-text-stroke: 1px var(--black); }
 
   .theme-count { font-size: 13px; font-weight: 800; color: #666; margin-bottom: 16px; }
+
+  .fit-text-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    overflow: hidden;
+    text-align: center;
+  }
+  .fit-text-content {
+    display: block;
+    max-width: 100%;
+    line-height: 1.08;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+  .fit-text-one-line .fit-text-content {
+    white-space: nowrap;
+  }
 
   /* ===== FUDGE PUCK BUTTON (primary) ===== */
   .btn {
@@ -580,8 +603,8 @@ const styles = `
     justify-content: center;
   }
   .ans-box-img {
-    width: 100%;
-    height: 100%;
+    width: 80%;
+    height: 80%;
     object-fit: contain;
     display: block;
   }
@@ -2386,6 +2409,64 @@ function BeatScreen(){
   );
 }
 
+function shouldKeepFitTextOnOneLine(value){
+  const text = String(value||"").trim();
+  return Boolean(text) && !/[\s-]/.test(text);
+}
+
+function FitText({children, className="", style, min=12, max=48, oneLine, as:Tag="div"}){
+  const text = String(children??"");
+  const wrapRef = useRef(null);
+  const textRef = useRef(null);
+  const [fontSize,setFontSize] = useState(max);
+  const noWrap = oneLine ?? shouldKeepFitTextOnOneLine(text);
+
+  useLayoutEffect(()=>{
+    const wrap = wrapRef.current;
+    const node = textRef.current;
+    if(!wrap||!node) return;
+    let frame = 0;
+    const fit = ()=>{
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(()=>{
+        const width = wrap.clientWidth;
+        const height = wrap.clientHeight;
+        if(!width||!height) return;
+        let low = min;
+        let high = max;
+        let best = min;
+        node.style.whiteSpace = noWrap ? "nowrap" : "normal";
+        node.style.width = noWrap ? "auto" : `${width}px`;
+        for(let i=0;i<9;i++){
+          const mid = (low+high)/2;
+          node.style.fontSize = `${mid}px`;
+          if(node.scrollWidth<=width+1&&node.scrollHeight<=height+1){
+            best = mid;
+            low = mid;
+          }else{
+            high = mid;
+          }
+        }
+        setFontSize(Math.floor(best*10)/10);
+      });
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(wrap);
+    if(document?.fonts?.ready) document.fonts.ready.then(fit);
+    return ()=>{
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  },[text,min,max,noWrap]);
+
+  return (
+    <Tag ref={wrapRef} className={`fit-text-box ${noWrap?"fit-text-one-line":""} ${className}`} style={style}>
+      <span ref={textRef} className="fit-text-content" style={{fontSize}}>{children}</span>
+    </Tag>
+  );
+}
+
 // ============================================================
 // COLOR PALETTE — fudge candy colors for category boxes
 // ============================================================
@@ -2624,9 +2705,9 @@ function HomeScreen({game,gameRecord,stats,onPlay,onNav}){
         <div className="theme-lbl">Today's Theme</div>
         <div className="theme-title">{game.themeTitle}</div>
         <div className="vs-strip">
-          <span className="cat-chip cat-a">{game.categoryA}</span>
+          <FitText as="span" className="cat-chip cat-a" min={10} max={13}>{game.categoryA}</FitText>
           <span className="vs-word">VS</span>
-          <span className="cat-chip cat-b">{game.categoryB}</span>
+          <FitText as="span" className="cat-chip cat-b" min={10} max={13}>{game.categoryB}</FitText>
         </div>
         <div className="theme-count">{game.questions.length} questions · which is which??</div>
         {done?(
@@ -2770,9 +2851,9 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,isR
                       {cat==="A"?"🎲":"🎬"}
                     </div>
                   )}
-                  <div className="ans-box-label" style={{color:isDark?"white":"var(--black)",textShadow:isDark?"1px 2px 0 rgba(0,0,0,0.2)":"none",WebkitTextStroke:isDark?"0.5px rgba(0,0,0,0.2)":"0"}}>
+                  <FitText className="ans-box-label" min={18} max={48} style={{color:isDark?"white":"var(--black)",textShadow:isDark?"1px 2px 0 rgba(0,0,0,0.2)":"none",WebkitTextStroke:isDark?"0.5px rgba(0,0,0,0.2)":"0"}}>
                     {label}
-                  </div>
+                  </FitText>
                 </button>
               );
             })}
@@ -3457,7 +3538,7 @@ function AdminPreview({game,onBack}){
             <div style={{padding:"24px 20px"}}>
             <div className="theme-lbl">Today's Theme</div>
             <div className="theme-title">{game.themeTitle}</div>
-            <div className="vs-strip"><span className="cat-chip cat-a">{game.categoryA}</span><span className="vs-word">VS</span><span className="cat-chip cat-b">{game.categoryB}</span></div>
+            <div className="vs-strip"><FitText as="span" className="cat-chip cat-a" min={10} max={13}>{game.categoryA}</FitText><span className="vs-word">VS</span><FitText as="span" className="cat-chip cat-b" min={10} max={13}>{game.categoryB}</FitText></div>
             <div className="theme-count">{game.questions.length} questions</div>
             <button className="btn btn-yellow" onClick={()=>setView("game")}>Let's gooo!! →</button>
             </div>
