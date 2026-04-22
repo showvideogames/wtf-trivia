@@ -273,6 +273,8 @@ const styles = `
     min-height: 32px;
     box-sizing: border-box;
     overflow: hidden;
+    width: fit-content;
+    flex: 0 1 auto;
   }
   .cat-chip::after {
     content: '';
@@ -2705,9 +2707,9 @@ function HomeScreen({game,gameRecord,stats,onPlay,onNav}){
         <div className="theme-lbl">Today's Theme</div>
         <div className="theme-title">{game.themeTitle}</div>
         <div className="vs-strip">
-          <FitText as="span" className="cat-chip cat-a" min={10} max={13}>{game.categoryA}</FitText>
+          <FitText as="span" className="cat-chip cat-a" min={10} max={13} oneLine={true}>{game.categoryA}</FitText>
           <span className="vs-word">VS</span>
-          <FitText as="span" className="cat-chip cat-b" min={10} max={13}>{game.categoryB}</FitText>
+          <FitText as="span" className="cat-chip cat-b" min={10} max={13} oneLine={true}>{game.categoryB}</FitText>
         </div>
         <div className="theme-count">{game.questions.length} questions · which is which??</div>
         {done?(
@@ -3538,7 +3540,7 @@ function AdminPreview({game,onBack}){
             <div style={{padding:"24px 20px"}}>
             <div className="theme-lbl">Today's Theme</div>
             <div className="theme-title">{game.themeTitle}</div>
-            <div className="vs-strip"><FitText as="span" className="cat-chip cat-a" min={10} max={13}>{game.categoryA}</FitText><span className="vs-word">VS</span><FitText as="span" className="cat-chip cat-b" min={10} max={13}>{game.categoryB}</FitText></div>
+            <div className="vs-strip"><FitText as="span" className="cat-chip cat-a" min={10} max={13} oneLine={true}>{game.categoryA}</FitText><span className="vs-word">VS</span><FitText as="span" className="cat-chip cat-b" min={10} max={13} oneLine={true}>{game.categoryB}</FitText></div>
             <div className="theme-count">{game.questions.length} questions</div>
             <button className="btn btn-yellow" onClick={()=>setView("game")}>Let's gooo!! →</button>
             </div>
