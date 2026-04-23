@@ -298,10 +298,10 @@ const styles = `
     min-width: 0;
     overflow: hidden;
     text-align: center;
+    box-sizing: border-box;
   }
   .fit-text-content {
     display: block;
-    max-width: 100%;
     line-height: 1.08;
     overflow-wrap: break-word;
     word-break: normal;
@@ -628,7 +628,7 @@ const styles = `
     font-size: clamp(18px, 8vw, 48px);
     color: white;
     text-align: center;
-    padding: 6px;
+    padding: 10px 14px;
     line-height: 1.1;
     -webkit-text-stroke: 0.5px rgba(0,0,0,0.25);
     text-shadow: 2px 3px 0 rgba(0,0,0,0.2);
@@ -641,6 +641,7 @@ const styles = `
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    box-sizing: border-box;
   }
   .ans-box.cat-a-box .ans-box-label { color: var(--black); text-shadow: none; -webkit-text-stroke: 0; }
 
@@ -2693,7 +2694,7 @@ function shouldKeepFitTextOnOneLine(value){
   return Boolean(text) && !/[\s-]/.test(text);
 }
 
-function FitText({children, className="", style, min=12, max=48, oneLine, as="div"}){
+function FitText({children, className="", style, min=12, max=48, oneLine, as="div", buffer=4}){
   const text = String(children??"");
   const wrapRef = useRef(null);
   const textRef = useRef(null);
@@ -2708,8 +2709,11 @@ function FitText({children, className="", style, min=12, max=48, oneLine, as="di
     const fit = ()=>{
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(()=>{
-        const width = wrap.clientWidth;
-        const height = wrap.clientHeight;
+        const wrapStyle = window.getComputedStyle(wrap);
+        const padX = parseFloat(wrapStyle.paddingLeft||"0") + parseFloat(wrapStyle.paddingRight||"0");
+        const padY = parseFloat(wrapStyle.paddingTop||"0") + parseFloat(wrapStyle.paddingBottom||"0");
+        const width = Math.max(0, wrap.clientWidth - padX - buffer);
+        const height = Math.max(0, wrap.clientHeight - padY - buffer);
         if(!width||!height) return;
         let low = min;
         let high = max;
@@ -2719,7 +2723,7 @@ function FitText({children, className="", style, min=12, max=48, oneLine, as="di
         for(let i=0;i<9;i++){
           const mid = (low+high)/2;
           node.style.fontSize = `${mid}px`;
-          if(node.scrollWidth<=width+1&&node.scrollHeight<=height+1){
+          if(node.scrollWidth<=width&&node.scrollHeight<=height){
             best = mid;
             low = mid;
           }else{
@@ -2737,7 +2741,7 @@ function FitText({children, className="", style, min=12, max=48, oneLine, as="di
       cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  },[text,min,max,noWrap]);
+  },[text,min,max,noWrap,buffer]);
 
   const boxClass = `fit-text-box ${noWrap?"fit-text-one-line":""} ${className}`;
   const content = <span ref={textRef} className="fit-text-content" style={{fontSize}}>{children}</span>;
@@ -3139,7 +3143,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,isR
                       {cat==="A"?"🎲":"🎬"}
                     </div>
                   )}
-                  <FitText className="ans-box-label" min={18} max={48} style={{color:isDark?"white":"var(--black)",textShadow:isDark?"1px 2px 0 rgba(0,0,0,0.2)":"none",WebkitTextStroke:isDark?"0.5px rgba(0,0,0,0.2)":"0"}}>
+                  <FitText className="ans-box-label" min={12} max={48} buffer={10} style={{color:isDark?"white":"var(--black)",textShadow:isDark?"1px 2px 0 rgba(0,0,0,0.2)":"none",WebkitTextStroke:isDark?"0.5px rgba(0,0,0,0.2)":"0"}}>
                     {label}
                   </FitText>
                 </button>
