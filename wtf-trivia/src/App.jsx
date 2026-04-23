@@ -1616,12 +1616,23 @@ const styles = `
   .st-published { background: rgba(34,197,94,.18); color: #86EFAC; }
   .st-scheduled { background: rgba(255,227,71,.14); color: var(--yellow); }
 
-  .q-row { background: #12121E; border: 1.5px solid rgba(45,212,191,.12); border-radius: 16px; padding: 11px 13px; margin-bottom: 7px; display: flex; gap: 10px; align-items: flex-start; }
-  .q-num { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(180deg,#5EEAD4,#2DD4BF 60%,#0F9488); border: 2px solid var(--teal-dark); display: flex; align-items: center; justify-content: center; font-family: 'Fredoka One', cursive; font-size: 13px; color: var(--black); flex-shrink: 0; margin-top: 1px; box-shadow: 0 3px 0 var(--teal-dark); }
+  .q-row { background: #12121E; border: 1.5px solid rgba(45,212,191,.12); border-radius: 14px; padding: 9px 11px; margin-bottom: 6px; display: flex; gap: 9px; align-items: center; transition: border-color .12s, background .12s, opacity .12s; }
+  .q-row.dragging { opacity: .45; border-color: var(--yellow); background: rgba(255,227,71,.08); }
+  .q-row.drag-over { border-color: var(--teal); background: rgba(45,212,191,.1); }
+  .q-drag { width: 20px; align-self: stretch; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.25); font-size: 18px; cursor: grab; user-select: none; }
+  .q-drag:active { cursor: grabbing; }
+  .q-num { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(180deg,#5EEAD4,#2DD4BF 60%,#0F9488); border: 2px solid var(--teal-dark); display: flex; align-items: center; justify-content: center; font-family: 'Fredoka One', cursive; font-size: 12px; color: var(--black); flex-shrink: 0; box-shadow: 0 3px 0 var(--teal-dark); }
   .q-inf { flex: 1; }
   .q-txt { font-size: 14px; font-weight: 700; color: white; margin-bottom: 2px; }
   .q-meta { font-size: 11px; color: rgba(45,212,191,.5); font-weight: 600; }
   .q-correct { display: inline-block; background: rgba(45,212,191,.15); color: var(--teal); font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 10px; margin-top: 3px; border: 1px solid rgba(45,212,191,.3); }
+  .q-form-box { background: rgba(45,212,191,.05); border-radius: 14px; padding: 10px; margin: 6px 0 9px; border: 1.5px solid rgba(45,212,191,.15); }
+  .q-form-title { font-family: 'Fredoka One', cursive; font-size: 14px; color: var(--teal); margin-bottom: 8px; }
+  .q-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
+  .q-form-wide { grid-column: 1 / -1; }
+  .q-form-box .adm-ta { min-height: 50px; }
+  .q-actions { display: flex; gap: 5px; align-items: center; }
+  .q-trash { min-width: 34px; }
 
   .count-bar { font-size: 13px; font-weight: 700; padding: 7px 11px; border-radius: 10px; margin-bottom: 10px; background: rgba(45,212,191,.06); border: 1px solid rgba(45,212,191,.1); }
   .count-bar.ok { color: var(--teal); }
@@ -3776,6 +3787,8 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
   const[game,setGame]=useState(()=>loadEditorDraft(ig));
   const[showQF,setShowQF]=useState(false);
   const[editQ,setEditQ]=useState(null);
+  const[dragQId,setDragQId]=useState(null);
+  const[dragOverQId,setDragOverQId]=useState(null);
   const[toast,setToast]=useState(null);
   const[preview,setPreview]=useState(false);
   const[autoSaveState,setAutoSaveState]=useState("idle");
@@ -3826,7 +3839,25 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
   const dftSafe=async()=>{if(!validateDate())return;await dft();};
   const addQ=q=>{setGame(g=>({...g,questions:[...(g.questions??[]),{...q,id:`q-${Date.now()}`,orderIndex:(g.questions?.length??0)+1}]}));setShowQF(false);setEditQ(null);};
   const updQ=u=>setGame(g=>({...g,questions:g.questions.map(q=>q.id===u.id?u:q)}));
-  const delQ=id=>setGame(g=>({...g,questions:g.questions.filter(q=>q.id!==id).map((q,i)=>({...q,orderIndex:i+1}))}));
+  const delQ=q=>{
+    if(!window.confirm(`Delete "${q.itemText||"this question"}"?`)) return;
+    setEditQ(e=>e?.id===q.id?null:e);
+    setGame(g=>({...g,questions:g.questions.filter(item=>item.id!==q.id).map((item,i)=>({...item,orderIndex:i+1}))}));
+  };
+  const reorderQ=(fromId,toId)=>setGame(g=>{
+    if(!fromId||!toId||fromId===toId) return g;
+    const list = [...(g.questions||[])];
+    const from = list.findIndex(q=>q.id===fromId);
+    const to = list.findIndex(q=>q.id===toId);
+    if(from<0||to<0) return g;
+    const [moved] = list.splice(from,1);
+    list.splice(to,0,moved);
+    return {...g,questions:list.map((q,i)=>({...q,orderIndex:i+1}))};
+  });
+  const startDrag=(e,id)=>{setDragQId(id);setDragOverQId(null);e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",id);};
+  const overDrag=(e,id)=>{e.preventDefault();if(id!==dragOverQId)setDragOverQId(id);};
+  const dropDrag=(e,id)=>{e.preventDefault();const from=e.dataTransfer.getData("text/plain")||dragQId;reorderQ(from,id);setDragQId(null);setDragOverQId(null);};
+  const endDrag=()=>{setDragQId(null);setDragOverQId(null);};
 
   if(preview)return <AdminPreview game={game} onBack={()=>setPreview(false)}/>;
 
@@ -3877,21 +3908,32 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
           <h3>Questions</h3>
           <div className={`count-bar ${ok?"ok":"bad"}`}>{qc} questions {!ok?`— need 4–15 to publish`:"— ✓ ready"}</div>
           {(game.questions??[]).map((q,i)=>(
-            <div className="q-row" key={q.id}>
-              <div className="q-num">{i+1}</div>
-              <div className="q-inf">
-                <div className="q-txt">{q.itemText}</div>
-                <div className="q-meta">{q.flavorCopy?"flavor ✓":"no flavor"} · {q.imageUrl?(isYouTubeUrl(q.imageUrl)?"video ✓":"image ✓"):"no media"}</div>
-                <span className="q-correct">✓ {q.correctCategory==="A"?game.categoryA:game.categoryB}</span>
+            <div key={q.id}>
+              <div
+                className={`q-row ${dragQId===q.id?"dragging":""} ${dragOverQId===q.id&&dragQId!==q.id?"drag-over":""}`}
+                draggable
+                onDragStart={e=>startDrag(e,q.id)}
+                onDragOver={e=>overDrag(e,q.id)}
+                onDrop={e=>dropDrag(e,q.id)}
+                onDragEnd={endDrag}
+              >
+                <div className="q-drag" title="Drag to reorder">⋮</div>
+                <div className="q-num">{i+1}</div>
+                <div className="q-inf">
+                  <div className="q-txt">{q.itemText}</div>
+                  <div className="q-meta">{q.flavorCopy?"flavor ✓":"no flavor"} · {q.imageUrl?(isYouTubeUrl(q.imageUrl)?"video ✓":"image ✓"):"no media"}</div>
+                  <span className="q-correct">✓ {q.correctCategory==="A"?game.categoryA:game.categoryB}</span>
+                </div>
+                <div className="q-actions">
+                  <button className="btn-adm btn-adm-g" style={{padding:"4px 10px",fontSize:12}} onClick={()=>{setShowQF(false);setEditQ(editQ?.id===q.id?null:q);}}>{editQ?.id===q.id?"Close":"Edit"}</button>
+                  <button className="btn-adm btn-adm-red q-trash" style={{padding:"4px 9px",fontSize:12}} onClick={()=>delQ(q)} title="Delete question">🗑</button>
+                </div>
               </div>
-              <div style={{display:"flex",gap:5}}>
-                <button className="btn-adm btn-adm-g" style={{padding:"4px 10px",fontSize:12}} onClick={()=>setEditQ(q)}>Edit</button>
-                <button className="btn-adm btn-adm-red" style={{padding:"4px 9px",fontSize:12}} onClick={()=>delQ(q.id)}>✕</button>
-              </div>
+              {editQ?.id===q.id&&<QForm key={q.id} initial={editQ} catA={game.categoryA} catB={game.categoryB} onSave={updated=>{updQ(updated);setEditQ(null);}} onCancel={()=>setEditQ(null)}/>}
             </div>
           ))}
           {!showQF&&!editQ&&<button className="btn-adm btn-adm-y" style={{marginTop:9,width:"100%"}} onClick={()=>setShowQF(true)}>+ Add Question</button>}
-          {(showQF||editQ)&&<QForm initial={editQ} catA={game.categoryA} catB={game.categoryB} onSave={editQ?q=>{updQ(q);setEditQ(null);}:addQ} onCancel={()=>{setShowQF(false);setEditQ(null);}}/>}
+          {showQF&&!editQ&&<QForm catA={game.categoryA} catB={game.categoryB} onSave={addQ} onCancel={()=>setShowQF(false)}/>}
         </div>
         {!isNew&&game.status!=="published"&&<div style={{textAlign:"center"}}><button className="btn-adm btn-adm-red" onClick={()=>onDelete(game.id)}>Delete game</button></div>}
       </div>
@@ -3904,21 +3946,23 @@ function QForm({initial,catA,catB,onSave,onCancel}){
   const[q,setQ]=useState(initial||{itemText:"",correctCategory:"A",flavorCopy:"",explanationCopy:"",imageUrl:"",imageAlt:"",imageSource:""});
   const up=(f,v)=>setQ(p=>({...p,[f]:v}));
   return(
-    <div style={{background:"rgba(45,212,191,.05)",borderRadius:16,padding:14,marginTop:11,border:"1.5px solid rgba(45,212,191,.15)"}}>
-      <div style={{fontFamily:"'Fredoka One',cursive",fontSize:15,color:"var(--teal)",marginBottom:11}}>{initial?"Edit Question ✏️":"New Question 🍬"}</div>
-      <div className="adm-field"><label>Item Text *</label><input className="adm-input" value={q.itemText} placeholder="e.g. Jumanji" onChange={e=>up("itemText",e.target.value)}/></div>
-      <div className="adm-field">
-        <label>Correct Category</label>
-        <div className="tog-pair">
-          <button className={`tog ${q.correctCategory==="A"?"on":""}`} onClick={()=>up("correctCategory","A")}>A: {catA||"Cat A"}</button>
-          <button className={`tog ${q.correctCategory==="B"?"on":""}`} onClick={()=>up("correctCategory","B")}>B: {catB||"Cat B"}</button>
+    <div className="q-form-box">
+      <div className="q-form-title">{initial?"Edit Question":"New Question"}</div>
+      <div className="q-form-grid">
+        <div className="adm-field"><label>Item Text *</label><input className="adm-input" value={q.itemText} placeholder="e.g. Jumanji" onChange={e=>up("itemText",e.target.value)}/></div>
+        <div className="adm-field">
+          <label>Correct Category</label>
+          <div className="tog-pair">
+            <button className={`tog ${q.correctCategory==="A"?"on":""}`} onClick={()=>up("correctCategory","A")}>A: {catA||"Cat A"}</button>
+            <button className={`tog ${q.correctCategory==="B"?"on":""}`} onClick={()=>up("correctCategory","B")}>B: {catB||"Cat B"}</button>
+          </div>
         </div>
+        <div className="adm-field"><label>Flavor Copy</label><textarea className="adm-input adm-ta" value={q.flavorCopy} placeholder="Funny reaction line..." onChange={e=>up("flavorCopy",e.target.value)}/></div>
+        <div className="adm-field"><label>Explanation Copy</label><textarea className="adm-input adm-ta" value={q.explanationCopy} placeholder="One factual sentence..." onChange={e=>up("explanationCopy",e.target.value)}/></div>
+        <div className="q-form-wide"><ImageUploader label="Reveal Media (image or YouTube link)" value={q.imageUrl||""} onChange={v=>up("imageUrl",v)} preset="question" allowYouTube={true} compact={true}/></div>
+        {q.imageUrl&&!isYouTubeUrl(q.imageUrl)&&<div className="adm-field"><label>Alt Text *</label><input className="adm-input" value={q.imageAlt} placeholder="Screen reader description..." onChange={e=>up("imageAlt",e.target.value)}/></div>}
+        {q.imageUrl&&<div className="adm-field"><label>Media Source</label><input className="adm-input" value={q.imageSource} placeholder={isYouTubeUrl(q.imageUrl)?"Official music video, lyric video, etc.":"Via Wikimedia Commons"} onChange={e=>up("imageSource",e.target.value)}/></div>}
       </div>
-      <div className="adm-field"><label>Flavor Copy</label><textarea className="adm-input adm-ta" value={q.flavorCopy} placeholder="The funny, warm, goofy reaction line..." onChange={e=>up("flavorCopy",e.target.value)}/></div>
-      <div className="adm-field"><label>Explanation Copy</label><textarea className="adm-input adm-ta" value={q.explanationCopy} placeholder="One straight factual sentence..." onChange={e=>up("explanationCopy",e.target.value)}/></div>
-      <ImageUploader label="Reveal Media (image or YouTube link)" value={q.imageUrl||""} onChange={v=>up("imageUrl",v)} preset="question" allowYouTube={true}/>
-      {q.imageUrl&&!isYouTubeUrl(q.imageUrl)&&<div className="adm-field"><label>Alt Text *</label><input className="adm-input" value={q.imageAlt} placeholder="Screen reader description..." onChange={e=>up("imageAlt",e.target.value)}/></div>}
-      {q.imageUrl&&<div className="adm-field"><label>Media Source</label><input className="adm-input" value={q.imageSource} placeholder={isYouTubeUrl(q.imageUrl)?"Official music video, lyric video, etc.":"Via Wikimedia Commons"} onChange={e=>up("imageSource",e.target.value)}/></div>}
       <div style={{display:"flex",gap:7,marginTop:7}}>
         <button className="btn-adm btn-adm-y" onClick={()=>q.itemText.trim()&&onSave({...q})}>{initial?"Update":"Add"}</button>
         <button className="btn-adm btn-adm-g" onClick={onCancel}>Cancel</button>
