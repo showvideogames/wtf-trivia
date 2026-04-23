@@ -1448,6 +1448,141 @@ const styles = `
   select.adm-input option { background: #12121E; }
   .adm-ta { resize: vertical; min-height: 64px; }
 
+  .admin-date-picker { margin-bottom: 14px; }
+  .admin-date-top { display: flex; gap: 8px; align-items: stretch; }
+  .admin-date-input-wrap { flex: 1; }
+  .admin-date-btn {
+    flex-shrink: 0;
+    min-width: 118px;
+    background: linear-gradient(180deg,#5EEAD4,#2DD4BF 60%,#0F9488);
+    color: var(--black);
+    border-color: var(--teal-dark);
+    box-shadow: 0 3px 0 var(--teal-dark);
+  }
+  .admin-date-note {
+    margin-top: 7px;
+    font-size: 12px;
+    font-weight: 800;
+    color: rgba(255,255,255,.45);
+  }
+  .admin-date-note.bad { color: #FCA5A5; }
+  .admin-date-note.good { color: #86EFAC; }
+  .admin-calendar {
+    margin-top: 10px;
+    background: #12121E;
+    border: 1.5px solid rgba(45,212,191,.22);
+    border-radius: 16px;
+    padding: 12px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
+  }
+  .admin-cal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .admin-cal-title {
+    font-family: 'Fredoka One', cursive;
+    font-size: 16px;
+    color: var(--teal);
+  }
+  .admin-cal-nav { display: flex; gap: 6px; }
+  .admin-cal-nav button {
+    min-width: 34px;
+    height: 30px;
+    padding: 0 9px;
+    border-radius: 10px;
+    border: 1.5px solid rgba(45,212,191,.28);
+    background: rgba(45,212,191,.08);
+    color: var(--teal);
+    font-family: 'Fredoka One', cursive;
+    cursor: pointer;
+  }
+  .admin-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+  }
+  .admin-cal-dow {
+    text-align: center;
+    color: rgba(45,212,191,.5);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .7px;
+    text-transform: uppercase;
+    padding: 2px 0;
+  }
+  .admin-cal-day {
+    min-height: 48px;
+    border-radius: 12px;
+    border: 1.5px solid rgba(255,255,255,.08);
+    background: rgba(255,255,255,.035);
+    color: rgba(255,255,255,.75);
+    font-weight: 900;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    position: relative;
+  }
+  .admin-cal-day:hover:not(.empty):not(.occupied) {
+    border-color: var(--teal);
+    background: rgba(45,212,191,.12);
+  }
+  .admin-cal-day.empty { visibility: hidden; cursor: default; }
+  .admin-cal-day.selected {
+    background: linear-gradient(180deg,#FFF176,#FFE347 60%,#E6C800);
+    color: var(--black);
+    border-color: #B8A000;
+    box-shadow: 0 3px 0 #8A7800;
+  }
+  .admin-cal-day.occupied {
+    background: rgba(239,68,68,.14);
+    border-color: rgba(239,68,68,.42);
+    color: #FCA5A5;
+    cursor: not-allowed;
+  }
+  .admin-cal-day.own {
+    background: rgba(45,212,191,.14);
+    border-color: rgba(45,212,191,.35);
+    color: var(--teal);
+    cursor: pointer;
+  }
+  .admin-cal-day.own.selected {
+    background: linear-gradient(180deg,#5EEAD4,#2DD4BF 60%,#0F9488);
+    color: var(--black);
+    border-color: var(--teal-dark);
+  }
+  .admin-cal-status {
+    font-size: 8px;
+    line-height: 1;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    opacity: .9;
+  }
+  .admin-cal-legend {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+    font-size: 11px;
+    color: rgba(255,255,255,.45);
+    font-weight: 800;
+  }
+  .admin-cal-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+  }
+  .admin-cal-dot.used { background: #EF4444; }
+  .admin-cal-dot.mine { background: var(--teal); }
+
   .btn-adm {
     font-family: 'Fredoka One', cursive;
     font-size: 14px;
@@ -2260,6 +2395,41 @@ function safeWrite(k,v){try{localStorage.setItem(k,JSON.stringify(v));return tru
 function safeRemove(k){try{localStorage.removeItem(k);return true;}catch{return false;}}
 function calcBestCombo(answers){let best=0,cur=0;for(const a of answers){if(a.correct){cur++;best=Math.max(best,cur);}else cur=0;}return best;}
 function getLocalGameDay(){return new Date().toLocaleDateString("en-CA");}
+function isoFromLocalDate(date){
+  if(!(date instanceof Date)||Number.isNaN(date.getTime())) return "";
+  const y = date.getFullYear();
+  const m = String(date.getMonth()+1).padStart(2,"0");
+  const d = String(date.getDate()).padStart(2,"0");
+  return `${y}-${m}-${d}`;
+}
+function localDateFromISO(iso){
+  const match = String(iso||"").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!match) return null;
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  const d = Number(match[3]);
+  const date = new Date(y, m-1, d);
+  if(date.getFullYear()!==y||date.getMonth()!==m-1||date.getDate()!==d) return null;
+  return date;
+}
+function formatAdminDate(iso){
+  const date = localDateFromISO(iso);
+  if(!date) return iso||"";
+  return `${String(date.getMonth()+1).padStart(2,"0")}/${String(date.getDate()).padStart(2,"0")}/${date.getFullYear()}`;
+}
+function parseAdminDate(value){
+  const raw = String(value||"").trim();
+  const us = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if(us){
+    const m = Number(us[1]);
+    const d = Number(us[2]);
+    const y = Number(us[3]);
+    const date = new Date(y, m-1, d);
+    if(date.getFullYear()===y&&date.getMonth()===m-1&&date.getDate()===d) return isoFromLocalDate(date);
+  }
+  const iso = localDateFromISO(raw);
+  return iso ? raw : "";
+}
 function getCountdown(){const n=new Date();const t=new Date(n);t.setDate(t.getDate()+1);t.setHours(0,0,0,0);const d=t-n;return`${String(Math.floor(d/3600000)).padStart(2,"0")}:${String(Math.floor((d%3600000)/60000)).padStart(2,"0")}:${String(Math.floor((d%60000)/1000)).padStart(2,"0")}`;}
 function parseYouTubeStart(value){
   const raw = String(value||"").trim();
@@ -3402,7 +3572,7 @@ function AdminDash({games,onNew,onEdit,onLogout}){
           {sorted.map(g=>(
             <div key={g.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 0",borderBottom:"1px solid rgba(45,212,191,.08)"}}>
               <div>
-                <div style={{fontSize:11,color:"var(--teal-dark)",opacity:.7,fontWeight:700,marginBottom:1,letterSpacing:.5,textTransform:"uppercase"}}>{g.date}</div>
+                <div style={{fontSize:11,color:"var(--teal-dark)",opacity:.7,fontWeight:700,marginBottom:1,letterSpacing:.5,textTransform:"uppercase"}}>{formatAdminDate(g.date)}</div>
                 <div style={{fontSize:15,fontWeight:700,color:"white",marginBottom:1}}>{g.themeTitle}</div>
                 <div style={{fontSize:11,color:"rgba(255,255,255,.3)"}}>{g.questions?.length??0} questions · {g.categoryA} vs {g.categoryB}</div>
               </div>
@@ -3418,7 +3588,130 @@ function AdminDash({games,onNew,onEdit,onLogout}){
   );
 }
 
-function AdminEditor({game:ig,onSave,onDelete,onBack}){
+function AdminDatePicker({value,onChange,games,currentGameId}){
+  const selectedDate = localDateFromISO(value) || new Date();
+  const[month,setMonth]=useState(()=>new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
+  const[draft,setDraft]=useState(()=>formatAdminDate(value));
+  const[open,setOpen]=useState(true);
+  const occupied = new Map();
+  (games||[]).forEach(g=>{
+    if(g?.date) occupied.set(g.date,g);
+  });
+  const conflict = value ? occupied.get(value) : null;
+  const hasConflict = Boolean(conflict && conflict.id!==currentGameId);
+  const ownDate = Boolean(conflict && conflict.id===currentGameId);
+  const monthTitle = month.toLocaleDateString("en-US",{month:"long",year:"numeric"});
+  const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
+  const daysInMonth = new Date(month.getFullYear(), month.getMonth()+1, 0).getDate();
+  const blanks = Array.from({length:firstDay.getDay()},(_,i)=>({empty:true,key:`b-${i}`}));
+  const days = Array.from({length:daysInMonth},(_,idx)=>{
+    const day = idx+1;
+    const date = new Date(month.getFullYear(), month.getMonth(), day);
+    const iso = isoFromLocalDate(date);
+    const game = occupied.get(iso);
+    return {day,iso,game};
+  });
+  const cells = [...blanks,...days];
+  const shiftMonth = delta => setMonth(m=>new Date(m.getFullYear(), m.getMonth()+delta, 1));
+  const chooseDate = iso => {
+    const game = occupied.get(iso);
+    if(game && game.id!==currentGameId) return;
+    onChange(iso);
+    setDraft(formatAdminDate(iso));
+  };
+  const applyDraft = () => {
+    const parsed = parseAdminDate(draft);
+    if(parsed){
+      onChange(parsed);
+      setDraft(formatAdminDate(parsed));
+      const parsedDate = localDateFromISO(parsed);
+      if(parsedDate) setMonth(new Date(parsedDate.getFullYear(), parsedDate.getMonth(), 1));
+    }else if(!draft.trim()){
+      onChange("");
+    }else{
+      setDraft(formatAdminDate(value));
+    }
+  };
+  useEffect(()=>{
+    setDraft(formatAdminDate(value));
+    const date = localDateFromISO(value);
+    if(date) setMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+  },[value]);
+
+  return(
+    <div className="admin-date-picker">
+      <div className="adm-field" style={{marginBottom:0}}>
+        <label>Puzzle Date (MM/DD/YYYY)</label>
+        <div className="admin-date-top">
+          <div className="admin-date-input-wrap">
+            <input
+              className="adm-input"
+              value={draft}
+              placeholder="04/30/2026"
+              onChange={e=>setDraft(e.target.value)}
+              onBlur={applyDraft}
+              onKeyDown={e=>e.key==="Enter"&&applyDraft()}
+            />
+          </div>
+          <button type="button" className="btn-adm admin-date-btn" onClick={()=>setOpen(v=>!v)}>
+            {open?"Hide":"Calendar"}
+          </button>
+        </div>
+      </div>
+      {hasConflict&&(
+        <div className="admin-date-note bad">
+          {formatAdminDate(value)} already has "{conflict.themeTitle||"another puzzle"}". Pick a different day.
+        </div>
+      )}
+      {!hasConflict&&value&&(
+        <div className={`admin-date-note ${ownDate?"good":""}`}>
+          {ownDate?"This is this puzzle's current day.":"This day is available."}
+        </div>
+      )}
+      {open&&(
+        <div className="admin-calendar">
+          <div className="admin-cal-head">
+            <div className="admin-cal-title">{monthTitle}</div>
+            <div className="admin-cal-nav">
+              <button type="button" onClick={()=>shiftMonth(-1)}>‹</button>
+              <button type="button" onClick={()=>setMonth(new Date())}>Today</button>
+              <button type="button" onClick={()=>shiftMonth(1)}>›</button>
+            </div>
+          </div>
+          <div className="admin-cal-grid">
+            {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=><div key={d} className="admin-cal-dow">{d}</div>)}
+            {cells.map(cell=>{
+              if(cell.empty) return <div key={cell.key} className="admin-cal-day empty"/>;
+              const cellGame = cell.game;
+              const isOwn = cellGame?.id===currentGameId;
+              const isUsed = Boolean(cellGame && !isOwn);
+              const selected = cell.iso===value;
+              const cls = `admin-cal-day ${selected?"selected":""} ${isUsed?"occupied":""} ${isOwn?"own":""}`;
+              return(
+                <button
+                  type="button"
+                  key={cell.iso}
+                  className={cls}
+                  onClick={()=>chooseDate(cell.iso)}
+                  title={cellGame?`${formatAdminDate(cell.iso)}: ${cellGame.themeTitle}`:formatAdminDate(cell.iso)}
+                >
+                  <span>{cell.day}</span>
+                  {cellGame&&<span className="admin-cal-status">{isOwn?"This":cellGame.status||"Used"}</span>}
+                </button>
+              );
+            })}
+          </div>
+          <div className="admin-cal-legend">
+            <span><span className="admin-cal-dot used"/>Day already has a puzzle</span>
+            <span><span className="admin-cal-dot mine"/>This puzzle's day</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
   const isNew=!ig.id;
   const[game,setGame]=useState(()=>loadEditorDraft(ig));
   const[showQF,setShowQF]=useState(false);
@@ -3431,6 +3724,14 @@ function AdminEditor({game:ig,onSave,onDelete,onBack}){
   const set=(f,v)=>setGame(g=>({...g,[f]:v}));
   const qc=game.questions?.length??0;
   const ok=qc>=4&&qc<=15;
+  const dateConflict = game.date ? (games||[]).find(g=>g.date===game.date&&g.id!==game.id) : null;
+  const dateOk = Boolean(localDateFromISO(game.date)) && !dateConflict;
+  const canPublish = ok && dateOk;
+  const validateDate = () => {
+    if(!localDateFromISO(game.date)){st("Pick a puzzle date first.");return false;}
+    if(dateConflict){st(`That day already has "${dateConflict.themeTitle||"another puzzle"}".`);return false;}
+    return true;
+  };
 
   useEffect(()=>{
     const restored = loadEditorDraft(ig);
@@ -3459,8 +3760,10 @@ function AdminEditor({game:ig,onSave,onDelete,onBack}){
     return ()=>clearTimeout(timer);
   },[game]);
 
-  const pub=async()=>{if(!ok){st(`Need 4–15 questions (have ${qc})`);return;}const s={...game,status:"published"};st("Saving... ⏳");try{await onSave(s);clearEditorDraft(s.id);setGame(s);setLastAutoSavedAt(null);setAutoSaveState("idle");}catch(e){st("Save failed 😬");}};
-  const dft=async()=>{const s={...game,status:game.status==="published"?"published":"draft"};if(!s.id)s.id=`g-${Date.now()}`;if(!s.questions)s.questions=[];st("Saving... ⏳");try{await onSave(s);clearEditorDraft(s.id);setGame(s);setLastAutoSavedAt(null);setAutoSaveState("idle");}catch(e){st("Save failed 😬");}};
+  const pub=async()=>{if(!validateDate())return;if(!ok){st(`Need 4–15 questions (have ${qc})`);return;}const s={...game,status:"published"};st("Saving... ⏳");try{await onSave(s);clearEditorDraft(s.id);setGame(s);setLastAutoSavedAt(null);setAutoSaveState("idle");}catch(e){st("Save failed 😬");}};
+  const dft=async()=>{if(!validateDate())return;const s={...game,status:game.status==="published"?"published":"draft"};if(!s.id)s.id=`g-${Date.now()}`;if(!s.questions)s.questions=[];st("Saving... ⏳");try{await onSave(s);clearEditorDraft(s.id);setGame(s);setLastAutoSavedAt(null);setAutoSaveState("idle");}catch(e){st("Save failed 😬");}};
+  const pubSafe=async()=>{if(!validateDate())return;await pub();};
+  const dftSafe=async()=>{if(!validateDate())return;await dft();};
   const addQ=q=>{setGame(g=>({...g,questions:[...(g.questions??[]),{...q,id:`q-${Date.now()}`,orderIndex:(g.questions?.length??0)+1}]}));setShowQF(false);setEditQ(null);};
   const updQ=u=>setGame(g=>({...g,questions:g.questions.map(q=>q.id===u.id?u:q)}));
   const delQ=id=>setGame(g=>({...g,questions:g.questions.filter(q=>q.id!==id).map((q,i)=>({...q,orderIndex:i+1}))}));
@@ -3482,7 +3785,7 @@ function AdminEditor({game:ig,onSave,onDelete,onBack}){
           <div style={{fontSize:11,fontWeight:800,color:"rgba(255,255,255,.6)",marginBottom:10}}>
             {autoSaveState==="saving"?"Auto-saving draft...":lastAutoSavedAt?`Draft auto-saved locally at ${new Date(lastAutoSavedAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}`:"Draft auto-save is on"}
           </div>
-          <div className="adm-field"><label>Date (YYYY-MM-DD)</label><input className="adm-input" value={game.date||""} placeholder="2025-06-11" onChange={e=>set("date",e.target.value)}/></div>
+          <AdminDatePicker value={game.date||""} onChange={v=>set("date",v)} games={games} currentGameId={game.id}/>
           <div className="adm-field"><label>Theme Title</label><input className="adm-input" value={game.themeTitle||""} placeholder="Board Game or Nicolas Cage Movie?" onChange={e=>set("themeTitle",e.target.value)}/></div>
           <div style={{display:"flex",gap:9}}>
             <div className="adm-field" style={{flex:1}}><label>Category A</label><input className="adm-input" value={game.categoryA||""} placeholder="Board Game" onChange={e=>set("categoryA",e.target.value)}/></div>
@@ -3506,8 +3809,8 @@ function AdminEditor({game:ig,onSave,onDelete,onBack}){
           </div>
           <ImageUploader label="Header Image (shown on home screen & archive)" value={game.headerImage||""} onChange={v=>set("headerImage",v)} preset="header"/>
           <div style={{display:"flex",gap:7,marginTop:2}}>
-            <button className="btn-adm btn-adm-g" onClick={dft}>Save Draft</button>
-            <button className={`btn-adm ${ok?"btn-adm-green":""}`} style={!ok?{opacity:.5,cursor:"not-allowed"}:{}} onClick={pub}>{game.status==="published"?"✓ Published":"Publish"}</button>
+            <button className="btn-adm btn-adm-g" onClick={dftSafe}>Save Draft</button>
+            <button className={`btn-adm ${canPublish?"btn-adm-green":""}`} style={!canPublish?{opacity:.5,cursor:"not-allowed"}:{}} onClick={pubSafe}>{game.status==="published"?"✓ Published":"Publish"}</button>
           </div>
         </div>
         <div className="adm-card">
@@ -3774,6 +4077,15 @@ export default function WhatTheFudgeTrivia(){
   // Admin save
   const handleSave = async(sg) => {
     try {
+      if(!localDateFromISO(sg.date)){
+        showToast("Pick a valid puzzle date.");
+        return;
+      }
+      const conflict = games.find(g=>g.date===sg.date&&g.id!==sg.id);
+      if(conflict){
+        showToast(`That day already has "${conflict.themeTitle||"another puzzle"}".`);
+        return;
+      }
       const saved = await dbSaveGame(sg);
       await refreshGames();
       setEditGame(saved);
@@ -3872,7 +4184,7 @@ export default function WhatTheFudgeTrivia(){
   if(view==="admin"){
     if(!adminIn)return <><style>{styles}</style><AdminLogin onLogin={()=>{setAdminIn(true);setAdminView("dashboard");}}/></>;
     if(adminView==="dashboard")return <><style>{styles}</style><AdminDash games={games} onNew={()=>{setEditGame({id:`g-${Date.now()}`,date:"",themeTitle:"",categoryA:"",categoryB:"",status:"draft",questions:[]});setAdminView("editor");}} onEdit={g=>{setEditGame(g);setAdminView("editor");}} onLogout={()=>{setAdminIn(false);setAdminView("login");setView("home");}}/></>;
-    if(adminView==="editor")return <><style>{styles}</style><AdminEditor game={editGame} onSave={handleSave} onDelete={handleDel} onBack={()=>setAdminView("dashboard")}/></>;
+    if(adminView==="editor")return <><style>{styles}</style><AdminEditor game={editGame} games={games} onSave={handleSave} onDelete={handleDel} onBack={()=>setAdminView("dashboard")}/></>;
   }
 
   // Player app
