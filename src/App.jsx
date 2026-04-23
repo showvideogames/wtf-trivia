@@ -1866,21 +1866,57 @@ const supabase = SUPABASE_READY ? createClient(SB_URL, SB_KEY, {
     detectSessionInUrl: true
   }
 }) : null;
+const AUTH_TIMEOUT_MS = 8000;
+const APP_BOOT_TIMEOUT_MS = 14000;
+
+function withTimeout(promise, ms, message){
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise).finally(()=>clearTimeout(timer)),
+    new Promise((_,reject)=>{
+      timer = setTimeout(()=>reject(new Error(message)), ms);
+    })
+  ]);
+}
+
+function clearSupabaseAuthCache(){
+  if(typeof localStorage==="undefined") return;
+  const keys = [];
+  for(let i=0;i<localStorage.length;i++){
+    const key = localStorage.key(i);
+    if(key&&key.startsWith("sb-")&&key.includes("auth-token")) keys.push(key);
+  }
+  keys.forEach(key=>safeRemove(key));
+}
 
 function isAnonymousUser(user){
   return Boolean(user?.is_anonymous ?? (!user?.email && (!Array.isArray(user?.identities) || user.identities.length===0)));
 }
 async function getAuthSession(){
   if(!supabase) return null;
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await withTimeout(
+    supabase.auth.getSession(),
+    AUTH_TIMEOUT_MS,
+    "Auth session check timed out."
+  );
   if(error) throw error;
   return data.session;
 }
-async function authEnsureSession(){
+async function authEnsureSession({recover=false}={}){
   if(!supabase) throw new Error("Supabase Auth is not configured.");
-  const existing = await getAuthSession();
+  let existing = null;
+  try{
+    existing = await getAuthSession();
+  }catch(e){
+    if(!recover) throw e;
+    clearSupabaseAuthCache();
+  }
   if(existing?.user) return existing;
-  const { data, error } = await supabase.auth.signInAnonymously();
+  const { data, error } = await withTimeout(
+    supabase.auth.signInAnonymously(),
+    AUTH_TIMEOUT_MS,
+    "Guest sign-in timed out."
+  );
   if(error) throw error;
   return data.session;
 }
@@ -2416,7 +2452,7 @@ function shouldKeepFitTextOnOneLine(value){
   return Boolean(text) && !/[\s-]/.test(text);
 }
 
-function FitText({children, className="", style, min=12, max=48, oneLine, as:Tag="div"}){
+function FitText({children, className="", style, min=12, max=48, oneLine, as="div"}){
   const text = String(children??"");
   const wrapRef = useRef(null);
   const textRef = useRef(null);
@@ -2462,10 +2498,19 @@ function FitText({children, className="", style, min=12, max=48, oneLine, as:Tag
     };
   },[text,min,max,noWrap]);
 
+  const boxClass = `fit-text-box ${noWrap?"fit-text-one-line":""} ${className}`;
+  const content = <span ref={textRef} className="fit-text-content" style={{fontSize}}>{children}</span>;
+  if(as==="span"){
+    return (
+      <span ref={wrapRef} className={boxClass} style={style}>
+        {content}
+      </span>
+    );
+  }
   return (
-    <Tag ref={wrapRef} className={`fit-text-box ${noWrap?"fit-text-one-line":""} ${className}`} style={style}>
+    <div ref={wrapRef} className={boxClass} style={style}>
       <span ref={textRef} className="fit-text-content" style={{fontSize}}>{children}</span>
-    </Tag>
+    </div>
   );
 }
 
@@ -3579,9 +3624,10 @@ export default function WhatTheFudgeTrivia(){
   const sound=useSoundEngine();
   const today=getLocalGameDay();
 
-  const loadAppData = useCallback(async(sessionOverride=null)=>{
-    const session = sessionOverride || await authEnsureSession();
+  const loadAppData = useCallback(async(sessionOverride=null,{recoverAuth=false}={})=>{
+    const session = sessionOverride || await authEnsureSession({recover:recoverAuth});
     const p = await dbGetOrCreatePlayer(session?.user);
+    if(!p?.id) throw new Error("Player session could not be created.");
     authUserIdRef.current = p?.id || null;
     setPlayer(p);
     const [allGames, playerStats] = await Promise.all([
@@ -3602,34 +3648,58 @@ export default function WhatTheFudgeTrivia(){
   // Boot and listen for auth session changes
   useEffect(()=>{
     let active = true;
+    let authReloadTimer = null;
     const boot = async()=>{
       try {
         setLoading(true);
         setError(null);
-        await loadAppData();
+        await withTimeout(
+          loadAppData(null,{recoverAuth:true}),
+          APP_BOOT_TIMEOUT_MS,
+          "App boot timed out."
+        );
       } catch(e){
-        setError("Couldn't connect to server. Check your connection.");
-        console.error(e);
+        console.error("[boot] first attempt failed", e);
+        try{
+          clearSupabaseAuthCache();
+          await withTimeout(
+            loadAppData(null,{recoverAuth:true}),
+            APP_BOOT_TIMEOUT_MS,
+            "App boot retry timed out."
+          );
+        }catch(retryError){
+          setError("Couldn't connect to server. Check your connection.");
+          console.error("[boot] retry failed", retryError);
+        }
       } finally {
         if(active) setLoading(false);
       }
     };
     boot();
-    const { data:{ subscription } } = authSubscribe(async (event, session)=>{
+    const { data:{ subscription } } = authSubscribe((event, session)=>{
       if(!active) return;
       if(event==="TOKEN_REFRESHED"||event==="INITIAL_SESSION") return;
       if(event==="SIGNED_IN" && session?.user?.id===authUserIdRef.current) return;
-      try{
-        setError(null);
-        const ensured = session?.user ? session : await authEnsureSession();
-        await loadAppData(ensured);
-      }catch(e){
-        setError("Couldn't connect to server. Check your connection.");
-        console.error(e);
-      }
+      clearTimeout(authReloadTimer);
+      authReloadTimer = setTimeout(async()=>{
+        if(!active) return;
+        try{
+          setError(null);
+          const ensured = session?.user ? session : await authEnsureSession({recover:true});
+          await withTimeout(
+            loadAppData(ensured,{recoverAuth:true}),
+            APP_BOOT_TIMEOUT_MS,
+            "Auth reload timed out."
+          );
+        }catch(e){
+          setError("Couldn't connect to server. Check your connection.");
+          console.error("[auth change] reload failed", e);
+        }
+      },0);
     });
     return ()=>{
       active = false;
+      clearTimeout(authReloadTimer);
       subscription.unsubscribe();
     };
   },[loadAppData]);
