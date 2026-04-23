@@ -2146,26 +2146,78 @@ async function sbFetch(path, opts={}){
 }
 
 // ===== IMAGE UPLOAD to Supabase Storage =====
-async function uploadImage(dataUri, folder="images"){
-  if(!dataUri || !dataUri.startsWith("data:")) return dataUri; // already a URL
+const STORAGE_BUCKET = "wtf-images";
+const STORAGE_PUBLIC_PREFIX = `${SB_URL}/storage/v1/object/public/${STORAGE_BUCKET}/`;
+const IMPORT_IMAGE_TIMEOUT_MS = 14000;
+
+function isStorageImageUrl(value){
+  if(!value || !SUPABASE_READY) return false;
+  return String(value).startsWith(STORAGE_PUBLIC_PREFIX);
+}
+function isImportableExternalImageUrl(value){
+  if(!value || String(value).startsWith("data:") || isYouTubeUrl(value) || isStorageImageUrl(value)) return false;
+  try{
+    const url = new URL(value);
+    return url.protocol==="http:" || url.protocol==="https:";
+  }catch{
+    return false;
+  }
+}
+async function uploadBytesToStorage(bytes, mime, folder="images"){
   if(!SUPABASE_READY) throw new Error("Supabase is not configured.");
-  const [meta, b64] = dataUri.split(",");
-  const mime = meta.match(/:(.*?);/)[1];
-  const ext = mime.split("/")[1] || "png";
+  const cleanMime = mime || "image/png";
+  const ext = (cleanMime.split("/")[1] || "png").replace(/[^a-z0-9]/gi,"").replace(/^jpeg$/,"jpg") || "png";
   const filename = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const bytes = Uint8Array.from(atob(b64), c=>c.charCodeAt(0));
-  const res = await fetch(`${SB_URL}/storage/v1/object/wtf-images/${filename}`, {
+  let session = null;
+  try{ session = await getAuthSession(); }catch{}
+  const postWithToken = token=>fetch(`${SB_URL}/storage/v1/object/${STORAGE_BUCKET}/${filename}`, {
     method:"POST",
     headers:{
       "apikey": SB_KEY,
-      "Authorization": `Bearer ${SB_KEY}`,
-      "Content-Type": mime,
-      "Cache-Control": "3600"
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": cleanMime,
+      "Cache-Control": "31536000"
     },
     body: bytes
   });
+  let res = await postWithToken(session?.access_token || SB_KEY);
+  if(!res.ok && session?.access_token) res = await postWithToken(SB_KEY);
   if(!res.ok) throw new Error(`Image upload failed: ${await res.text()}`);
-  return `${SB_URL}/storage/v1/object/public/wtf-images/${filename}`;
+  return `${STORAGE_PUBLIC_PREFIX}${filename}`;
+}
+async function uploadImage(dataUri, folder="images"){
+  if(!dataUri || !dataUri.startsWith("data:")) return dataUri; // already a URL
+  const [meta, b64] = dataUri.split(",");
+  const mime = meta.match(/:(.*?);/)[1];
+  const bytes = Uint8Array.from(atob(b64), c=>c.charCodeAt(0));
+  return uploadBytesToStorage(bytes, mime, folder);
+}
+async function importExternalImageUrl(value, {folder="images", preset="default", label="image"}={}){
+  if(!isImportableExternalImageUrl(value)) return value;
+  let response;
+  try{
+    response = await withTimeout(
+      fetch(value, {mode:"cors", redirect:"follow"}),
+      IMPORT_IMAGE_TIMEOUT_MS,
+      `Import timed out for ${label}.`
+    );
+  }catch{
+    throw new Error(`Couldn't import ${label}. Try uploading the image file instead.`);
+  }
+  if(!response.ok) throw new Error(`Couldn't import ${label}. The image URL returned ${response.status}.`);
+  const type = response.headers.get("content-type") || "";
+  const blob = await response.blob();
+  const mime = blob.type || type;
+  if(!mime.startsWith("image/")) throw new Error(`Couldn't import ${label}. That URL did not return an image.`);
+  const dataUrl = await fileToDataUrl(blob);
+  const optimized = await optimizeImageDataUrl(dataUrl, preset);
+  return uploadImage(optimized, folder);
+}
+async function prepareImageForSave(value, options, archiveExternal=false){
+  if(!value) return value;
+  if(String(value).startsWith("data:")) return uploadImage(value, options?.folder);
+  if(archiveExternal) return importExternalImageUrl(value, options);
+  return value;
 }
 
 // ===== GAME → DB row conversion =====
@@ -2212,20 +2264,24 @@ async function dbLoadPublishedGames(){
   return (rows||[]).map(rowToGame);
 }
 async function dbSaveGame(game){
-  // Upload any base64 images to Storage first
-  const toUpload = ["categoryAImage","categoryBImage","headerImage"];
+  // Upload pasted files immediately; archive external image URLs only once the puzzle is published.
+  const archiveExternal = game.status==="published";
+  const toUpload = [
+    ["categoryAImage", {folder:"categories", preset:"category", label:"Category A image"}],
+    ["categoryBImage", {folder:"categories", preset:"category", label:"Category B image"}],
+    ["headerImage", {folder:"headers", preset:"header", label:"header image"}]
+  ];
   const uploaded = {...game};
-  for(const field of toUpload){
-    if(uploaded[field]&&uploaded[field].startsWith("data:")){
-      uploaded[field] = await uploadImage(uploaded[field]);
-    }
+  for(const [field, options] of toUpload){
+    uploaded[field] = await prepareImageForSave(uploaded[field], options, archiveExternal);
   }
   // Also upload question images
   if(uploaded.questions){
     uploaded.questions = await Promise.all(uploaded.questions.map(async q=>{
-      if(q.imageUrl&&q.imageUrl.startsWith("data:")){
-        return {...q, imageUrl: await uploadImage(q.imageUrl,"questions")};
-      }
+      const original = q.imageUrl;
+      const imageUrl = await prepareImageForSave(original, {folder:"questions", preset:"question", label:`question image${q.itemText?` for "${q.itemText}"`:""}`}, archiveExternal);
+      if(imageUrl!==original && isImportableExternalImageUrl(original)) return {...q, imageUrl, originalImageUrl:q.originalImageUrl||original};
+      if(imageUrl!==original) return {...q, imageUrl};
       return q;
     }));
   }
@@ -3724,7 +3780,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
   const[preview,setPreview]=useState(false);
   const[autoSaveState,setAutoSaveState]=useState("idle");
   const[lastAutoSavedAt,setLastAutoSavedAt]=useState(()=>safeRead(getEditorDraftKey(ig.id))?.savedAt||null);
-  const st=m=>{setToast(m);setTimeout(()=>setToast(null),2100);};
+  const st=(m,ms=2100)=>{setToast(m);setTimeout(()=>setToast(null),ms);};
   const set=(f,v)=>setGame(g=>({...g,[f]:v}));
   const qc=game.questions?.length??0;
   const ok=qc>=4&&qc<=15;
@@ -3764,8 +3820,8 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
     return ()=>clearTimeout(timer);
   },[game]);
 
-  const pub=async()=>{if(!validateDate())return;if(!ok){st(`Need 4–15 questions (have ${qc})`);return;}const s={...game,status:"published"};st("Saving... ⏳");try{await onSave(s);clearEditorDraft(s.id);setGame(s);setLastAutoSavedAt(null);setAutoSaveState("idle");}catch(e){st("Save failed 😬");}};
-  const dft=async()=>{if(!validateDate())return;const s={...game,status:game.status==="published"?"published":"draft"};if(!s.id)s.id=`g-${Date.now()}`;if(!s.questions)s.questions=[];st("Saving... ⏳");try{await onSave(s);clearEditorDraft(s.id);setGame(s);setLastAutoSavedAt(null);setAutoSaveState("idle");}catch(e){st("Save failed 😬");}};
+  const pub=async()=>{if(!validateDate())return;if(!ok){st(`Need 4–15 questions (have ${qc})`);return;}const s={...game,status:"published"};st("Publishing + archiving images... ⏳",8000);try{const saved=await onSave(s);clearEditorDraft((saved||s).id);setGame(saved||s);setLastAutoSavedAt(null);setAutoSaveState("idle");}catch(e){st(e?.message||"Save failed 😬",6000);}};
+  const dft=async()=>{if(!validateDate())return;const s={...game,status:game.status==="published"?"published":"draft"};if(!s.id)s.id=`g-${Date.now()}`;if(!s.questions)s.questions=[];st("Saving... ⏳");try{const saved=await onSave(s);clearEditorDraft((saved||s).id);setGame(saved||s);setLastAutoSavedAt(null);setAutoSaveState("idle");}catch(e){st(e?.message||"Save failed 😬",6000);}};
   const pubSafe=async()=>{if(!validateDate())return;await pub();};
   const dftSafe=async()=>{if(!validateDate())return;await dft();};
   const addQ=q=>{setGame(g=>({...g,questions:[...(g.questions??[]),{...q,id:`q-${Date.now()}`,orderIndex:(g.questions?.length??0)+1}]}));setShowQF(false);setEditQ(null);};
@@ -4083,20 +4139,23 @@ export default function WhatTheFudgeTrivia(){
     try {
       if(!localDateFromISO(sg.date)){
         showToast("Pick a valid puzzle date.");
-        return;
+        throw new Error("Pick a valid puzzle date.");
       }
       const conflict = games.find(g=>g.date===sg.date&&g.id!==sg.id);
       if(conflict){
         showToast(`That day already has "${conflict.themeTitle||"another puzzle"}".`);
-        return;
+        throw new Error("That day already has a puzzle.");
       }
       const saved = await dbSaveGame(sg);
       await refreshGames();
       setEditGame(saved);
       showToast("Saved ✓");
+      return saved;
     } catch(e){
-      showToast("Save failed 😬");
+      const friendly = ["Couldn't import","Pick a valid","That day"].some(prefix=>e?.message?.startsWith(prefix));
+      showToast(friendly ? e.message : "Save failed 😬");
       console.error(e);
+      throw e;
     }
   };
 
