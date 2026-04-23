@@ -1422,13 +1422,13 @@ const styles = `
   .adm-shell { background: #0E0E16; min-height: 100vh; font-family: 'Nunito', sans-serif; color: white; }
   .adm-hdr { background: linear-gradient(160deg,#FFF176,#FFE347 55%,#F0D020); border-bottom: 3px solid var(--black); padding: 13px 22px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 0 rgba(0,0,0,0.15); }
   .adm-title { font-family: 'Fredoka One', cursive; font-size: 20px; color: var(--black); -webkit-text-stroke: 0.3px var(--black); }
-  .adm-body { max-width: 820px; margin: 0 auto; padding: 22px 18px; }
+  .adm-body { max-width: 820px; margin: 0 auto; padding: 16px 18px; }
 
-  .adm-card { background: #1A1A28; border: 1.5px solid rgba(45,212,191,0.15); border-radius: 20px; padding: 20px; margin-bottom: 16px; }
-  .adm-card h3 { font-family: 'Fredoka One', cursive; font-size: 17px; color: var(--teal); margin-bottom: 14px; letter-spacing: .3px; }
+  .adm-card { background: #1A1A28; border: 1.5px solid rgba(45,212,191,0.15); border-radius: 18px; padding: 16px; margin-bottom: 12px; }
+  .adm-card h3 { font-family: 'Fredoka One', cursive; font-size: 16px; color: var(--teal); margin-bottom: 10px; letter-spacing: .3px; }
 
-  .adm-field { margin-bottom: 12px; }
-  .adm-field label { display: block; font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: rgba(45,212,191,.5); margin-bottom: 4px; }
+  .adm-field { margin-bottom: 9px; }
+  .adm-field label { display: block; font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: rgba(45,212,191,.5); margin-bottom: 3px; }
 
   .adm-input {
     width: 100%;
@@ -1439,7 +1439,7 @@ const styles = `
     font-family: 'Nunito', sans-serif;
     font-size: 14px;
     font-weight: 600;
-    padding: 9px 13px;
+    padding: 8px 11px;
     outline: none;
     transition: border-color .15s;
   }
@@ -1696,25 +1696,25 @@ const styles = `
     background: rgba(255,255,255,.04);
     border: 1.5px dashed rgba(255,255,255,.2);
     border-radius: 12px;
-    padding: 14px;
-    margin-top: 6px;
+    padding: 8px;
+    margin-top: 4px;
   }
   .img-tab-row {
     display: flex;
     gap: 0;
-    margin-bottom: 12px;
+    margin-bottom: 7px;
     border: 1.5px solid rgba(255,255,255,.15);
     border-radius: 8px;
     overflow: hidden;
   }
   .img-tab {
     flex: 1;
-    padding: 7px;
+    padding: 5px 7px;
     background: transparent;
     border: none;
     color: rgba(255,255,255,.35);
     font-family: 'Nunito', sans-serif;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
     cursor: pointer;
     text-align: center;
@@ -1726,7 +1726,7 @@ const styles = `
   .img-drop-zone {
     border: 2px dashed rgba(255,255,255,.2);
     border-radius: 10px;
-    padding: 20px 12px;
+    padding: 10px;
     text-align: center;
     cursor: pointer;
     transition: all .15s;
@@ -1741,15 +1741,19 @@ const styles = `
     width: 100%;
     height: 100%;
   }
-  .img-drop-lbl { font-size: 12px; font-weight: 700; color: rgba(255,255,255,.35); margin-top: 5px; }
+  .img-drop-lbl { font-size: 11px; font-weight: 700; color: rgba(255,255,255,.35); margin-top: 3px; }
   .img-preview {
-    margin-top: 10px;
+    margin-top: 7px;
     border-radius: 10px;
     overflow: hidden;
     border: 1.5px solid rgba(255,255,255,.15);
     position: relative;
+    background: rgba(0,0,0,.18);
   }
-  .img-preview img { width: 100%; max-height: 140px; object-fit: cover; display: block; }
+  .img-preview img { width: 100%; height: auto; max-height: 150px; object-fit: contain; display: block; background: rgba(0,0,0,.16); }
+  .img-uploader-wrap.compact .img-preview img { max-height: 115px; }
+  .img-uploader-wrap.preset-header .img-preview img { max-height: 180px; }
+  .img-uploader-wrap.compact.preset-header .img-preview img { max-height: 150px; }
   .img-preview iframe { width: 100%; aspect-ratio: 16/9; min-height: 160px; display: block; border: 0; background: #000; }
   .img-preview-label {
     position: absolute;
@@ -2734,24 +2738,24 @@ function ColorPicker({value, onChange, label}){
   return(
     <div className="adm-field">
       {label&&<label>{label}</label>}
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+      <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}>
         <div style={{
-          width:32,height:32,borderRadius:"50%",
+          width:26,height:26,borderRadius:"50%",
           background:`linear-gradient(160deg,${sel.light},${sel.mid} 55%,${sel.dark})`,
           border:"2px solid rgba(255,255,255,.3)",
           boxShadow:`0 3px 0 ${sel.dark}`,
           flexShrink:0
         }}/>
-        <span style={{fontFamily:"'Fredoka One',cursive",fontSize:14,color:"var(--teal)",letterSpacing:.3}}>{sel.name}</span>
+        <span style={{fontFamily:"'Fredoka One',cursive",fontSize:13,color:"var(--teal)",letterSpacing:.3}}>{sel.name}</span>
       </div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
         {PALETTE.map(p=>(
           <button
             key={p.id}
             title={p.name}
             onClick={()=>onChange(p.id)}
             style={{
-              width:36,height:36,
+              width:31,height:31,
               borderRadius:"50%",
               background:`linear-gradient(160deg,${p.light},${p.mid} 55%,${p.dark})`,
               border: p.id===value ? "3px solid white" : "2px solid rgba(255,255,255,.15)",
@@ -2813,7 +2817,7 @@ function ImageUploader({value, onChange, label="Image", compact=false, preset="d
   const clear=e=>{e.stopPropagation();onChange("");setUrlDraft("");};
 
   return(
-    <div className="adm-field">
+    <div className={`adm-field img-uploader-wrap preset-${preset}${compact?" compact":""}`}>
       {label&&<label>{label}</label>}
       <div className="img-uploader">
         <div className="img-tab-row">
@@ -2824,9 +2828,9 @@ function ImageUploader({value, onChange, label="Image", compact=false, preset="d
         {tab==="upload"&&(
           <label className="img-drop-zone" style={{cursor:"pointer"}}>
             <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} style={{display:"none"}}/>
-            <div style={{fontSize:28}}>📸</div>
+            <div style={{fontSize:compact?18:24}}>📸</div>
             <div className="img-drop-lbl">{loading?"Optimizing image...":err?"Couldn't load image file!":"Tap to choose an image"}</div>
-            <div className="img-drop-lbl" style={{fontSize:11,color:"rgba(255,255,255,.3)",marginTop:3}}>Large uploads are automatically resized for faster loading</div>
+            {!compact&&<div className="img-drop-lbl" style={{fontSize:11,color:"rgba(255,255,255,.3)",marginTop:3}}>Large uploads are automatically resized for faster loading</div>}
             {value&&value.startsWith("data:")&&<div className="img-drop-lbl" style={{color:"rgba(34,197,94,.7)",marginTop:3}}>✓ Image loaded</div>}
           </label>
         )}
@@ -3793,10 +3797,10 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
           </div>
           <div style={{display:"flex",gap:9}}>
             <div style={{flex:1}}>
-              <ImageUploader label={`Category A Image${game.categoryA?" ("+game.categoryA+")":""}`} value={game.categoryAImage||""} onChange={v=>set("categoryAImage",v)} preset="category"/>
+              <ImageUploader label={`Category A Image${game.categoryA?" ("+game.categoryA+")":""}`} value={game.categoryAImage||""} onChange={v=>set("categoryAImage",v)} preset="category" compact={true}/>
             </div>
             <div style={{flex:1}}>
-              <ImageUploader label={`Category B Image${game.categoryB?" ("+game.categoryB+")":""}`} value={game.categoryBImage||""} onChange={v=>set("categoryBImage",v)} preset="category"/>
+              <ImageUploader label={`Category B Image${game.categoryB?" ("+game.categoryB+")":""}`} value={game.categoryBImage||""} onChange={v=>set("categoryBImage",v)} preset="category" compact={true}/>
             </div>
           </div>
           <div style={{display:"flex",gap:9}}>
@@ -3807,7 +3811,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
               <ColorPicker label={`Category B Color${game.categoryB?" ("+game.categoryB+")":""}`} value={game.categoryBColor||"pink"} onChange={v=>set("categoryBColor",v)}/>
             </div>
           </div>
-          <ImageUploader label="Header Image (shown on home screen & archive)" value={game.headerImage||""} onChange={v=>set("headerImage",v)} preset="header"/>
+          <ImageUploader label="Header Image (shown on home screen & archive)" value={game.headerImage||""} onChange={v=>set("headerImage",v)} preset="header" compact={true}/>
           <div style={{display:"flex",gap:7,marginTop:2}}>
             <button className="btn-adm btn-adm-g" onClick={dftSafe}>Save Draft</button>
             <button className={`btn-adm ${canPublish?"btn-adm-green":""}`} style={!canPublish?{opacity:.5,cursor:"not-allowed"}:{}} onClick={pubSafe}>{game.status==="published"?"✓ Published":"Publish"}</button>
