@@ -69,6 +69,34 @@ const styles = `
     cursor: default;
   }
 
+  /* ===== DECORATIVE CANDY BACKDROP (landing page only) =====
+     Sits behind all content via z-index:-1, so no existing element needed
+     changing. Purely ornamental and never interactive. */
+  .candy-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .candy-bg img {
+    position: absolute;
+    width: var(--cw, 190px);
+    height: auto;
+    opacity: .9;
+    filter: drop-shadow(0 6px 0 rgba(0,0,0,0.13));
+    user-select: none;
+  }
+  @media (max-width: 900px) {
+    .candy-bg img { opacity: .85; }
+  }
+  @media (max-width: 640px) {
+    /* Do not fade these over the yellow: pink reads orange and turquoise
+       reads green. Reduce size and count instead. */
+    .candy-bg img { opacity: .9; --cw: 132px; }
+    .candy-bg img.candy-hide-sm { display: none; }
+  }
+
   /* ===== CONFETTI CANVAS ===== */
   #confetti-canvas {
     position: fixed;
@@ -79,13 +107,13 @@ const styles = `
 
   /* ===== APP SHELL ===== */
   .app {
+    /* Background intentionally left to <body>, which paints the identical
+       yellow + dot pattern. Keeping .app transparent lets the decorative
+       candy layer sit between the background and the content. */
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: var(--yellow);
-    background-image: radial-gradient(circle, #1A1A1A 1.2px, transparent 1.2px);
-    background-size: 26px 26px;
   }
 
   /* ===== HEADER ===== */
@@ -2669,6 +2697,22 @@ function perfectRateCopy(rate){
 // SMALL SHARED COMPONENTS
 // ============================================================
 function Countdown(){const[t,setT]=useState(getCountdown());useEffect(()=>{const id=setInterval(()=>setT(getCountdown()),1000);return()=>clearInterval(id);},[]);return(<div className="cdown-box"><div className="cdown-lbl">Next game in</div><div className="cdown-time">{t}</div></div>);}
+function CandyBackdrop(){
+  const candies=[
+    {src:"/candy-pink.png",      style:{top:"4%",   left:"-3%",  "--cw":"210px", transform:"rotate(-18deg)"}, cls:"candy-hide-sm"},
+    {src:"/candy-turquoise.png", style:{top:"34%",  left:"1%",   "--cw":"165px", transform:"rotate(12deg)"},  cls:"candy-hide-sm"},
+    {src:"/candy-pink.png",      style:{bottom:"5%",left:"-2%",  "--cw":"180px", transform:"rotate(9deg)"}},
+    {src:"/candy-turquoise.png", style:{top:"7%",   right:"-3%", "--cw":"195px", transform:"rotate(16deg)"}, cls:"candy-hide-sm"},
+    {src:"/candy-pink.png",      style:{top:"41%",  right:"0%",  "--cw":"150px", transform:"rotate(-14deg)"}, cls:"candy-hide-sm"},
+    {src:"/candy-turquoise.png", style:{bottom:"6%",right:"-2%", "--cw":"200px", transform:"rotate(-11deg)"}}
+  ];
+  return(
+    <div className="candy-bg" aria-hidden="true">
+      {candies.map((c,i)=><img key={i} src={c.src} alt="" className={c.cls||""} style={c.style}/>)}
+    </div>
+  );
+}
+
 function Toast({message,onDone}){useEffect(()=>{const id=setTimeout(onDone,2100);return()=>clearTimeout(id);},[onDone]);return <div className="toast">{message}</div>;}
 
 function ProgressDots({total,currentIndex,answers,combo}){
@@ -4327,6 +4371,7 @@ export default function WhatTheFudgeTrivia(){
     <>
       <style>{styles}</style>
       <div className="app">
+        {view==="home"&&<CandyBackdrop/>}
         <div className="hdr">
           <div className="logo">
             <div className="logo-line1"><span className="logo-what">What The</span></div>
