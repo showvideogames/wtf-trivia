@@ -1,5 +1,15 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
+import {
+  demoGames as devDemoGames,
+  devPlayer,
+  devGetRecord,
+  devInitRecord,
+  devRecordAnswer,
+  devCompleteGame,
+  devGetStats,
+  devCommunityStats,
+} from "./dev/offlineBackend.js";
 
 // ============================================================
 // WHAT THE FUDGE TRIVIA — FUDGE CANDY EDITION
@@ -2010,6 +2020,10 @@ function useConfetti() {
 const SB_URL = import.meta.env.VITE_SUPABASE_URL?.trim() || "";
 const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() || "";
 const SUPABASE_READY = Boolean(SB_URL && SB_KEY);
+
+// LOCAL DEV ONLY: with no Supabase key, serve a demo puzzle so the UI can be
+// viewed offline. Vite strips this from production builds.
+const OFFLINE_PREVIEW = import.meta.env.DEV && !SUPABASE_READY;
 const supabase = SUPABASE_READY ? createClient(SB_URL, SB_KEY, {
   auth: {
     persistSession: true,
@@ -2054,6 +2068,7 @@ async function getAuthSession(){
   return data.session;
 }
 async function authEnsureSession({recover=false}={}){
+  if(OFFLINE_PREVIEW) return { user: { id: devPlayer.id, is_anonymous: true } };
   if(!supabase) throw new Error("Supabase Auth is not configured.");
   let existing = null;
   try{
@@ -2114,6 +2129,7 @@ async function authSignOutToGuest(){
   return authEnsureSession();
 }
 function authSubscribe(onChange){
+  if(OFFLINE_PREVIEW) return { data: { subscription: { unsubscribe(){} } } };
   if(!supabase) return { data: { subscription: { unsubscribe(){} } } };
   return supabase.auth.onAuthStateChange((event, session)=>onChange(event, session));
 }
@@ -2268,6 +2284,7 @@ function rowToGame(r){
 
 // ===== DB FUNCTIONS — GAMES =====
 async function dbLoadGames(){
+  if(OFFLINE_PREVIEW) return devDemoGames();
   const rows = await sbFetch("/rest/v1/games?select=*&order=date.desc");
   return (rows||[]).map(rowToGame);
 }
@@ -2311,6 +2328,7 @@ async function dbDeleteGame(id){
 
 // ===== DB FUNCTIONS — PLAYERS =====
 async function dbGetOrCreatePlayer(user){
+  if(OFFLINE_PREVIEW) return devPlayer;
   if(!user) return null;
   try{
     await sbFetch("/rest/v1/players", {
@@ -2338,6 +2356,7 @@ async function dbGetOrCreatePlayer(user){
 
 // ===== DB FUNCTIONS — GAME RECORDS =====
 async function dbGetGameRecord(playerId, date){
+  if(OFFLINE_PREVIEW) return devGetRecord(date);
   try {
     const rows = await sbFetch(`/rest/v1/game_records?player_id=eq.${playerId}&game_date=eq.${date}&select=*`);
     if(!rows||!rows.length) return null;
@@ -2356,6 +2375,7 @@ async function dbGetGameRecord(playerId, date){
   } catch(e){ return null; }
 }
 async function dbInitGameRecord(playerId, date, themeTitle, total){
+  if(OFFLINE_PREVIEW) return devInitRecord(date, themeTitle, total);
   const existing = await dbGetGameRecord(playerId, date);
   if(existing) return existing;
   await sbFetch("/rest/v1/game_records", {
@@ -2369,12 +2389,14 @@ async function dbInitGameRecord(playerId, date, themeTitle, total){
   return {date,themeTitle,score:0,totalQuestions:total,currentIndex:0,answers:[],completed:false,startedAt:new Date().toISOString(),completedAt:null};
 }
 async function dbRecordAnswer(playerId, date, answers, score){
+  if(OFFLINE_PREVIEW) return devRecordAnswer(date, answers, score);
   await sbFetch(`/rest/v1/game_records?player_id=eq.${playerId}&game_date=eq.${date}`, {
     method:"PATCH",
     body: JSON.stringify({answers, score})
   });
 }
 async function dbCompleteGame(playerId, date, answers, score, totalQuestions){
+  if(OFFLINE_PREVIEW) return devCompleteGame(date, answers, score, totalQuestions);
   await sbFetch(`/rest/v1/game_records?player_id=eq.${playerId}&game_date=eq.${date}`, {
     method:"PATCH",
     body: JSON.stringify({answers, score, completed:true, completed_at:new Date().toISOString()})
@@ -2383,6 +2405,7 @@ async function dbCompleteGame(playerId, date, answers, score, totalQuestions){
   await dbUpdateStats(playerId, date, score, totalQuestions, answers);
 }
 async function dbGetPuzzleCommunityStats(date, userScore){
+  if(OFFLINE_PREVIEW) return devCommunityStats(date, userScore);
   try {
     const rows = await sbFetch(`/rest/v1/puzzle_stats?game_date=eq.${date}&select=*`);
     const stats = rows?.[0];
@@ -2424,6 +2447,7 @@ async function dbGetPuzzleCommunityStats(date, userScore){
 
 // ===== DB FUNCTIONS — STATS =====
 async function dbGetStats(playerId){
+  if(OFFLINE_PREVIEW) return devGetStats();
   try {
     const rows = await sbFetch(`/rest/v1/player_stats?player_id=eq.${playerId}&select=*`);
     if(!rows||!rows.length) return {currentStreak:0,longestStreak:0,lastPlayedDate:null,totalPlayed:0,totalCorrect:0,totalQuestions:0,bestCombo:0};
