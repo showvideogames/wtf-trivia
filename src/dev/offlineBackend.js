@@ -152,7 +152,7 @@ export function demoGame() {
     categoryBColor: "pink",
     categoryAImage: DIE,
     categoryBImage: CLAPPER,
-    headerImage: null,
+    headerImage: "/src/dev/demo-hero.png",
     status: "published",
     questions: DEMO_QUESTIONS,
   };

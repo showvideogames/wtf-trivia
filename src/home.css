@@ -1,0 +1,644 @@
+/* ================= HOMEPAGE (landing screen only) =================
+   New `hp-` classes only; nothing here overrides the existing stylesheet,
+   so gameplay, results, Stats, Archive and admin are untouched. */
+
+.hp-wrap {
+  width: 100%;
+  max-width: 660px;
+  margin: 0 auto;
+  padding: 0 16px 26px;
+}
+
+/* The homepage manages its own width. The shared .main wrapper would otherwise
+   cap it at 500px, which is right for the other screens but not this one. */
+.main:has(> .hp-wrap) {
+  max-width: none;
+  padding: 0;
+}
+
+/* Desktop gets the mockup's more generous composition. Kept at 880px so the
+   outer margins stay wide enough for the candy/sprinkle layer to sit clear
+   of the card at 1280px as well as 1536px. */
+@media (min-width: 1100px) {
+  .hp-wrap {
+    max-width: 760px;
+  }
+  .hp-logo {
+    height: 96px;
+  }
+  .hp-title {
+    font-size: clamp(24px, 2.4vw, 30px);
+  }
+  .hp-score-big {
+    font-size: 56px;
+  }
+  .hp-tile {
+    min-height: 74px;
+    font-size: 22px;
+  }
+  .hp-tile img {
+    width: 46px;
+    height: 46px;
+  }
+}
+
+@media (min-width: 1500px) {
+  .hp-wrap {
+    max-width: 880px;
+  }
+}
+
+/* --- header --- */
+.hp-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 0 16px;
+}
+.hp-logo {
+  display: block;
+  height: 82px;
+  width: auto;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.hp-tools {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+}
+.hp-sound {
+  background: none;
+  border: 0;
+  padding: 6px;
+  cursor: pointer;
+  line-height: 0;
+  display: grid;
+  place-items: center;
+  min-width: 40px;
+  min-height: 40px;
+  font-size: 24px;
+}
+.hp-help {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, #fff176, #ffe347 60%, #e6c800);
+  border: 3px solid var(--black);
+  box-shadow: 0 4px 0 var(--black);
+  font-family: "Fredoka One", cursive;
+  font-size: 20px;
+  color: var(--black);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.hp-signin {
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, #fff176, #ffe347 60%, #e6c800);
+  border: 3px solid var(--black);
+  box-shadow: 0 4px 0 var(--black);
+  border-radius: 999px;
+  padding: 9px 18px;
+  min-height: 42px;
+  font-family: "Fredoka One", cursive;
+  font-size: 16px;
+  color: var(--black);
+  cursor: pointer;
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hp-signin.hp-acct {
+  background: linear-gradient(180deg, #c084fc, #a855f7 60%, #7e22ce);
+  color: #fff;
+}
+.hp-help:active,
+.hp-signin:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 var(--black);
+}
+
+/* --- card, with the streak badge overlapping its top-left corner --- */
+.hp-card-wrap {
+  position: relative;
+}
+.hp-streak {
+  position: absolute;
+  top: -13px;
+  left: 16px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 32px);
+  background: linear-gradient(180deg, #ffa53c, #ff8c00 60%, #cc6600);
+  border: 3px solid var(--black);
+  box-shadow: 0 4px 0 var(--black);
+  border-radius: 999px;
+  padding: 6px 15px 7px;
+  font-family: "Fredoka One", cursive;
+  font-size: 15px;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hp-card {
+  background: #fffdf5;
+  border: 4px solid var(--black);
+  border-radius: 26px;
+  box-shadow: 8px 8px 0 var(--black);
+  overflow: hidden;
+}
+
+/* --- puzzle artwork --- */
+.hp-art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2.75;
+  object-fit: cover;
+  border-bottom: 4px solid var(--black);
+  background: #efe6d2;
+}
+.hp-art-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  aspect-ratio: 2.75;
+  border-bottom: 4px solid var(--black);
+}
+.hp-art-half {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.hp-art-half img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.hp-art-half span {
+  font-family: "Fredoka One", cursive;
+  font-size: 15px;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  padding: 0 8px;
+  text-align: center;
+}
+
+/* --- card body --- */
+.hp-body {
+  padding: 16px 20px 20px;
+  text-align: center;
+}
+.hp-eyebrow {
+  font-family: "Fredoka One", cursive;
+  font-size: 12px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--teal-dark);
+}
+.hp-title {
+  font-family: "Fredoka One", cursive;
+  font-size: clamp(21px, 3.4vw, 27px);
+  line-height: 1.2;
+  color: var(--black);
+  margin: 4px 0 10px;
+  overflow-wrap: break-word;
+}
+.hp-rule {
+  border: 0;
+  border-top: 2px dashed rgba(45, 212, 191, 0.55);
+  margin: 15px 0 12px;
+}
+.hp-score-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 6px 0 12px;
+}
+.hp-score-big {
+  font-family: "Fredoka One", cursive;
+  font-size: 50px;
+  line-height: 1;
+  color: var(--pink);
+  -webkit-text-stroke: 2px var(--black);
+  text-shadow: 3px 3px 0 var(--pink-dark);
+}
+.hp-score-big small {
+  font-size: 26px;
+  color: var(--black);
+  -webkit-text-stroke: 1px var(--black);
+  text-shadow: none;
+}
+.hp-spark {
+  color: var(--yellow-dark);
+  font-size: 20px;
+  line-height: 1;
+}
+.hp-progress {
+  font-family: "Fredoka One", cursive;
+  font-size: 17px;
+  color: var(--teal-dark);
+  margin: 4px 0 12px;
+}
+.hp-share {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px auto 0;
+  padding: 9px 20px;
+  min-height: 42px;
+  background: #fff;
+  border: 3px solid var(--black);
+  border-radius: 999px;
+  box-shadow: 0 4px 0 var(--black);
+  cursor: pointer;
+  font-family: "Fredoka One", cursive;
+  font-size: 15px;
+  color: var(--black);
+}
+.hp-share:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 var(--black);
+}
+
+/* --- secondary navigation tiles --- */
+.hp-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 20px;
+}
+.hp-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  min-height: 66px;
+  border: 4px solid var(--black);
+  border-radius: 20px;
+  box-shadow: 0 6px 0 var(--black);
+  cursor: pointer;
+  font-family: "Fredoka One", cursive;
+  font-size: 20px;
+  color: #fff;
+  text-shadow: 1px 2px 0 rgba(0, 0, 0, 0.28);
+  text-align: left;
+}
+.hp-tile:active {
+  transform: translateY(3px);
+  box-shadow: 0 3px 0 var(--black);
+}
+.hp-tile-teal {
+  background: linear-gradient(180deg, #5eead4, #2dd4bf 55%, #0f9488);
+}
+.hp-tile-orange {
+  background: linear-gradient(180deg, #fbbf6b, #ff9f1c 55%, #d97706);
+}
+.hp-tile img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.hp-tile-lbl {
+  flex: 1;
+}
+.hp-chev {
+  font-size: 22px;
+  opacity: 0.9;
+}
+
+/* --- footer --- */
+.hp-foot {
+  margin-top: 22px;
+  text-align: center;
+}
+.hp-admin-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+.hp-admin-line::before,
+.hp-admin-line::after {
+  content: "";
+  height: 2px;
+  width: 70px;
+  background: rgba(26, 26, 26, 0.16);
+}
+.hp-admin-link {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-family: "Nunito", sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(26, 26, 26, 0.55);
+  text-decoration: underline;
+  padding: 4px;
+}
+.hp-signin-hint {
+  margin-top: 8px;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: rgba(26, 26, 26, 0.6);
+}
+
+/* --- help dialog --- */
+.hp-modal-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 26, 26, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 60;
+}
+.hp-modal {
+  background: #fffdf5;
+  border: 4px solid var(--black);
+  border-radius: 24px;
+  box-shadow: 8px 8px 0 var(--black);
+  padding: 22px;
+  max-width: 420px;
+  width: 100%;
+  max-height: 84vh;
+  overflow-y: auto;
+}
+.hp-modal h2 {
+  font-family: "Fredoka One", cursive;
+  font-size: 22px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+.hp-modal p {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.55;
+  color: #4a4a4a;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 600px) {
+  .hp-wrap {
+    padding: 0 12px 22px;
+  }
+  .hp-hdr {
+    padding: 8px 0 14px;
+    gap: 8px;
+  }
+  .hp-logo {
+    height: 54px;
+  }
+  .hp-tools {
+    gap: 6px;
+  }
+  .hp-help {
+    width: 38px;
+    height: 38px;
+    font-size: 18px;
+    border-width: 2.5px;
+  }
+  .hp-signin {
+    padding: 7px 12px;
+    min-height: 38px;
+    font-size: 14px;
+    border-width: 2.5px;
+    max-width: 104px;
+  }
+  .hp-sound {
+    padding: 2px;
+    min-width: 34px;
+    min-height: 34px;
+    font-size: 21px;
+  }
+  .hp-card {
+    border-radius: 22px;
+    box-shadow: 6px 6px 0 var(--black);
+  }
+  .hp-art,
+  .hp-art-split {
+    aspect-ratio: 2.05;
+  }
+  .hp-body {
+    padding: 14px 16px 18px;
+    text-align: left;
+  }
+  .hp-score-row {
+    justify-content: flex-start;
+  }
+  .hp-body .vs-strip {
+    justify-content: flex-start;
+  }
+  .hp-streak {
+    font-size: 13px;
+    padding: 5px 12px 6px;
+    top: -12px;
+    left: 12px;
+  }
+  .hp-tiles {
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .hp-tile {
+    font-size: 17px;
+    padding: 10px 12px;
+    min-height: 58px;
+    border-width: 3px;
+    gap: 8px;
+    border-radius: 17px;
+  }
+  .hp-tile img {
+    width: 32px;
+    height: 32px;
+  }
+  .hp-score-big {
+    font-size: 42px;
+  }
+  .hp-admin-line::before,
+  .hp-admin-line::after {
+    width: 48px;
+  }
+}
+
+@media (max-width: 380px) {
+  .hp-logo {
+    height: 48px;
+  }
+  .hp-signin {
+    font-size: 13px;
+    padding: 6px 10px;
+    max-width: 92px;
+  }
+}
+
+/* Slightly roomier category pills on the homepage than the in-game chips. */
+.hp-body .vs-strip {
+  gap: 10px;
+  margin-top: 8px;
+}
+.hp-body .cat-chip {
+  padding: 8px 16px;
+}
+
+/* Tablet: pull the card in so the reduced candy arrangement still has an
+   outer margin to live in. */
+@media (min-width: 600px) and (max-width: 1099px) {
+  .hp-wrap {
+    max-width: 560px;
+  }
+}
+
+/* Phones: the card, tiles and footer can fill the whole viewport, so a
+   viewport-fixed decoration layer has nowhere safe to sit. Anchor the layer to
+   the document instead and reserve a band below the footer for it, so the
+   sprinkles always sit clear of the interface at any scroll position. */
+@media (max-width: 599px) {
+  .app {
+    position: relative;
+  }
+  .app .candy-bg {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+  }
+  .hp-wrap {
+    padding-bottom: 104px;
+  }
+}
+
+/* ===== Final fidelity refinements ===== */
+
+/* Centre the category row from tablet up. .vs-strip is a flex container, so
+   text-align on the card body does not reach it. Phones keep the existing
+   left-aligned row, which sits under the left-aligned title. */
+@media (min-width: 601px) {
+  .hp-body .vs-strip {
+    justify-content: center;
+  }
+}
+
+@media (min-width: 1100px) {
+  /* Chunkier pills so they stay proportional to the wider desktop card.
+     Height and padding grow; the text size is left to the fitting component. */
+  .hp-body .cat-chip {
+    padding: 9px 21px;
+    min-height: 38px;
+  }
+  .hp-body .vs-strip {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 600px) {
+  /* Slightly larger wordmark; the controls still sit on one row. */
+  .hp-logo {
+    height: 64px;
+  }
+  /* The left-aligned title stays as it is, but the completed-state
+     celebration is centred in the card, matching the reference. */
+  .hp-done {
+    text-align: center;
+  }
+  .hp-done .hp-score-row {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 380px) {
+  .hp-logo {
+    height: 56px;
+  }
+}
+
+/* ===== Category pills =====
+   These carry the puzzle's premise, so they are sized for readability rather
+   than run through the auto-fitting component used by the in-game chips.
+   Only the homepage pills are affected; .cat-chip elsewhere is untouched. */
+.hp-body .hp-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1.15;
+  padding: 6px 13px;
+  min-height: 46px;
+  max-width: none;
+  overflow: visible;
+  /* Long names wrap inside their own pill rather than pushing the pill onto
+     its own row, which would orphan the VS. */
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-align: center;
+  width: 100%;
+}
+
+/* A stable three-column matchup: the pills can shrink and wrap internally,
+   but they never leave the row and the VS stays centred between them.
+   Tracks size to content while it fits, so short labels stay on one line
+   exactly as before. */
+.hp-body .vs-strip {
+  display: grid;
+  grid-template-columns: minmax(0, auto) auto minmax(0, auto);
+  align-items: stretch;
+  justify-content: center;
+  flex-wrap: nowrap;
+}
+.hp-body .vs-strip .vs-word {
+  align-self: center;
+  white-space: nowrap;
+}
+
+/* Narrowest phones: drop to the 13px floor and tighten so the pair still
+   sits on one line beside the VS. */
+@media (max-width: 380px) {
+  .hp-body .hp-chip {
+    font-size: 13px;
+    padding: 6px 11px;
+    min-height: 44px;
+  }
+  .hp-body .vs-strip {
+    gap: 6px;
+  }
+}
+
+/* Narrowest phones: drop to the 13px floor and tighten so the pair still
+   sits on one line beside the VS. */
+@media (max-width: 380px) {
+  .hp-body .hp-chip {
+    font-size: 13px;
+    padding: 0 11px;
+    min-height: 44px;
+  }
+  .hp-body .vs-strip {
+    gap: 6px;
+  }
+}
+
+@media (min-width: 601px) {
+  .hp-body .hp-chip {
+    font-size: 17px;
+    min-height: 50px;
+    padding: 0 22px;
+  }
+}
+
+/* The metadata line is gone, so close the gap it used to occupy. */
+.hp-body .vs-strip {
+  margin-bottom: 0;
+}
+.hp-rule {
+  margin-top: 14px;
+}

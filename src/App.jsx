@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
+import "./home.css";
 import {
   demoGames as devDemoGames,
   devPlayer,
@@ -2755,45 +2756,45 @@ const DECOR_DT = [
   {src:"/candy-turquoise.png", cls:"decor-candy", style:{top:"11%", right:"-26px", "--cw":"158px", transform:"rotate(21deg)"}},
   {src:"/candy-turquoise.png", cls:"decor-candy", style:{top:"66%", left:"-48px",  "--cw":"180px", transform:"rotate(9deg)"}},
   {src:"/candy-pink.png",      cls:"decor-candy", style:{top:"73%", right:"-54px", "--cw":"194px", transform:"rotate(-12deg)"}},
-  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"4%",  left:"22%",  "--cw":"92px",  transform:"rotate(-38deg)"}},
-  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"15%", left:"12%",  "--cw":"104px", transform:"rotate(24deg)"}},
-  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"27%", left:"5%",   "--cw":"84px",  transform:"rotate(-8deg)"}},
-  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"44%", left:"14%",  "--cw":"78px",  transform:"rotate(47deg)"}},
-  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"7%",  right:"17%", "--cw":"98px",  transform:"rotate(33deg)"}},
-  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"24%", right:"7%",  "--cw":"112px", transform:"rotate(-21deg)"}},
-  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"40%", right:"13%", "--cw":"86px",  transform:"rotate(14deg)"}},
-  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"58%", right:"4%",  "--cw":"80px",  transform:"rotate(-45deg)"}},
-  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"84%", left:"31%",  "--cw":"90px",  transform:"rotate(18deg)"}},
-  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"91%", right:"29%", "--cw":"82px",  transform:"rotate(-29deg)"}}
+  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"5%",  left:"3%",  "--cw":"92px",  transform:"rotate(-38deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"18%", left:"8%",  "--cw":"100px", transform:"rotate(24deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"31%", left:"2%",  "--cw":"84px",  transform:"rotate(-8deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"47%", left:"7%",  "--cw":"78px",  transform:"rotate(47deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"88%", left:"6%",  "--cw":"90px",  transform:"rotate(18deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"8%",  right:"7%", "--cw":"96px",  transform:"rotate(33deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"26%", right:"2%", "--cw":"108px", transform:"rotate(-21deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"42%", right:"8%", "--cw":"86px",  transform:"rotate(14deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"59%", right:"3%", "--cw":"80px",  transform:"rotate(-45deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"90%", right:"9%", "--cw":"82px",  transform:"rotate(-29deg)"}}
 ];
 
 // TABLET, 600-1099px: 2 candies drawn in closer to the card, 6 sprinkles.
 const DECOR_TB = [
-  {src:"/candy-pink.png",      cls:"decor-candy", style:{top:"8%",  left:"-46px",  "--cw":"168px", transform:"rotate(-15deg)"}},
-  {src:"/candy-turquoise.png", cls:"decor-candy", style:{top:"70%", right:"-40px", "--cw":"162px", transform:"rotate(16deg)"}},
-  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"14%", right:"2%",  "--cw":"92px", transform:"rotate(28deg)"}},
-  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"27%", left:"3%",   "--cw":"84px", transform:"rotate(-34deg)"}},
-  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"33%", right:"4%",  "--cw":"90px", transform:"rotate(19deg)"}},
-  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"55%", left:"6%",   "--cw":"78px", transform:"rotate(42deg)"}},
-  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"86%", left:"26%",  "--cw":"86px", transform:"rotate(-11deg)"}},
-  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"93%", right:"22%", "--cw":"80px", transform:"rotate(31deg)"}}
+  {src:"/candy-pink.png",      cls:"decor-candy", style:{top:"11%", left:"-72px",  "--cw":"152px", transform:"rotate(-15deg)"}},
+  {src:"/candy-turquoise.png", cls:"decor-candy", style:{top:"66%", right:"-68px", "--cw":"146px", transform:"rotate(16deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"4%",  right:"0%",  "--cw":"72px", transform:"rotate(28deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"31%", left:"0%",   "--cw":"68px", transform:"rotate(-34deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"36%", right:"1%",  "--cw":"74px", transform:"rotate(19deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"55%", left:"1%",   "--cw":"66px", transform:"rotate(42deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"88%", left:"2%",   "--cw":"70px", transform:"rotate(-11deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"92%", right:"3%",  "--cw":"68px", transform:"rotate(31deg)"}}
 ];
 
 // PHONE, under 600px: sprinkles only -- no wrapped candies at this size.
 const DECOR_PH = [
-  {src:SP.yellow, cls:"decor-sprinkle", style:{bottom:"20%", left:"24%",  "--cw":"76px", transform:"rotate(-27deg)"}},
-  {src:SP.teal,   cls:"decor-sprinkle", style:{bottom:"13%", left:"46%",  "--cw":"70px", transform:"rotate(36deg)"}},
-  {src:SP.pink,   cls:"decor-sprinkle", style:{bottom:"5%",  left:"31%",  "--cw":"74px", transform:"rotate(12deg)"}},
-  {src:SP.teal,   cls:"decor-sprinkle", style:{bottom:"22%", right:"17%", "--cw":"68px", transform:"rotate(-41deg)"}},
-  {src:SP.yellow, cls:"decor-sprinkle", style:{bottom:"3%",  right:"31%", "--cw":"72px", transform:"rotate(22deg)"}}
+  {src:SP.yellow, cls:"decor-sprinkle", style:{bottom:"52px", left:"4%",   "--cw":"74px", transform:"rotate(-24deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{bottom:"14px", left:"22%",  "--cw":"68px", transform:"rotate(33deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{bottom:"58px", left:"47%",  "--cw":"64px", transform:"rotate(11deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{bottom:"20px", right:"7%",  "--cw":"72px", transform:"rotate(-38deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{bottom:"62px", right:"26%", "--cw":"62px", transform:"rotate(19deg)"}}
 ];
 
 // SHORT PHONE, under 600px wide and 700px tall (e.g. 375x667): sprinkles only,
 // tucked into the narrow band below the Stats/Archive tiles.
 const DECOR_PS = [
-  {src:SP.yellow, cls:"decor-sprinkle", style:{bottom:"20px",  left:"25%",  "--cw":"66px", transform:"rotate(-13deg)"}},
-  {src:SP.pink,   cls:"decor-sprinkle", style:{bottom:"25px",  left:"47%",  "--cw":"62px", transform:"rotate(11deg)"}},
-  {src:SP.teal,   cls:"decor-sprinkle", style:{bottom:"19px",  right:"26%", "--cw":"64px", transform:"rotate(-16deg)"}}
+  {src:SP.yellow, cls:"decor-sprinkle", style:{bottom:"50px", left:"6%",   "--cw":"70px", transform:"rotate(-21deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{bottom:"16px", left:"34%",  "--cw":"64px", transform:"rotate(27deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{bottom:"54px", right:"9%",  "--cw":"68px", transform:"rotate(14deg)"}}
 ];
 
 function LandingBackdrop(){
@@ -3147,54 +3148,157 @@ function RevealMedia({question, placeholder}){
 // ============================================================
 
 // ---- HOME ----
-function HomeScreen({game,gameRecord,stats,onPlay,onNav}){
-  const done=gameRecord?.completed;
-  const mid=gameRecord&&!gameRecord.completed;
+// Temporary owner access to the existing admin screen while testing. Not a
+// security control: the admin gate behind it is still a client-side password.
+const SHOW_ADMIN_LINK = import.meta.env.DEV || import.meta.env.VITE_SHOW_ADMIN_LINK === "true";
+
+
+// The wide puzzle artwork. Uses the existing `headerImage` field, which the
+// admin editor already labels "shown on home screen & archive". When a puzzle
+// has no header image we fall back to a split of the two category images that
+// the same puzzle already stores, so nothing new is required of the content.
+function HomePuzzleArt({game}){
+  if(game.headerImage){
+    return <img src={game.headerImage} alt={game.themeTitle} className="hp-art"
+                onError={e=>{e.currentTarget.style.display="none";}}/>;
+  }
+  const colA = PALETTE.find(p=>p.id===(game.categoryAColor||"teal"))||PALETTE[0];
+  const colB = PALETTE.find(p=>p.id===(game.categoryBColor||"pink"))||PALETTE[1];
   return(
-    <div>
-      <div className="streak-row">
-        {stats.currentStreak>0&&<span className="badge badge-orange"><FI name="flame" size={28} style={{marginRight:6}}/>{stats.currentStreak}-day streak</span>}
-        {stats.bestCombo>=3&&<span className="badge badge-purple"><LightningMark size={18} style={{marginRight:6}}/>Best combo: {stats.bestCombo}x</span>}
+    <div className="hp-art-split" role="img" aria-label={game.themeTitle}>
+      <div className="hp-art-half" style={{background:colA.mid}}>
+        {game.categoryAImage ? <img src={game.categoryAImage} alt=""/> : <span>{game.categoryA}</span>}
       </div>
-      <div className="card" style={{position:"relative",overflow:"hidden"}}>
-        {game.headerImage&&(
-          <div className="game-header-img-wrap">
-            <img src={game.headerImage} alt={game.themeTitle} className="game-header-img" onError={e=>e.target.style.display="none"}/>
+      <div className="hp-art-half" style={{background:colB.mid}}>
+        {game.categoryBImage ? <img src={game.categoryBImage} alt=""/> : <span>{game.categoryB}</span>}
+      </div>
+    </div>
+  );
+}
+
+function ShareGlyph(){
+  return(
+    <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 15V4m0 0L8.5 7.5M12 4l3.5 3.5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M5 13v5.5A1.5 1.5 0 006.5 20h11a1.5 1.5 0 001.5-1.5V13" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function HomeHelp({game,onClose}){
+  const n = game?.questions?.length||8;
+  return(
+    <div className="hp-modal-bg" role="dialog" aria-modal="true" aria-label="How to play" onClick={onClose}>
+      <div className="hp-modal" onClick={e=>e.stopPropagation()}>
+        <h2>How to play</h2>
+        <p>Every day you get {n} things. For each one, decide which of the two categories it belongs to{game?.categoryA&&game?.categoryB?`: ${game.categoryA} or ${game.categoryB}.`:"."}</p>
+        <p>Tap a category to lock in your answer. You find out straight away whether you were right, plus the actual info and some needless commentary.</p>
+        <p>At the end you get a score out of {n} you can share &mdash; without spoiling the answers.</p>
+        <button className="btn btn-teal" onClick={onClose} style={{marginTop:6}}>Got it</button>
+      </div>
+    </div>
+  );
+}
+
+function HomeHeader({player,sound,onHelp,onAccount}){
+  const signedIn = player && !player.isGuest;
+  return(
+    <header className="hp-hdr">
+      <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="hp-logo"/>
+      <div className="hp-tools">
+        <button className="hp-sound" onClick={()=>sound.setMuted(m=>!m)}
+                aria-pressed={!sound.muted} aria-label={sound.muted?"Turn sound on":"Turn sound off"}
+                title={sound.muted?"Turn sound on":"Turn sound off"}>
+          {sound.muted?"\u{1F507}":"\u{1F50A}"}
+        </button>
+        <button className="hp-help" onClick={onHelp} aria-label="How to play" title="How to play">?</button>
+        <button className={signedIn?"hp-signin hp-acct":"hp-signin"} onClick={onAccount}
+                title={signedIn?(player.email||"Account"):"Sign in"}>
+          {signedIn?formatAccountLabel(player.email):"Sign in"}
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function HomeScreen({game,gameRecord,stats,player,sound,onPlay,onNav,onAdmin,onShare}){
+  const[showHelp,setShowHelp]=useState(false);
+  const answered = gameRecord?.answers?.length||0;
+  const total = gameRecord?.totalQuestions||game.questions.length;
+  const done = Boolean(gameRecord?.completed);
+  const inProgress = Boolean(gameRecord && !gameRecord.completed && answered>0);
+  const signedIn = player && !player.isGuest;
+
+  return(
+    <div className="hp-wrap">
+      <HomeHeader player={player} sound={sound} onHelp={()=>setShowHelp(true)} onAccount={()=>onNav("account")}/>
+
+      <div className="hp-card-wrap">
+        {stats.currentStreak>0&&(
+          <span className="hp-streak">
+            <FI name="flame" size={19}/>{stats.currentStreak}-day streak
+          </span>
+        )}
+        <div className="hp-card">
+          <HomePuzzleArt game={game}/>
+          <div className="hp-body">
+            <div className="hp-eyebrow">Today&rsquo;s theme</div>
+            <h1 className="hp-title">{game.themeTitle}</h1>
+            <div className="vs-strip">
+              <span className="cat-chip cat-a hp-chip">{game.categoryA}</span>
+              <span className="vs-word">VS</span>
+              <span className="cat-chip cat-b hp-chip">{game.categoryB}</span>
+            </div>
+            <hr className="hp-rule"/>
+
+            {done?(
+              <div className="hp-done">
+                <div className="hp-eyebrow">Today&rsquo;s score</div>
+                <div className="hp-score-row">
+                  <span className="hp-spark" aria-hidden="true">{"✦"}</span>
+                  <span className="hp-score-big">{gameRecord.score}<small>/{gameRecord.totalQuestions}</small></span>
+                  <span className="hp-spark" aria-hidden="true">{"✦"}</span>
+                </div>
+                <button className="btn btn-pink" onClick={()=>onNav("score")}>See my results 🎉</button>
+                <button className="hp-share" onClick={onShare}>
+                  <ShareGlyph/> Share
+                </button>
+              </div>
+            ):inProgress?(
+              <>
+                <div className="hp-progress">{answered} of {total} answered</div>
+                <button className="btn btn-yellow" onClick={onPlay}>Keep going!</button>
+              </>
+            ):(
+              <button className="btn btn-yellow" onClick={onPlay}>Let&rsquo;s gooo!!</button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="hp-tiles">
+        <button className="hp-tile hp-tile-teal" onClick={()=>onNav("stats")}>
+          <FI name="chart" size={40}/>
+          <span className="hp-tile-lbl">Stats</span>
+          <span className="hp-chev" aria-hidden="true">&rsaquo;</span>
+        </button>
+        <button className="hp-tile hp-tile-orange" onClick={()=>onNav("archive")}>
+          <FI name="cal" size={40}/>
+          <span className="hp-tile-lbl">Archive</span>
+          <span className="hp-chev" aria-hidden="true">&rsaquo;</span>
+        </button>
+      </div>
+
+      <div className="hp-foot">
+        {SHOW_ADMIN_LINK&&(
+          <div className="hp-admin-line">
+            <button className="hp-admin-link" onClick={onAdmin}>Admin tools</button>
           </div>
         )}
-        {!game.headerImage&&<div style={{position:"absolute",top:-8,right:14,fontSize:32,transform:"rotate(15deg)",filter:"drop-shadow(2px 3px 0 var(--teal-dark))",color:"var(--teal)"}}>🍬</div>}
-        <div className="theme-lbl">Today's Theme</div>
-        <div className="theme-title">{game.themeTitle}</div>
-        <div className="vs-strip">
-          <FitText as="span" className="cat-chip cat-a" min={10} max={13} oneLine={true}>{game.categoryA}</FitText>
-          <span className="vs-word">VS</span>
-          <FitText as="span" className="cat-chip cat-b" min={10} max={13} oneLine={true}>{game.categoryB}</FitText>
-        </div>
-        <div className="theme-count">{game.questions.length} questions · which is which??</div>
-        {done?(
-          <>
-            <div style={{textAlign:"center",padding:"14px 0",borderTop:"2px dashed rgba(45,212,191,0.3)",marginBottom:14}}>
-              <div style={{fontFamily:"'Fredoka One',cursive",fontSize:12,color:"var(--teal-dark)",letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>Today's Score</div>
-              <div style={{fontFamily:"'Fredoka One',cursive",fontSize:54,color:"var(--pink)",WebkitTextStroke:"2px var(--black)",textShadow:"3px 3px 0 var(--pink-dark)",lineHeight:1}}>
-                {gameRecord.score}<span style={{fontSize:26,color:"var(--black)",WebkitTextStroke:"1px var(--black)",textShadow:"none"}}>/{gameRecord.totalQuestions}</span>
-              </div>
-            </div>
-            <button className="btn btn-pink" onClick={()=>onNav("score")}>See my result 🎉</button>
-          </>
-        ):(
-          <button className="btn btn-yellow" onClick={onPlay}>{mid?"Keep going!! →":"Let's gooo!! →"}</button>
-        )}
+        {!signedIn&&<div className="hp-signin-hint">Sign in to save your streak</div>}
       </div>
-      <div className="btn-row">
-        <button className="btn-nav-tile tile-teal" onClick={()=>onNav("stats")}>
-          <FI name="chart" size={150}/>
-          <span className="btn-nav-tile-lbl">Stats</span>
-        </button>
-        <button className="btn-nav-tile tile-orange" onClick={()=>onNav("archive")}>
-          <FI name="cal" size={120}/>
-          <span className="btn-nav-tile-lbl">Archive</span>
-        </button>
-      </div>
+
+      {showHelp&&<HomeHelp game={game} onClose={()=>setShowHelp(false)}/>}
     </div>
   );
 }
@@ -4428,6 +4532,18 @@ export default function WhatTheFudgeTrivia(){
     } catch(e){ console.error("Complete game error:", e); }
   };
 
+  // Share today's result from the homepage (same spoiler-free text as the
+  // results screen).
+  const handleShareToday = async() => {
+    if(!gameRecord?.completed) return;
+    const text = buildShare(gameRecord);
+    try{
+      if(navigator.share){ await navigator.share({text}); return; }
+    }catch{ /* share sheet dismissed */ }
+    try{ await navigator.clipboard.writeText(text); showToast("Copied to clipboard!"); }
+    catch{ showToast("Couldn't copy 😬"); }
+  };
+
   // Replay
   const handleReplay = g => {
     setReplayGame(g);
@@ -4473,7 +4589,7 @@ export default function WhatTheFudgeTrivia(){
       <style>{styles}</style>
       <div className="app">
         {view==="home"&&<LandingBackdrop/>}
-        <div className="hdr">
+        {view!=="home"&&<div className="hdr">
           <div className="logo">
             <div className="logo-line1"><span className="logo-what">What The</span></div>
             <div className="logo-line2"><span className="logo-fudge">Fudge</span><span className="logo-emoji">🍬</span></div>
@@ -4489,8 +4605,7 @@ export default function WhatTheFudgeTrivia(){
             </button>
             <button className="nav-btn" style={{background:"linear-gradient(180deg,#FF85AA,#FF5C8D 60%,#CC3366)",color:"white",borderColor:"var(--pink-dark)",boxShadow:"0 3px 0 var(--pink-dark)"}} onClick={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}><FI name="gear" size={26} style={{marginRight:6}}/>Admin</button>
           </div>
-        </div>
-
+        </div>}
         <div className="main">
           {!todayGame&&view==="home"&&(
             <div className="no-game">
@@ -4503,8 +4618,12 @@ export default function WhatTheFudgeTrivia(){
 
           {todayGame&&view==="home"&&(
             <HomeScreen game={todayGame} gameRecord={gameRecord} stats={stats}
+              player={player}
+              sound={sound}
               onPlay={handlePlay}
               onNav={v=>{sound.play("click");setView(v);}}
+              onAdmin={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}
+              onShare={handleShareToday}
             />
           )}
 
