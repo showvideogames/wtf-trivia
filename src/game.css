@@ -66,27 +66,153 @@
 @media (max-width: 599px) { .gpd-ph { display: block; } }
 
 /* ===== HEADER =====
-   The gameplay header reuses the homepage header component, so it needs no
-   styles of its own. Only the Back row below it is new. */
-.gp-backrow {
+   One row at every width: Back at the left, wordmark centred between the
+   controls, tools at the right. */
+.gp-hdr {
+  display: grid;
+  /* Side tracks size to their controls; the wordmark takes the space between
+     them and centres inside it. Equal 1fr side tracks would centre the
+     wordmark on the page exactly, but at phone widths the right-hand cluster
+     alone is ~155px, so symmetry would squeeze the wordmark below legibility.
+     Centring it in the gap keeps it balanced and makes overlap impossible. */
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 0 11px;
+}
+.gp-hdr-left { justify-self: start; min-width: 0; }
+.gp-hdr-right {
+  justify-self: end;
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 6px;
+  min-width: 0;
+}
+/* Bounded on both axes and free on neither, so it scales proportionally into
+   whatever width is left rather than being squashed or clipped. */
+.gp-hdr-logo {
+  display: block;
+  margin: 0 auto;
+  min-width: 0;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 46px;
 }
 
+/* Every control keeps a 40px+ tap target even where the painted box is
+   smaller, so nothing here becomes fiddly on a phone. */
+.gp-back,
+.gp-sound,
+.gp-help,
+.gp-signin {
+  min-height: 40px;
+  cursor: pointer;
+  font-family: 'Fredoka One', cursive;
+  flex-shrink: 0;
+}
+
+.gp-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--white);
+  border: 2.5px solid var(--black);
+  box-shadow: 3px 3px 0 var(--black);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--black);
+  white-space: nowrap;
+}
+.gp-back:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--black); }
+.gp-back-arrow { font-size: 1.05em; line-height: 1; }
+
+.gp-sound {
+  background: none;
+  border: 0;
+  padding: 3px;
+  line-height: 0;
+  display: grid;
+  place-items: center;
+  min-width: 36px;
+  font-size: 20px;
+}
+
+.gp-help {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #fff176, #ffe347 60%, #e6c800);
+  border: 2.5px solid var(--black);
+  box-shadow: 0 3px 0 var(--black);
+  font-size: 18px;
+  color: var(--black);
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.gp-signin {
+  white-space: nowrap;
+  background: linear-gradient(180deg, #fff176, #ffe347 60%, #e6c800);
+  border: 2.5px solid var(--black);
+  box-shadow: 0 3px 0 var(--black);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--black);
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gp-signin.gp-acct {
+  background: linear-gradient(180deg, #c084fc, #a855f7 60%, #7e22ce);
+  color: #fff;
+}
+.gp-help:active,
+.gp-signin:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--black); }
+
+/* ===== REPLAY STATUS STRIP =====
+   Supporting status, not a button: one thin line that never wraps at 360px. */
+.gp-replay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 12px;
+  margin-bottom: 8px;
+  background: #CFF7F0;
+  border: 2px solid var(--teal-dark);
+  border-radius: 999px;
+  font-family: 'Fredoka One', cursive;
+  font-size: 12.5px;
+  line-height: 1.2;
+  color: #0B5F57;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* ===== THEME BANNER =====
+   Thin and content-height. Long matchups may take a second line rather than
+   being clipped. */
 .gp-theme {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
+  min-height: 36px;
   background: linear-gradient(160deg, #CFF7F0 0%, #A7ECE2 100%);
   border: 2.5px solid var(--teal-dark);
   border-radius: 999px;
   box-shadow: 0 3px 0 var(--teal-dark);
-  padding: 7px 16px;
-  margin-bottom: 10px;
+  padding: 4px 16px;
+  margin-bottom: 8px;
   font-family: 'Fredoka One', cursive;
-  font-size: 14px;
-  line-height: 1.25;
+  font-size: 13.5px;
+  line-height: 1.2;
   color: #0B5F57;
   text-align: center;
   overflow-wrap: break-word;
@@ -95,34 +221,34 @@
 /* ===== PROGRESS (position only — never score) ===== */
 .gp-prog {
   background: linear-gradient(160deg, #FFFEF5 0%, #FFF8E7 100%);
-  border: 3px solid var(--black);
-  border-radius: 18px;
-  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.16);
-  padding: 10px 16px 12px;
-  margin-bottom: 12px;
+  border: 2.5px solid var(--black);
+  border-radius: 16px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15);
+  padding: 7px 14px 8px;
+  margin-bottom: 8px;
 }
 
 .gp-prog-lbl {
   font-family: 'Fredoka One', cursive;
-  font-size: 13px;
-  letter-spacing: 0.7px;
+  font-size: 12px;
+  letter-spacing: 0.6px;
   text-transform: uppercase;
   color: var(--black);
-  margin-bottom: 9px;
+  margin-bottom: 6px;
 }
 
 .gp-dots {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 6px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
 .gp-dot {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: #E2E2E2;
   border: 2px solid rgba(0, 0, 0, 0.18);
@@ -153,18 +279,20 @@
   box-shadow: 0 3px 0 var(--yellow-dark);
 }
 
-/* ===== CLUE CARD ===== */
+/* ===== CLUE CARD =====
+   Hugs its content. A one-line clue gets a short box; two or three lines grow
+   the box naturally. No fixed or minimum height forcing empty space around a
+   short title. */
 .gp-clue {
   background: #FFFDF2;
   border: 3.5px solid var(--black);
-  border-radius: 22px;
-  box-shadow: 0 7px 0 rgba(0, 0, 0, 0.2);
-  padding: 18px 20px;
-  margin-bottom: 12px;
+  border-radius: 20px;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.2);
+  padding: 11px 18px;
+  margin-bottom: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 84px;
 }
 
 .gp-clue-text {
@@ -180,9 +308,9 @@
 }
 /* Stepped down by title length, so a very long clue stays on the card without
    shrinking a short one. */
-.gp-clue-text.lg { font-size: clamp(30px, 8.4vw, 46px); }
-.gp-clue-text.md { font-size: clamp(25px, 6.6vw, 38px); }
-.gp-clue-text.sm { font-size: clamp(21px, 5.2vw, 31px); }
+.gp-clue-text.lg { font-size: clamp(27px, 7.4vw, 44px); }
+.gp-clue-text.md { font-size: clamp(23px, 6.0vw, 36px); }
+.gp-clue-text.sm { font-size: clamp(19px, 4.8vw, 30px); }
 .gp-clue-text.xs { font-size: clamp(17px, 3.9vw, 24px); }
 
 /* ===== ANSWER CARDS =====
@@ -209,15 +337,43 @@
   max-height: min(34vh, 250px);
 }
 
+/* ===== UNANSWERED SCREEN FILLS THE PHONE =====
+   Tightening the chrome above leaves a tall phone with a lot of empty space
+   under the choices. Rather than pad it out, the pair of cards takes whatever
+   height is left over: they grow on a tall screen and shrink on a short one,
+   so the screen is always full and never scrolls. */
+@media (max-width: 599px) {
+  .gp-wrap.gp-q {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .gp-wrap.gp-q .ans-btns {
+    flex: 1 1 auto;
+    min-height: 196px;
+    /* Capped: the category artwork is square, so letting the card grow much
+       past its own width only letterboxes the art inside a tall slab. */
+    max-height: 292px;
+  }
+  .gp-wrap.gp-q .ans-box-img-wrap,
+  .gp-wrap.gp-q .ans-box-img-placeholder {
+    aspect-ratio: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
+}
+
 /* The label half is a fixed, equal-height band on both cards. The auto-fitting
    text component picks the largest size that fits inside it, so a label shrinks
    long before it would ever break inside a word. */
 .gp-wrap .ans-box-label {
   aspect-ratio: auto;
   /* Tall enough for a two-line label at the shared ceiling, so a two-word name
-     sits at the same size as a one-word one instead of being shrunk to fit. */
-  height: clamp(66px, 20vw, 92px);
-  padding: 8px 10px;
+     sits at the same size as a one-word one instead of being shrunk to fit.
+     The floor also clears a three-line worst case at 360px without clipping. */
+  height: clamp(72px, 21vw, 94px);
+  padding: 7px 9px;
   line-height: 1.1;
 }
 .gp-wrap .ans-box-label .fit-text-content {
@@ -232,16 +388,17 @@
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 4px 10px;
+  gap: 2px 9px;
   text-align: center;
-  padding: 13px 18px;
+  padding: 8px 16px;
+  min-height: 50px;
   border: 3.5px solid var(--black);
-  border-radius: 18px;
+  border-radius: 16px;
   font-family: 'Fredoka One', cursive;
   color: #fff;
   text-shadow: 1px 2px 0 rgba(0, 0, 0, 0.28);
   position: relative;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
   animation: gpVerdictPop 0.38s cubic-bezier(0.34, 1.5, 0.64, 1);
 }
 .gp-verdict::before {
@@ -292,23 +449,29 @@
    Only rendered when the question actually has media. There is no empty state,
    no placeholder panel and no icon. */
 .gp-media {
-  margin: 0 0 14px;
-  border: 3.5px solid var(--black);
-  border-radius: 20px;
+  margin: 0 0 10px;
+  border: 3px solid var(--black);
+  border-radius: 18px;
   overflow: hidden;
-  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.18);
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.18);
   background: #14161A;
   position: relative;
+  /* The tallest the media stage may become. A landscape still is already
+     shorter than this, so only tall artwork is actually reined in. */
+  --gp-media-cap: 250px;
 }
 
-/* Stills keep their own proportions: contained, centred, never cropped. */
+/* Stills keep their own proportions: contained, centred, never cropped and
+   never stretched. A portrait cover is bounded by the stage height instead of
+   running to its natural height and swallowing the rest of the page. */
 .gp-media-img {
   display: block;
   margin: 0 auto;
   max-width: 100%;
   width: auto;
   height: auto;
-  max-height: min(48vh, 430px);
+  max-height: var(--gp-media-cap);
+  object-fit: contain;
 }
 
 /* Video needs a real box to live in, so the player gets a 16:9 frame. */
@@ -338,10 +501,10 @@
 
 /* ===== EXPLANATION PANELS ===== */
 .gp-panel {
-  border-radius: 16px;
-  padding: 13px 16px 14px;
-  margin-bottom: 12px;
-  border: 2.5px solid;
+  border-radius: 14px;
+  padding: 9px 13px 10px;
+  margin-bottom: 8px;
+  border: 2px solid;
 }
 .gp-panel-info {
   background: #DFF8F3;
@@ -360,8 +523,8 @@
   letter-spacing: 0.9px;
   text-transform: uppercase;
   border-radius: 999px;
-  padding: 4px 11px;
-  margin-bottom: 8px;
+  padding: 3px 10px;
+  margin-bottom: 5px;
 }
 .gp-panel-info .gp-panel-lbl { background: #A5E9DF; color: #0B5F57; }
 .gp-panel-fun  .gp-panel-lbl { background: #FBC2D6; color: #96204C; }
@@ -370,7 +533,7 @@
   font-family: 'Nunito', sans-serif;
   font-size: 15px;
   font-weight: 700;
-  line-height: 1.5;
+  line-height: 1.45;
   color: #2A2A2A;
   /* Long copy wraps and grows the panel. It is never clipped or shrunk. */
   overflow-wrap: break-word;
@@ -394,26 +557,49 @@
   to   { opacity: 1; transform: none; }
 }
 
-/* ===== FOCUS VISIBILITY ===== */
-.gp-wrap :focus-visible,
-.gp-hdr-slot :focus-visible {
+/* ===== FOCUS VISIBILITY =====
+   The header lives inside .gp-wrap, so this covers it too. */
+.gp-wrap :focus-visible {
   outline: 3px solid #1D4ED8;
   outline-offset: 3px;
   border-radius: 6px;
 }
 
+/* ===== DESKTOP BREATHING ROOM =====
+   The density work above is aimed at phones. From tablet up the same layout
+   is allowed to relax again. */
+@media (min-width: 600px) {
+  .gp-hdr { padding: 14px 0 16px; gap: 12px; }
+  .gp-hdr-logo { max-height: 64px; }
+  .gp-hdr-right { gap: 9px; }
+  .gp-back { padding: 9px 18px; font-size: 16px; min-height: 44px; }
+  .gp-help { width: 44px; height: 44px; font-size: 21px; }
+  .gp-signin { padding: 9px 18px; font-size: 16px; min-height: 44px; max-width: 150px; }
+  .gp-sound { font-size: 25px; min-width: 44px; }
+  .gp-replay { min-height: 36px; font-size: 14px; margin-bottom: 12px; }
+  .gp-theme { min-height: 44px; font-size: 16px; padding: 6px 20px; margin-bottom: 12px; }
+  .gp-prog { padding: 10px 18px 12px; margin-bottom: 12px; }
+  .gp-prog-lbl { font-size: 13px; margin-bottom: 9px; }
+  .gp-clue { padding: 16px 22px; margin-bottom: 12px; }
+  .gp-verdict { padding: 12px 20px; min-height: 60px; margin-bottom: 14px; }
+  .gp-media { margin-bottom: 14px; --gp-media-cap: 360px; }
+  .gp-panel { padding: 12px 16px 13px; margin-bottom: 11px; }
+  .gp-panel-lbl { margin-bottom: 7px; }
+}
+
+@media (min-width: 1100px) {
+  .gp-hdr-logo { max-height: 78px; }
+  .gp-media { --gp-media-cap: 420px; }
+}
+
 /* ===== SHORT VIEWPORTS =====
-   At 375x667 and similar, tighten the vertical rhythm so the clue and both
-   choices are visible without scrolling. */
+   At 375x667 and similar, trim the artwork square a little further so the clue
+   and both choices are comfortably above the fold. */
 @media (max-height: 740px) and (max-width: 599px) {
   .gp-wrap .ans-box-img-wrap,
-  .gp-wrap .ans-box-img-placeholder { max-height: 27vh; }
-  .gp-clue { min-height: 70px; padding: 13px 16px; margin-bottom: 10px; }
-  .gp-prog { padding: 8px 14px 10px; margin-bottom: 10px; }
-  .gp-prog-lbl { margin-bottom: 7px; }
-  .gp-theme { padding: 6px 14px; margin-bottom: 8px; font-size: 13px; }
-  .gp-hdr-slot .hp-hdr { padding: 8px 0 10px; }
-  .gp-hdr-slot .hp-logo { height: 52px; }
+  .gp-wrap .ans-box-img-placeholder { max-height: 30vh; }
+  .gp-hdr { padding: 7px 0 9px; }
+  .gp-hdr-logo { max-height: 44px; }
 }
 
 /* Laptop and tablet heights around 800px: trim the artwork square so the clue
@@ -423,11 +609,21 @@
   .gp-wrap .ans-box-img-placeholder { max-height: 26vh; }
 }
 
+/* Narrowest phones: shave the header controls just enough that Back, the
+   wordmark and the three tools stay on one row without touching. */
 @media (max-width: 380px) {
   .gp-wrap { padding: 0 12px 24px; }
   .gp-wrap .ans-btns { gap: 10px; }
   .gp-dot { width: 13px; height: 13px; }
-  .gp-dots { gap: 6px; }
+  .gp-dots { gap: 5px; }
+  .gp-hdr { gap: 5px; }
+  .gp-hdr-right { gap: 4px; }
+  .gp-hdr-logo { max-height: 40px; }
+  .gp-back { padding: 6px 10px; font-size: 12.5px; gap: 3px; }
+  .gp-signin { padding: 6px 11px; font-size: 12.5px; max-width: 92px; }
+  .gp-help { width: 36px; height: 36px; font-size: 17px; }
+  .gp-sound { font-size: 19px; min-width: 34px; padding: 2px; }
+  .gp-replay { font-size: 11.5px; padding: 4px 9px; }
 }
 
 /* ===== REDUCED MOTION =====
@@ -436,10 +632,7 @@
 @media (prefers-reduced-motion: reduce) {
   .gp-wrap *,
   .gp-wrap *::before,
-  .gp-wrap *::after,
-  .gp-hdr-slot *,
-  .gp-hdr-slot *::before,
-  .gp-hdr-slot *::after {
+  .gp-wrap *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;

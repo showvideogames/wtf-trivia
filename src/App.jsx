@@ -3360,6 +3360,37 @@ function HomeScreen({game,gameRecord,stats,player,sound,onPlay,onNav,onAdmin,onS
 
 // ---- GAME ----
 
+// One compact row: Back at the left, the wordmark centred between the controls,
+// the player tools at the right. See .gp-hdr for why the wordmark is centred in
+// the gap rather than on the page.
+function GameHeader({player,sound,onBack,onHelp,onAccount}){
+  const signedIn = player && !player.isGuest;
+  return(
+    <header className="gp-hdr">
+      <div className="gp-hdr-left">
+        <button className="gp-back" onClick={onBack}>
+          <span className="gp-back-arrow" aria-hidden="true">←</span>
+          <span className="gp-back-txt">Back</span>
+        </button>
+      </div>
+      <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="gp-hdr-logo"/>
+      <div className="gp-hdr-right">
+        <button className="gp-sound" onClick={()=>sound.setMuted(m=>!m)}
+                aria-pressed={!sound.muted}
+                aria-label={sound.muted?"Turn sound on":"Turn sound off"}
+                title={sound.muted?"Turn sound on":"Turn sound off"}>
+          {sound.muted?"\u{1F507}":"\u{1F50A}"}
+        </button>
+        <button className="gp-help" onClick={onHelp} aria-label="How to play" title="How to play">?</button>
+        <button className={signedIn?"gp-signin gp-acct":"gp-signin"} onClick={onAccount}
+                title={signedIn?(player.email||"Account"):"Sign in"}>
+          {signedIn?formatAccountLabel(player.email):"Sign in"}
+        </button>
+      </div>
+    </header>
+  );
+}
+
 // How far through the quiz the player is -- and deliberately nothing about how
 // well they are doing. The ball count comes from the puzzle's own question
 // count, so archive puzzles of any length draw the right number.
@@ -3435,7 +3466,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
   // shouting. Each label still auto-fits below that ceiling, which is what
   // keeps a long name shrinking rather than breaking inside a word.
   const longestLabel=Math.max(String(game.categoryA||"").length,String(game.categoryB||"").length);
-  const labelMax = longestLabel<=8?36:longestLabel<=12?30:longestLabel<=18?26:longestLabel<=26?22:19;
+  const labelMax = longestLabel<=8?32:longestLabel<=12?27:longestLabel<=18?22:longestLabel<=26?19:17;
 
   // Guard: once we've advanced past the last question, stop rendering question/reveal UI.
   if(!cq) return null;
@@ -3486,23 +3517,18 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
   const correctLabel = cq.correctCategory==="A"?cq._catA:cq._catB;
 
   return(
-    <div className="gp-wrap">
+    <div className={`gp-wrap${phase==="question"?" gp-q":""}`}>
       <canvas ref={canvasRef} id="confetti-canvas" style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:9999}}/>
       {reaction&&<ReactionOverlay emoji={reaction}/>}
 
-      <div className="gp-hdr-slot">
-        <HomeHeader player={player} sound={sound}
-                    onHelp={()=>setShowHelp(true)}
-                    onAccount={()=>onNav("account")}/>
-      </div>
-
-      <div className="gp-backrow">
-        <button className="btn-sm" onClick={()=>onNav(isReplay?"archive":"home")}>← Back</button>
-      </div>
+      <GameHeader player={player} sound={sound}
+                  onBack={()=>onNav(isReplay?"archive":"home")}
+                  onHelp={()=>setShowHelp(true)}
+                  onAccount={()=>onNav("account")}/>
 
       {isReplay&&(
-        <div className="replay-banner">
-          📼 Replay mode — scores not saved to your stats
+        <div className="gp-replay" role="status">
+          <span aria-hidden="true">📼</span> Replay mode — scores aren&rsquo;t saved
         </div>
       )}
 
