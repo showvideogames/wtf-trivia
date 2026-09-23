@@ -76,14 +76,16 @@
      enough to squeeze the wordmark out of legibility. */
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 5px;
+  /* Gaps are deliberately tight: the width they give back is what lets the
+     wordmark be legible without the side tracks overrunning each other. */
+  gap: 4px;
   padding: 9px 0 11px;
 }
 .gp-hdr-left,
 .gp-hdr-right {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 .gp-hdr-left { justify-self: start; }
@@ -97,8 +99,8 @@
   min-width: 0;
   width: auto;
   height: auto;
-  max-width: 96px;
-  max-height: 44px;
+  max-width: 112px;
+  max-height: 51px;
 }
 
 /* Every control keeps a 40px+ tap target even where the painted box is
@@ -163,7 +165,7 @@
   padding: 6px 12px;
   font-size: 13px;
   color: var(--black);
-  max-width: 84px;
+  max-width: 76px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -196,48 +198,46 @@
   overflow: hidden;
 }
 
-/* ===== THEME BANNER =====
+/* ===== MATCHUP BANNER =====
    Thin and content-height. Long matchups may take a second line rather than
-   being clipped. */
+   being clipped.
+
+   Deliberately pink, drawn from the existing brand pinks, so it reads as the
+   puzzle's own identity rather than as a second teal status bar next to the
+   replay notice. */
 .gp-theme {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   min-height: 36px;
-  background: linear-gradient(160deg, #CFF7F0 0%, #A7ECE2 100%);
-  border: 2.5px solid var(--teal-dark);
+  background: linear-gradient(160deg, #FFE1EC 0%, #FFC6DC 100%);
+  border: 2.5px solid var(--pink-dark);
   border-radius: 999px;
-  box-shadow: 0 3px 0 var(--teal-dark);
+  box-shadow: 0 3px 0 var(--pink-dark);
   padding: 4px 16px;
   margin-bottom: 8px;
   font-family: 'Fredoka One', cursive;
   font-size: 13.5px;
   line-height: 1.2;
-  color: #0B5F57;
+  color: #8E1E45;
   text-align: center;
   overflow-wrap: break-word;
 }
 
 /* ===== PROGRESS (position only — never score) =====
-   The balls straddle the clue card's top border like tabs: centred across it,
-   roughly half inside and half outside. No separate progress box, and no
-   "Question X of Y" on screen -- that is carried by .gp-sr for assistive tech
-   instead. */
+   A centred row of identical balls sitting inside the clue card, above the
+   title. No separate progress box, and no "Question X of Y" on screen -- that
+   is carried by .gp-sr for assistive tech instead. */
 .gp-dots {
-  position: absolute;
-  /* Absolute offsets resolve against the padding box, so pulling back by the
-     border width puts the row's centre line exactly on the border itself. */
-  top: -3.5px;
-  left: 50%;
-  transform: translate(-50%, -50%);
   display: flex;
   flex-wrap: nowrap;
+  justify-content: center;
   gap: 5px;
   list-style: none;
   margin: 0;
   padding: 0;
-  max-width: calc(100% - 20px);
+  max-width: 100%;
 }
 
 /* Visually hidden, still announced. */
@@ -282,10 +282,8 @@
   border-color: var(--yellow-dark);
   box-shadow: 0 2px 0 var(--yellow-dark);
 }
-.gp-dot.cur {
-  transform: scale(1.3);
-  box-shadow: 0 3px 0 var(--yellow-dark);
-}
+/* Reached and upcoming differ by colour alone. Every ball is the same
+   diameter -- nothing is scaled up to mark the current question. */
 
 /* ===== CLUE CARD =====
    Hugs its content. A one-line clue gets a short box; two or three lines grow
@@ -297,14 +295,15 @@
   border: 3.5px solid var(--black);
   border-radius: 20px;
   box-shadow: 0 6px 0 rgba(0, 0, 0, 0.2);
-  /* The extra top padding is the clearance the progress balls sit in, so they
-     never collide with the clue text. */
-  padding: 20px 18px 12px;
-  /* Room above for the half of each ball that overhangs the border. */
-  margin: 10px 0 9px;
+  padding: 10px 18px 12px;
+  margin: 0 0 9px;
+  /* One column: the progress row, then the title, both centred, with a small
+     deliberate gap between them. The card stays content-height. */
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 8px;
 }
 
 .gp-clue-text {
@@ -614,7 +613,7 @@
   .gp-sound { font-size: 25px; min-width: 44px; }
   .gp-replay { min-height: 36px; font-size: 14px; margin-bottom: 12px; }
   .gp-theme { min-height: 44px; font-size: 16px; padding: 6px 20px; margin-bottom: 12px; }
-  .gp-clue { padding: 24px 22px 16px; margin: 12px 0 12px; }
+  .gp-clue { padding: 14px 22px 16px; margin: 0 0 12px; gap: 10px; }
   .gp-dots { gap: 7px; }
   .gp-verdict { padding: 12px 20px; min-height: 60px; margin-bottom: 14px; }
   .gp-media { margin-bottom: 14px; --gp-media-cap: 360px; }
@@ -634,8 +633,8 @@
   .gp-wrap .ans-box-img-wrap,
   .gp-wrap .ans-box-img-placeholder { max-height: 30vh; }
   .gp-hdr { padding: 7px 0 9px; }
-  .gp-hdr-logo { max-height: 40px; }
-  .gp-clue { padding: 18px 16px 10px; margin: 9px 0 8px; }
+  .gp-hdr-logo { max-height: 46px; }
+  .gp-clue { padding: 9px 16px 10px; margin: 0 0 8px; gap: 7px; }
 }
 
 /* Laptop and tablet heights around 800px: trim the artwork square so the clue
@@ -651,11 +650,12 @@
   .gp-wrap { padding: 0 12px 24px; }
   .gp-wrap .ans-btns { gap: 10px; }
   .gp-dots { gap: 4px; max-width: calc(100% - 14px); }
-  .gp-hdr { gap: 5px; }
-  .gp-hdr-right { gap: 4px; }
-  .gp-hdr-logo { max-width: 86px; max-height: 40px; }
+  .gp-hdr { gap: 4px; }
+  .gp-hdr-left,
+  .gp-hdr-right { gap: 3px; }
+  .gp-hdr-logo { max-width: 100px; max-height: 46px; }
   .gp-back { padding: 6px 9px; font-size: 12px; gap: 3px; }
-  .gp-signin { padding: 6px 10px; font-size: 12px; max-width: 78px; }
+  .gp-signin { padding: 6px 10px; font-size: 12px; max-width: 72px; }
   .gp-help { width: 36px; height: 36px; font-size: 17px; }
   .gp-sound { font-size: 19px; min-width: 34px; padding: 2px; }
   .gp-replay { font-size: 11.5px; padding: 4px 9px; }
