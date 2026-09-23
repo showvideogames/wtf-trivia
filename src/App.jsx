@@ -3372,15 +3372,15 @@ function GameHeader({player,sound,onBack,onHelp,onAccount}){
           <span className="gp-back-arrow" aria-hidden="true">←</span>
           <span className="gp-back-txt">Back</span>
         </button>
-      </div>
-      <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="gp-hdr-logo"/>
-      <div className="gp-hdr-right">
         <button className="gp-sound" onClick={()=>sound.setMuted(m=>!m)}
                 aria-pressed={!sound.muted}
                 aria-label={sound.muted?"Turn sound on":"Turn sound off"}
                 title={sound.muted?"Turn sound on":"Turn sound off"}>
           {sound.muted?"\u{1F507}":"\u{1F50A}"}
         </button>
+      </div>
+      <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="gp-hdr-logo"/>
+      <div className="gp-hdr-right">
         <button className="gp-help" onClick={onHelp} aria-label="How to play" title="How to play">?</button>
         <button className={signedIn?"gp-signin gp-acct":"gp-signin"} onClick={onAccount}
                 title={signedIn?(player.email||"Account"):"Sign in"}>
@@ -3391,24 +3391,36 @@ function GameHeader({player,sound,onBack,onHelp,onAccount}){
   );
 }
 
-// How far through the quiz the player is -- and deliberately nothing about how
-// well they are doing. The ball count comes from the puzzle's own question
-// count, so archive puzzles of any length draw the right number.
-function GameProgress({total,currentIndex}){
-  const shown=Math.min(currentIndex+1,total);
+// Progress rides on the clue card's top border rather than occupying a box of
+// its own. The balls are decoration only -- they carry no meaning a screen
+// reader could use -- so they are hidden from the accessibility tree and the
+// position is announced as text instead.
+function GameProgressDots({total,currentIndex}){
+  // Shrink the balls for unusually long puzzles so the row still fits across
+  // the card at 360px without wrapping into the clue text.
+  const size = total>16 ? 10 : total>12 ? 12 : 14;
   return(
-    <div className="gp-prog">
-      <div className="gp-prog-lbl">Question {shown} of {total}</div>
-      <ol className="gp-dots" aria-label={`Question ${shown} of ${total}`}>
-        {Array.from({length:total}).map((_,i)=>{
-          let cls="gp-dot";
-          if(i<currentIndex)cls+=" done";
-          else if(i===currentIndex)cls+=" cur";
-          return <li key={i} className={cls}/>;
-        })}
-      </ol>
-    </div>
+    <ol className="gp-dots" aria-hidden="true" style={{"--gp-dot-size":`${size}px`}}>
+      {Array.from({length:total}).map((_,i)=>{
+        let cls="gp-dot";
+        if(i<currentIndex)cls+=" done";
+        else if(i===currentIndex)cls+=" cur";
+        return <li key={i} className={cls}/>;
+      })}
+    </ol>
   );
+}
+
+// The category half of the result banner is sized by its own length, so a short
+// answer reads as boldly as the verdict instead of being held down to whatever
+// a long category would need.
+function catSizeClass(text){
+  const n=String(text||"").trim().length;
+  if(n>26)return"xs";
+  if(n>20)return"sm";
+  if(n>13)return"md";
+  if(n>8)return"lg";
+  return"xl";
 }
 
 // Step the clue down by length rather than auto-fitting it, so a short title
@@ -3534,11 +3546,13 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
 
       {game.themeTitle&&<div className="gp-theme">{game.themeTitle}</div>}
 
-      <GameProgress total={qs.length} currentIndex={idx}/>
-
-      {/* The clue stays on screen in both states, so the reveal still shows
+      {/* Progress and clue share one card: the balls sit astride its top
+          border, so the pair no longer costs two stacked boxes of height. The
+          clue itself stays on screen in both states, so the reveal still shows
           what was being asked about. */}
       <div className="gp-clue">
+        <GameProgressDots total={qs.length} currentIndex={idx}/>
+        <span className="gp-sr">Question {Math.min(idx+1,qs.length)} of {qs.length}</span>
         <div className={`gp-clue-text ${clueSizeClass(cq.itemText)}`}>{cq.itemText}</div>
       </div>
 
@@ -3588,14 +3602,17 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
       {phase==="reveal"&&(
         <div className="gp-reveal">
           {/* One banner carries the result. The two choices are gone, and
-              nothing here reports the running score. */}
+              nothing here reports the running score.
+
+              It stays first in the DOM so it is announced and read before the
+              media, and CSS alone moves the media above it visually. */}
           <div className={`gp-verdict ${isRight?"ok":"no"}`} role="status">
             <span className="gp-verdict-emoji" aria-hidden="true">{isRight?"🎉":"😬"}</span>
             <span className="gp-verdict-word">{isRight?"Correct!":"Nope!"}</span>
             {/* The category is presented as a label after a dash rather than in a
                 sentence, so it reads correctly whatever the theme's wording is. */}
             <span className="gp-verdict-dash" aria-hidden="true">&mdash;</span>
-            <span className="gp-verdict-tail">{correctLabel}</span>
+            <span className={`gp-verdict-tail ${catSizeClass(correctLabel)}`}>{correctLabel}</span>
           </div>
 
           <GameRevealMedia question={cq}/>

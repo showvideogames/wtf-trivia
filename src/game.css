@@ -70,34 +70,35 @@
    controls, tools at the right. */
 .gp-hdr {
   display: grid;
-  /* Side tracks size to their controls; the wordmark takes the space between
-     them and centres inside it. Equal 1fr side tracks would centre the
-     wordmark on the page exactly, but at phone widths the right-hand cluster
-     alone is ~155px, so symmetry would squeeze the wordmark below legibility.
-     Centring it in the gap keeps it balanced and makes overlap impossible. */
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* Equal side tracks, so the centre track -- and the wordmark centred inside
+     it -- lands on the viewport's true horizontal centre. Splitting the four
+     controls two-and-two is what makes this affordable: neither side is wide
+     enough to squeeze the wordmark out of legibility. */
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   padding: 9px 0 11px;
 }
-.gp-hdr-left { justify-self: start; min-width: 0; }
+.gp-hdr-left,
 .gp-hdr-right {
-  justify-self: end;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
 }
-/* Bounded on both axes and free on neither, so it scales proportionally into
-   whatever width is left rather than being squashed or clipped. */
+.gp-hdr-left { justify-self: start; }
+.gp-hdr-right { justify-self: end; }
+/* Bounded on both axes and free on neither, so it scales proportionally rather
+   than being squashed or clipped. The width cap is what guarantees the two
+   side tracks stay wide enough for their controls at 360px. */
 .gp-hdr-logo {
   display: block;
-  margin: 0 auto;
+  justify-self: center;
   min-width: 0;
   width: auto;
   height: auto;
-  max-width: 100%;
-  max-height: 46px;
+  max-width: 96px;
+  max-height: 44px;
 }
 
 /* Every control keeps a 40px+ tap target even where the painted box is
@@ -162,7 +163,7 @@
   padding: 6px 12px;
   font-size: 13px;
   color: var(--black);
-  max-width: 96px;
+  max-width: 84px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -218,37 +219,44 @@
   overflow-wrap: break-word;
 }
 
-/* ===== PROGRESS (position only — never score) ===== */
-.gp-prog {
-  background: linear-gradient(160deg, #FFFEF5 0%, #FFF8E7 100%);
-  border: 2.5px solid var(--black);
-  border-radius: 16px;
-  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15);
-  padding: 7px 14px 8px;
-  margin-bottom: 8px;
-}
-
-.gp-prog-lbl {
-  font-family: 'Fredoka One', cursive;
-  font-size: 12px;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: var(--black);
-  margin-bottom: 6px;
-}
-
+/* ===== PROGRESS (position only — never score) =====
+   The balls straddle the clue card's top border like tabs: centred across it,
+   roughly half inside and half outside. No separate progress box, and no
+   "Question X of Y" on screen -- that is carried by .gp-sr for assistive tech
+   instead. */
 .gp-dots {
+  position: absolute;
+  /* Absolute offsets resolve against the padding box, so pulling back by the
+     border width puts the row's centre line exactly on the border itself. */
+  top: -3.5px;
+  left: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 5px;
   list-style: none;
   margin: 0;
   padding: 0;
+  max-width: calc(100% - 20px);
+}
+
+/* Visually hidden, still announced. */
+.gp-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .gp-dot {
-  width: 14px;
-  height: 14px;
+  width: var(--gp-dot-size, 14px);
+  height: var(--gp-dot-size, 14px);
   border-radius: 50%;
   background: #E2E2E2;
   border: 2px solid rgba(0, 0, 0, 0.18);
@@ -284,12 +292,16 @@
    the box naturally. No fixed or minimum height forcing empty space around a
    short title. */
 .gp-clue {
+  position: relative;
   background: #FFFDF2;
   border: 3.5px solid var(--black);
   border-radius: 20px;
   box-shadow: 0 6px 0 rgba(0, 0, 0, 0.2);
-  padding: 11px 18px;
-  margin-bottom: 9px;
+  /* The extra top padding is the clearance the progress balls sit in, so they
+     never collide with the clue text. */
+  padding: 20px 18px 12px;
+  /* Room above for the half of each ball that overhangs the border. */
+  margin: 10px 0 9px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -427,17 +439,32 @@
   line-height: 1;
   text-shadow: none;
 }
+/* The verdict word is never shrunk to make room for the category. */
 .gp-verdict-word { font-size: clamp(22px, 5.4vw, 32px); }
 .gp-verdict-dash {
   font-size: clamp(18px, 4.2vw, 26px);
   opacity: 0.8;
 }
+/* The category is sized by its own length: a short answer reads as boldly as
+   the verdict, a long one steps down only as far as it must. It may take a
+   second line rather than shrinking into fine print, and it is never
+   truncated, ellipsised or broken inside a word. */
 .gp-verdict-tail {
-  font-size: clamp(15px, 3.4vw, 21px);
-  opacity: 0.95;
   min-width: 0;
-  overflow-wrap: break-word;
+  line-height: 1.12;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
+.gp-verdict-tail.xl { font-size: clamp(23px, 6.0vw, 32px); }
+.gp-verdict-tail.lg { font-size: clamp(20px, 5.0vw, 28px); }
+.gp-verdict-tail.md { font-size: clamp(17px, 4.2vw, 23px); }
+/* The two longest tiers stay deliberately readable rather than shrinking to
+   fit beside the verdict. When they no longer fit on that row the banner wraps
+   and the category takes a full-width second line, which reads far better than
+   squeezing it onto one row as fine print. */
+.gp-verdict-tail.sm { font-size: clamp(17px, 4.6vw, 22px); }
+.gp-verdict-tail.xs { font-size: clamp(15px, 4.1vw, 20px); }
 
 @keyframes gpVerdictPop {
   0%   { transform: scale(0.9) translateY(6px); opacity: 0; }
@@ -502,8 +529,8 @@
 /* ===== EXPLANATION PANELS ===== */
 .gp-panel {
   border-radius: 14px;
-  padding: 9px 13px 10px;
-  margin-bottom: 8px;
+  padding: 8px 12px 9px;
+  margin-bottom: 7px;
   border: 2px solid;
 }
 .gp-panel-info {
@@ -518,22 +545,22 @@
 .gp-panel-lbl {
   display: inline-block;
   font-family: 'Fredoka One', cursive;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: normal;
-  letter-spacing: 0.9px;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
   border-radius: 999px;
-  padding: 3px 10px;
-  margin-bottom: 5px;
+  padding: 3px 9px;
+  margin-bottom: 4px;
 }
 .gp-panel-info .gp-panel-lbl { background: #A5E9DF; color: #0B5F57; }
 .gp-panel-fun  .gp-panel-lbl { background: #FBC2D6; color: #96204C; }
 
 .gp-panel-body {
   font-family: 'Nunito', sans-serif;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
-  line-height: 1.45;
+  line-height: 1.38;
   color: #2A2A2A;
   /* Long copy wraps and grows the panel. It is never clipped or shrunk. */
   overflow-wrap: break-word;
@@ -541,7 +568,7 @@
 .gp-panel-fun .gp-panel-body { font-style: italic; }
 
 @media (min-width: 1100px) {
-  .gp-panel-body { font-size: 16px; }
+  .gp-panel-body { font-size: 15.5px; line-height: 1.45; }
 }
 
 /* ===== NEXT ===== */
@@ -550,8 +577,17 @@
   margin-top: 2px;
 }
 
-/* ===== REVEAL SHELL ===== */
-.gp-reveal { animation: gpRevealIn 0.3s cubic-bezier(0.34, 1.35, 0.64, 1); }
+/* ===== REVEAL SHELL =====
+   The banner is first in the DOM so assistive tech announces and reads the
+   result before the media. Visually the media comes first, which is what the
+   single `order` below does -- no markup reshuffling, no reading-order cost.
+   With no media there is nothing to reorder and the banner simply leads. */
+.gp-reveal {
+  display: flex;
+  flex-direction: column;
+  animation: gpRevealIn 0.3s cubic-bezier(0.34, 1.35, 0.64, 1);
+}
+.gp-reveal .gp-media { order: -1; }
 @keyframes gpRevealIn {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: none; }
@@ -570,7 +606,7 @@
    is allowed to relax again. */
 @media (min-width: 600px) {
   .gp-hdr { padding: 14px 0 16px; gap: 12px; }
-  .gp-hdr-logo { max-height: 64px; }
+  .gp-hdr-logo { max-width: 150px; max-height: 62px; }
   .gp-hdr-right { gap: 9px; }
   .gp-back { padding: 9px 18px; font-size: 16px; min-height: 44px; }
   .gp-help { width: 44px; height: 44px; font-size: 21px; }
@@ -578,9 +614,8 @@
   .gp-sound { font-size: 25px; min-width: 44px; }
   .gp-replay { min-height: 36px; font-size: 14px; margin-bottom: 12px; }
   .gp-theme { min-height: 44px; font-size: 16px; padding: 6px 20px; margin-bottom: 12px; }
-  .gp-prog { padding: 10px 18px 12px; margin-bottom: 12px; }
-  .gp-prog-lbl { font-size: 13px; margin-bottom: 9px; }
-  .gp-clue { padding: 16px 22px; margin-bottom: 12px; }
+  .gp-clue { padding: 24px 22px 16px; margin: 12px 0 12px; }
+  .gp-dots { gap: 7px; }
   .gp-verdict { padding: 12px 20px; min-height: 60px; margin-bottom: 14px; }
   .gp-media { margin-bottom: 14px; --gp-media-cap: 360px; }
   .gp-panel { padding: 12px 16px 13px; margin-bottom: 11px; }
@@ -588,7 +623,7 @@
 }
 
 @media (min-width: 1100px) {
-  .gp-hdr-logo { max-height: 78px; }
+  .gp-hdr-logo { max-width: 190px; max-height: 76px; }
   .gp-media { --gp-media-cap: 420px; }
 }
 
@@ -599,7 +634,8 @@
   .gp-wrap .ans-box-img-wrap,
   .gp-wrap .ans-box-img-placeholder { max-height: 30vh; }
   .gp-hdr { padding: 7px 0 9px; }
-  .gp-hdr-logo { max-height: 44px; }
+  .gp-hdr-logo { max-height: 40px; }
+  .gp-clue { padding: 18px 16px 10px; margin: 9px 0 8px; }
 }
 
 /* Laptop and tablet heights around 800px: trim the artwork square so the clue
@@ -614,13 +650,12 @@
 @media (max-width: 380px) {
   .gp-wrap { padding: 0 12px 24px; }
   .gp-wrap .ans-btns { gap: 10px; }
-  .gp-dot { width: 13px; height: 13px; }
-  .gp-dots { gap: 5px; }
+  .gp-dots { gap: 4px; max-width: calc(100% - 14px); }
   .gp-hdr { gap: 5px; }
   .gp-hdr-right { gap: 4px; }
-  .gp-hdr-logo { max-height: 40px; }
-  .gp-back { padding: 6px 10px; font-size: 12.5px; gap: 3px; }
-  .gp-signin { padding: 6px 11px; font-size: 12.5px; max-width: 92px; }
+  .gp-hdr-logo { max-width: 86px; max-height: 40px; }
+  .gp-back { padding: 6px 9px; font-size: 12px; gap: 3px; }
+  .gp-signin { padding: 6px 10px; font-size: 12px; max-width: 78px; }
   .gp-help { width: 36px; height: 36px; font-size: 17px; }
   .gp-sound { font-size: 19px; min-width: 34px; padding: 2px; }
   .gp-replay { font-size: 11.5px; padding: 4px 9px; }
