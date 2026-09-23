@@ -16,7 +16,7 @@ const svg = (markup) =>
 
 // Full-bleed square tiles: they read as an icon on the choice cards and still
 // crop acceptably in the landing split, which is how real puzzle art behaves.
-const DIE = svg(`
+const DIE = /* @__PURE__ */ svg(`
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
   <defs><linearGradient id="d" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="#3ddbd0"/><stop offset="1" stop-color="#0e8d88"/>
@@ -30,7 +30,7 @@ const DIE = svg(`
   </g>
 </svg>`);
 
-const CLAPPER = svg(`
+const CLAPPER = /* @__PURE__ */ svg(`
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
   <defs><linearGradient id="c" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="#f96b94"/><stop offset="1" stop-color="#c22b55"/>
@@ -61,6 +61,21 @@ const photo = (a, b, label) =>
         font-weight="bold" fill="#ffffff" text-anchor="middle" opacity="0.92">${label}</text>
 </svg>`);
 
+// A deliberately tall still, so the reveal can be checked with media that is
+// taller than it is wide (book covers, playing cards, posters).
+const portrait = (a, b, label) =>
+  svg(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 540">
+  <defs><linearGradient id="p" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/>
+  </linearGradient></defs>
+  <rect width="360" height="540" fill="url(#p)"/>
+  <rect x="34" y="34" width="292" height="472" fill="none" stroke="#ffffff" stroke-width="3" opacity="0.4"/>
+  <circle cx="180" cy="210" r="66" fill="#ffffff" opacity="0.18"/>
+  <text x="180" y="330" font-family="Trebuchet MS, sans-serif" font-size="34"
+        font-weight="bold" fill="#ffffff" text-anchor="middle" opacity="0.94">${label}</text>
+</svg>`);
+
 const LONG_ITEM =
   "The Unbearably Long Title That Somehow Keeps Going Well Past The Point Of Reason";
 
@@ -71,7 +86,7 @@ const DEMO_QUESTIONS = [
     explanationCopy:
       "Through the Desert is a strategy board game about building colorful camel caravans across the desert.",
     flavorCopy: "To be fair, wandering through a desert does sound like a Nicolas Cage movie.",
-    imageUrl: photo("#e8b04b", "#c2571f", "Camels"),
+    imageUrl: /* @__PURE__ */ photo("#e8b04b", "#c2571f", "Camels"),
     imageAlt: "Stylised desert artwork",
     imageSource: "Demo artwork",
   },
@@ -89,7 +104,7 @@ const DEMO_QUESTIONS = [
     explanationCopy:
       "Tokaido is a board game about walking slowly along an old Japanese road and enjoying the scenery.",
     flavorCopy: "The whole game is a vacation. There is no fighting. Genuinely relaxing.",
-    imageUrl: photo("#39b3a6", "#1c6f8c", "Tokaido"),
+    imageUrl: /* @__PURE__ */ photo("#39b3a6", "#1c6f8c", "Tokaido"),
     imageAlt: "Stylised road artwork",
     imageSource: "Demo artwork",
   },
@@ -115,7 +130,7 @@ const DEMO_QUESTIONS = [
     correctCategory: "B",
     explanationCopy: "A 2000 remake in which Nicolas Cage steals fifty cars in one night.",
     flavorCopy: "Eleanor deserved better.",
-    imageUrl: photo("#8b5cf6", "#4c1d95", "60 Seconds"),
+    imageUrl: /* @__PURE__ */ photo("#8b5cf6", "#4c1d95", "60 Seconds"),
     imageAlt: "Stylised car artwork",
     imageSource: "Demo artwork",
   },
@@ -135,7 +150,110 @@ const DEMO_QUESTIONS = [
     flavorCopy: "Not the bees.",
     imageUrl: "",
   },
+  // A YouTube reveal, so the embedded-player path can be reviewed locally.
+  {
+    itemText: "A New Hope",
+    correctCategory: "B",
+    explanationCopy:
+      "Before it landed on Dude Ranch, this song circulated on an earlier demo tape under the title “Princess Leia”.",
+    flavorCopy: "A pop-punk song or a guidance counsellor's pep talk. Genuinely hard to say.",
+    imageUrl: "https://www.youtube.com/watch?v=OFbSKnKC4II",
+    imageSource: "Official audio",
+  },
+  // A portrait still, to check that tall media is contained rather than cropped.
+  {
+    itemText: "Patchwork",
+    correctCategory: "A",
+    explanationCopy:
+      "Patchwork is a two-player board game about stitching an oddly competitive quilt.",
+    flavorCopy: "Never has fabric been this cut-throat.",
+    imageUrl: /* @__PURE__ */ portrait("#2f4a7a", "#0f1d3a", "Patchwork"),
+    imageAlt: "Stylised portrait cover artwork",
+    imageSource: "Demo artwork",
+  },
+  {
+    itemText: "Moonstruck",
+    correctCategory: "B",
+    explanationCopy: "Moonstruck is a 1987 romantic comedy starring Nicolas Cage opposite Cher.",
+    flavorCopy: "Snap out of it.",
+    imageUrl: "",
+  },
+  {
+    itemText: "Azul",
+    correctCategory: "A",
+    explanationCopy:
+      "Azul is a tile-laying board game about decorating the walls of a Portuguese palace.",
+    flavorCopy: "The tiles are satisfying. The scoring is not.",
+    imageUrl: /* @__PURE__ */ photo("#2aa1c4", "#134a6b", "Azul"),
+    imageAlt: "Stylised tile artwork",
+    imageSource: "Demo artwork",
+  },
 ];
+
+// A five-question archive puzzle, so a total that is not 12 can be checked.
+//
+// Built inside a function on purpose. A derived constant at module scope is a
+// call the bundler cannot prove pure, which would pin this whole fixture into
+// the production bundle even though nothing in production ever reads it.
+function archiveQuestions() {
+  return DEMO_QUESTIONS.slice(0, 5);
+}
+
+// A worst-case puzzle for the answer cards: both category names are long, so
+// the label typography can be judged at its least forgiving. Also built inside
+// a function, for the same tree-shaking reason as above.
+function longLabelQuestions() {
+  return [
+    {
+      itemText: "The Mountain Is You",
+      correctCategory: "A",
+      explanationCopy:
+        "The Mountain Is You by Brianna Wiest is a real best-seller about turning self-sabotage into self-mastery.",
+      flavorCopy: "The mountain is me. The mountain has always been me.",
+      imageUrl: /* @__PURE__ */ portrait("#1b1b1b", "#3d3323", "The Mountain Is You"),
+      imageAlt: "Stylised dark book cover",
+      imageSource: "Demo artwork",
+    },
+    {
+      itemText: "You Are the Lighthouse",
+      correctCategory: "B",
+      explanationCopy:
+        "This title was invented for the quiz. There is no best-selling self-help book by this name.",
+      flavorCopy: "Still waiting for the lighthouse to answer my emails.",
+      imageUrl: /* @__PURE__ */ portrait("#16263f", "#0a1524", "You Are the Lighthouse"),
+      imageAlt: "Stylised lighthouse book cover",
+      imageSource: "Demo artwork",
+    },
+    {
+      itemText: "Atomic Habits",
+      correctCategory: "A",
+      explanationCopy: "Atomic Habits by James Clear has sold many millions of copies worldwide.",
+      flavorCopy: "One per cent better at buying books about being one per cent better.",
+      imageUrl: "",
+    },
+    {
+      itemText: "Unbothered by Tuesday",
+      correctCategory: "B",
+      explanationCopy: "Invented for the quiz. Tuesday remains, regrettably, quite bothering.",
+      flavorCopy: "Wednesday was unavailable for comment.",
+      imageUrl: "",
+    },
+    {
+      itemText: "The Subtle Art of Not Giving a F*ck",
+      correctCategory: "A",
+      explanationCopy: "Mark Manson's 2016 book was a genuine global best-seller.",
+      flavorCopy: "The irony of how much people cared about this one.",
+      imageUrl: "",
+    },
+    {
+      itemText: "Your Inner Weather Report",
+      correctCategory: "B",
+      explanationCopy: "Invented for the quiz. Forecast: made up, with a chance of made up.",
+      flavorCopy: "Scattered feelings, clearing by the afternoon.",
+      imageUrl: "",
+    },
+  ];
+}
 
 function todayKey() {
   return new Date().toLocaleDateString("en-CA");
@@ -159,8 +277,12 @@ export function demoGame() {
 }
 
 function yesterdayKey() {
+  return daysAgoKey(1);
+}
+
+function daysAgoKey(n) {
   const d = new Date();
-  d.setDate(d.getDate() - 1);
+  d.setDate(d.getDate() - n);
   return d.toLocaleDateString("en-CA");
 }
 
@@ -169,9 +291,21 @@ export function demoGames() {
     ...demoGame(),
     id: "demo-yesterday",
     date: yesterdayKey(),
-    themeTitle: "Yesterday's Demo Puzzle",
+    themeTitle: "Yesterday's Demo Puzzle (5 questions)",
+    questions: archiveQuestions(),
   };
-  return [demoGame(), older];
+  const longLabels = {
+    ...demoGame(),
+    id: "demo-long-labels",
+    date: daysAgoKey(2),
+    themeTitle: "Best-Selling Self-Help Book OR AI-Made-Up One?",
+    categoryA: "Best-Selling Self-Help Book",
+    categoryB: "AI-Made-Up Self-Help Book",
+    categoryAImage: null,
+    categoryBImage: null,
+    questions: longLabelQuestions(),
+  };
+  return [demoGame(), older, longLabels];
 }
 
 /* ---------- localStorage-backed persistence (so refresh/resume works) ---------- */
