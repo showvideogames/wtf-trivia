@@ -1,0 +1,451 @@
+/* ================= GAMEPLAY (question + answer reveal only) =================
+   New `gp-` classes, plus a handful of narrowly scoped overrides that only
+   apply inside `.gp-wrap`. Nothing here reaches the results screen, Stats,
+   Archive, Help, Sign in, Admin or the homepage. */
+
+/* The shared .main wrapper caps at 500px, which is right for the other
+   screens but too narrow for the new gameplay composition. */
+.main:has(> .gp-wrap) {
+  max-width: none;
+  padding: 0;
+}
+
+.gp-wrap {
+  width: 100%;
+  max-width: 660px;
+  margin: 0 auto;
+  padding: 0 16px 28px;
+}
+
+@media (min-width: 1100px) {
+  .gp-wrap { max-width: 720px; }
+}
+@media (min-width: 1500px) {
+  .gp-wrap { max-width: 800px; }
+}
+@media (min-width: 600px) and (max-width: 1099px) {
+  .gp-wrap { max-width: 560px; }
+}
+
+/* ===== BACKDROP =====
+   The homepage spotlight, turned down. Same warm buttery page and cream pool
+   of light, but a wider, flatter falloff so it sits behind the game without
+   competing with it. The homepage backdrop is untouched. */
+.gp-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-color: #FFEDA0;
+  background-image:
+    radial-gradient(ellipse 62% 46% at 50% 38%,
+      rgba(255, 252, 242, 0.92) 0%,
+      rgba(255, 252, 242, 0.82) 20%,
+      rgba(255, 252, 242, 0.62) 38%,
+      rgba(255, 252, 242, 0.40) 54%,
+      rgba(255, 252, 242, 0.20) 70%,
+      rgba(255, 252, 242, 0.06) 86%,
+      rgba(255, 252, 242, 0) 100%),
+    radial-gradient(ellipse 92% 68% at 50% 40%,
+      rgba(255, 245, 198, 0.78) 0%,
+      rgba(255, 245, 198, 0.50) 44%,
+      rgba(255, 245, 198, 0.22) 72%,
+      rgba(255, 245, 198, 0) 100%),
+    linear-gradient(180deg,
+      rgba(255, 235, 156, 0) 52%,
+      rgba(255, 235, 156, 0.30) 70%,
+      rgba(255, 235, 156, 0.64) 86%,
+      rgba(255, 235, 156, 0.92) 100%);
+}
+
+/* One decoration set per breakpoint, mirroring the homepage mechanism but
+   with its own, sparser arrangement. Phones get sprinkles only. */
+.gpd-dt, .gpd-tb, .gpd-ph { display: none; }
+@media (min-width: 1100px) { .gpd-dt { display: block; } }
+@media (min-width: 600px) and (max-width: 1099px) { .gpd-tb { display: block; } }
+@media (max-width: 599px) { .gpd-ph { display: block; } }
+
+/* ===== HEADER =====
+   The gameplay header reuses the homepage header component, so it needs no
+   styles of its own. Only the Back row below it is new. */
+.gp-backrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.gp-theme {
+  display: block;
+  width: 100%;
+  background: linear-gradient(160deg, #CFF7F0 0%, #A7ECE2 100%);
+  border: 2.5px solid var(--teal-dark);
+  border-radius: 999px;
+  box-shadow: 0 3px 0 var(--teal-dark);
+  padding: 7px 16px;
+  margin-bottom: 10px;
+  font-family: 'Fredoka One', cursive;
+  font-size: 14px;
+  line-height: 1.25;
+  color: #0B5F57;
+  text-align: center;
+  overflow-wrap: break-word;
+}
+
+/* ===== PROGRESS (position only — never score) ===== */
+.gp-prog {
+  background: linear-gradient(160deg, #FFFEF5 0%, #FFF8E7 100%);
+  border: 3px solid var(--black);
+  border-radius: 18px;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.16);
+  padding: 10px 16px 12px;
+  margin-bottom: 12px;
+}
+
+.gp-prog-lbl {
+  font-family: 'Fredoka One', cursive;
+  font-size: 13px;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--black);
+  margin-bottom: 9px;
+}
+
+.gp-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gp-dot {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #E2E2E2;
+  border: 2px solid rgba(0, 0, 0, 0.18);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
+  position: relative;
+  flex-shrink: 0;
+}
+.gp-dot::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  width: 5px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.65);
+}
+/* Answered and current both read as "reached", in yellow. Never a colour that
+   would leak whether an earlier answer was right. */
+.gp-dot.done,
+.gp-dot.cur {
+  background: linear-gradient(180deg, #FFF176, #FFE347 60%, #E6C800);
+  border-color: var(--yellow-dark);
+  box-shadow: 0 2px 0 var(--yellow-dark);
+}
+.gp-dot.cur {
+  transform: scale(1.3);
+  box-shadow: 0 3px 0 var(--yellow-dark);
+}
+
+/* ===== CLUE CARD ===== */
+.gp-clue {
+  background: #FFFDF2;
+  border: 3.5px solid var(--black);
+  border-radius: 22px;
+  box-shadow: 0 7px 0 rgba(0, 0, 0, 0.2);
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 84px;
+}
+
+.gp-clue-text {
+  font-family: 'Fredoka One', cursive;
+  color: var(--black);
+  text-align: center;
+  line-height: 1.16;
+  letter-spacing: 0.3px;
+  /* Long titles wrap at spaces. They are never broken mid-word. */
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+/* Stepped down by title length, so a very long clue stays on the card without
+   shrinking a short one. */
+.gp-clue-text.lg { font-size: clamp(30px, 8.4vw, 46px); }
+.gp-clue-text.md { font-size: clamp(25px, 6.6vw, 38px); }
+.gp-clue-text.sm { font-size: clamp(21px, 5.2vw, 31px); }
+.gp-clue-text.xs { font-size: clamp(17px, 3.9vw, 24px); }
+
+/* ===== ANSWER CARDS =====
+   The existing .ans-box markup, motion and per-puzzle colours are kept as they
+   are. Only sizing and label typography are adjusted here. */
+.gp-wrap .ans-btns {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.gp-wrap .ans-box {
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 22px;
+}
+
+/* Category artwork keeps its square, capped on short viewports so the pair of
+   choices still fits without scrolling. */
+.gp-wrap .ans-box-img-wrap,
+.gp-wrap .ans-box-img-placeholder {
+  aspect-ratio: 1;
+  max-height: min(34vh, 250px);
+}
+
+/* The label half is a fixed, equal-height band on both cards. The auto-fitting
+   text component picks the largest size that fits inside it, so a label shrinks
+   long before it would ever break inside a word. */
+.gp-wrap .ans-box-label {
+  aspect-ratio: auto;
+  /* Tall enough for a two-line label at the shared ceiling, so a two-word name
+     sits at the same size as a one-word one instead of being shrunk to fit. */
+  height: clamp(66px, 20vw, 92px);
+  padding: 8px 10px;
+  line-height: 1.1;
+}
+.gp-wrap .ans-box-label .fit-text-content {
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
+/* ===== RESULT BANNER ===== */
+.gp-verdict {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  text-align: center;
+  padding: 13px 18px;
+  border: 3.5px solid var(--black);
+  border-radius: 18px;
+  font-family: 'Fredoka One', cursive;
+  color: #fff;
+  text-shadow: 1px 2px 0 rgba(0, 0, 0, 0.28);
+  position: relative;
+  margin-bottom: 14px;
+  animation: gpVerdictPop 0.38s cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+.gp-verdict::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 12px;
+  right: 12px;
+  height: 34%;
+  border-radius: 13px 13px 50% 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+}
+.gp-verdict.ok {
+  background: linear-gradient(180deg, #5BE68B 0%, #22C55E 55%, #15803D 100%);
+  border-color: #0E5B2C;
+  box-shadow: 0 6px 0 #0E5B2C;
+}
+.gp-verdict.no {
+  background: linear-gradient(180deg, #FF7AA4 0%, #ED2E63 55%, #AF1140 100%);
+  border-color: #7E0C2E;
+  box-shadow: 0 6px 0 #7E0C2E;
+}
+.gp-verdict-emoji {
+  font-size: clamp(22px, 5vw, 30px);
+  line-height: 1;
+  text-shadow: none;
+}
+.gp-verdict-word { font-size: clamp(22px, 5.4vw, 32px); }
+.gp-verdict-dash {
+  font-size: clamp(18px, 4.2vw, 26px);
+  opacity: 0.8;
+}
+.gp-verdict-tail {
+  font-size: clamp(15px, 3.4vw, 21px);
+  opacity: 0.95;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+@keyframes gpVerdictPop {
+  0%   { transform: scale(0.9) translateY(6px); opacity: 0; }
+  60%  { transform: scale(1.03); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+/* ===== REVEAL MEDIA =====
+   Only rendered when the question actually has media. There is no empty state,
+   no placeholder panel and no icon. */
+.gp-media {
+  margin: 0 0 14px;
+  border: 3.5px solid var(--black);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.18);
+  background: #14161A;
+  position: relative;
+}
+
+/* Stills keep their own proportions: contained, centred, never cropped. */
+.gp-media-img {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  max-height: min(48vh, 430px);
+}
+
+/* Video needs a real box to live in, so the player gets a 16:9 frame. */
+.gp-media-video { aspect-ratio: 16 / 9; }
+.gp-media-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.gp-media-src {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 16px 14px 7px;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.6) 0%, transparent 100%);
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.82);
+  text-align: right;
+  pointer-events: none;
+}
+/* The player already has its own chrome along the bottom edge. */
+.gp-media-video .gp-media-src { display: none; }
+
+/* ===== EXPLANATION PANELS ===== */
+.gp-panel {
+  border-radius: 16px;
+  padding: 13px 16px 14px;
+  margin-bottom: 12px;
+  border: 2.5px solid;
+}
+.gp-panel-info {
+  background: #DFF8F3;
+  border-color: #7FD8CC;
+}
+.gp-panel-fun {
+  background: #FFE6EF;
+  border-color: #F9AEC8;
+}
+
+.gp-panel-lbl {
+  display: inline-block;
+  font-family: 'Fredoka One', cursive;
+  font-size: 11px;
+  font-weight: normal;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 4px 11px;
+  margin-bottom: 8px;
+}
+.gp-panel-info .gp-panel-lbl { background: #A5E9DF; color: #0B5F57; }
+.gp-panel-fun  .gp-panel-lbl { background: #FBC2D6; color: #96204C; }
+
+.gp-panel-body {
+  font-family: 'Nunito', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #2A2A2A;
+  /* Long copy wraps and grows the panel. It is never clipped or shrunk. */
+  overflow-wrap: break-word;
+}
+.gp-panel-fun .gp-panel-body { font-style: italic; }
+
+@media (min-width: 1100px) {
+  .gp-panel-body { font-size: 16px; }
+}
+
+/* ===== NEXT ===== */
+.gp-next {
+  width: 100%;
+  margin-top: 2px;
+}
+
+/* ===== REVEAL SHELL ===== */
+.gp-reveal { animation: gpRevealIn 0.3s cubic-bezier(0.34, 1.35, 0.64, 1); }
+@keyframes gpRevealIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ===== FOCUS VISIBILITY ===== */
+.gp-wrap :focus-visible,
+.gp-hdr-slot :focus-visible {
+  outline: 3px solid #1D4ED8;
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* ===== SHORT VIEWPORTS =====
+   At 375x667 and similar, tighten the vertical rhythm so the clue and both
+   choices are visible without scrolling. */
+@media (max-height: 740px) and (max-width: 599px) {
+  .gp-wrap .ans-box-img-wrap,
+  .gp-wrap .ans-box-img-placeholder { max-height: 27vh; }
+  .gp-clue { min-height: 70px; padding: 13px 16px; margin-bottom: 10px; }
+  .gp-prog { padding: 8px 14px 10px; margin-bottom: 10px; }
+  .gp-prog-lbl { margin-bottom: 7px; }
+  .gp-theme { padding: 6px 14px; margin-bottom: 8px; font-size: 13px; }
+  .gp-hdr-slot .hp-hdr { padding: 8px 0 10px; }
+  .gp-hdr-slot .hp-logo { height: 52px; }
+}
+
+/* Laptop and tablet heights around 800px: trim the artwork square so the clue
+   and both choices still land above the fold. */
+@media (min-width: 600px) and (max-height: 880px) {
+  .gp-wrap .ans-box-img-wrap,
+  .gp-wrap .ans-box-img-placeholder { max-height: 26vh; }
+}
+
+@media (max-width: 380px) {
+  .gp-wrap { padding: 0 12px 24px; }
+  .gp-wrap .ans-btns { gap: 10px; }
+  .gp-dot { width: 13px; height: 13px; }
+  .gp-dots { gap: 6px; }
+}
+
+/* ===== REDUCED MOTION =====
+   Honoured across the whole gameplay surface, including the existing
+   answer-card pop and shake, which previously ran regardless. */
+@media (prefers-reduced-motion: reduce) {
+  .gp-wrap *,
+  .gp-wrap *::before,
+  .gp-wrap *::after,
+  .gp-hdr-slot *,
+  .gp-hdr-slot *::before,
+  .gp-hdr-slot *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .gp-wrap .ans-box:hover:not(.dis),
+  .gp-wrap .ans-box:active:not(.dis) {
+    transform: none;
+  }
+}

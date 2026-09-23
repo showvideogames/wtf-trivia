@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 import "./home.css";
+import "./game.css";
 import {
   demoGames as devDemoGames,
   devPlayer,
@@ -2815,6 +2816,60 @@ function LandingBackdrop(){
   );
 }
 
+// ---- GAMEPLAY BACKDROP ----
+// A quieter cousin of the landing backdrop: the same warm page and cream
+// spotlight, with noticeably fewer decorations so nothing competes with the
+// question. Phones get sprinkles only -- no wrapped candies at that size.
+// Every piece is inert, sits behind the content on its own layer, and is
+// clipped to the viewport, so it can never overlap a control or push the
+// page sideways.
+
+// DESKTOP, 1100px and up: 2 candies well outside the column, 6 sprinkles.
+const GAME_DECOR_DT = [
+  {src:"/candy-turquoise.png", cls:"decor-candy", style:{top:"12%", left:"-40px",  "--cw":"150px", transform:"rotate(14deg)"}},
+  {src:"/candy-pink.png",      cls:"decor-candy", style:{top:"70%", right:"-44px", "--cw":"162px", transform:"rotate(-13deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"7%",  left:"4%",  "--cw":"78px", transform:"rotate(-31deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"38%", left:"2%",  "--cw":"70px", transform:"rotate(16deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"84%", left:"6%",  "--cw":"74px", transform:"rotate(41deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"10%", right:"5%", "--cw":"76px", transform:"rotate(27deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"45%", right:"2%", "--cw":"68px", transform:"rotate(-19deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"88%", right:"7%", "--cw":"72px", transform:"rotate(9deg)"}}
+];
+
+// TABLET, 600-1099px: sprinkles only, tucked into the outer margins.
+const GAME_DECOR_TB = [
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"9%",  left:"1%",  "--cw":"62px", transform:"rotate(-26deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"47%", left:"0%",  "--cw":"58px", transform:"rotate(33deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"86%", left:"3%",  "--cw":"60px", transform:"rotate(12deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"14%", right:"1%", "--cw":"60px", transform:"rotate(21deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"62%", right:"0%", "--cw":"56px", transform:"rotate(-37deg)"}}
+];
+
+// PHONE, under 600px: three sprinkles pinned to the very bottom corners of the
+// viewport, clear of the interface at any scroll position.
+const GAME_DECOR_PH = [
+  {src:SP.yellow, cls:"decor-sprinkle", style:{bottom:"14px", left:"3%",   "--cw":"54px", transform:"rotate(-23deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{bottom:"46px", left:"-10px","--cw":"48px", transform:"rotate(31deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{bottom:"18px", right:"4%",  "--cw":"52px", transform:"rotate(15deg)"}}
+];
+
+function GameBackdrop(){
+  const render=(list,group)=>list.map((d,i)=>(
+    <img key={group+i} src={d.src} alt="" aria-hidden="true"
+         className={d.cls+" "+group} style={d.style}/>
+  ));
+  return(
+    <>
+      <div className="gp-bg" aria-hidden="true"/>
+      <div className="candy-bg" aria-hidden="true">
+        {render(GAME_DECOR_DT,"gpd-dt")}
+        {render(GAME_DECOR_TB,"gpd-tb")}
+        {render(GAME_DECOR_PH,"gpd-ph")}
+      </div>
+    </>
+  );
+}
+
 function Toast({message,onDone}){useEffect(()=>{const id=setTimeout(onDone,2100);return()=>clearTimeout(id);},[onDone]);return <div className="toast">{message}</div>;}
 
 function ProgressDots({total,currentIndex,answers,combo}){
@@ -3304,13 +3359,67 @@ function HomeScreen({game,gameRecord,stats,player,sound,onPlay,onNav,onAdmin,onS
 }
 
 // ---- GAME ----
-function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,isReplay=false}){
+
+// How far through the quiz the player is -- and deliberately nothing about how
+// well they are doing. The ball count comes from the puzzle's own question
+// count, so archive puzzles of any length draw the right number.
+function GameProgress({total,currentIndex}){
+  const shown=Math.min(currentIndex+1,total);
+  return(
+    <div className="gp-prog">
+      <div className="gp-prog-lbl">Question {shown} of {total}</div>
+      <ol className="gp-dots" aria-label={`Question ${shown} of ${total}`}>
+        {Array.from({length:total}).map((_,i)=>{
+          let cls="gp-dot";
+          if(i<currentIndex)cls+=" done";
+          else if(i===currentIndex)cls+=" cur";
+          return <li key={i} className={cls}/>;
+        })}
+      </ol>
+    </div>
+  );
+}
+
+// Step the clue down by length rather than auto-fitting it, so a short title
+// stays big and a very long one still lands on the card. Wrapping happens at
+// spaces only; words are never broken.
+function clueSizeClass(text){
+  const n=String(text||"").trim().length;
+  if(n>58)return"xs";
+  if(n>34)return"sm";
+  if(n>20)return"md";
+  return"lg";
+}
+
+// The reveal's media area. Deliberately renders nothing at all when a question
+// has no media, so the explanation moves up instead of sitting under an empty
+// panel or a placeholder icon.
+function GameRevealMedia({question}){
+  const url=question.imageUrl;
+  if(!url) return null;
+  const embed=getYouTubeEmbedUrl(url);
+  return(
+    <figure className={`gp-media${embed?" gp-media-video":""}`}>
+      {embed?(
+        <iframe className="gp-media-frame" src={embed} title={question.imageAlt||question.itemText}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen/>
+      ):(
+        <img className="gp-media-img" src={url} alt={question.imageAlt||question.itemText}/>
+      )}
+      {question.imageSource&&<figcaption className="gp-media-src">📷 {question.imageSource}</figcaption>}
+    </figure>
+  );
+}
+
+function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,player,isReplay=false}){
   const[rec,setRec]=useState(initRec);
   const[phase,setPhase]=useState(initRec.completed?"question":initRec.currentIndex>=game.questions.length?"question":"question");
   const[chosen,setChosen]=useState(null);
   const[animBtn,setAnimBtn]=useState(null);
   const[reaction,setReaction]=useState(null);
   const[combo,setCombo]=useState(0);
+  const[showHelp,setShowHelp]=useState(false);
   const{play}=sound;
   const{canvasRef,shoot}=useConfetti();
   const beatOpts=["🤔","🤔","🤔","😬"];
@@ -3320,6 +3429,13 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,isR
   const qs=game.questions.map(q=>({...q,_catA:game.categoryA,_catB:game.categoryB}));
   const cq=qs[idx];
   const isLast=idx===qs.length-1;
+
+  // Both answer labels share one ceiling, derived from the longer of the two
+  // category names, so the pair reads as a matched set instead of one card
+  // shouting. Each label still auto-fits below that ceiling, which is what
+  // keeps a long name shrinking rather than breaking inside a word.
+  const longestLabel=Math.max(String(game.categoryA||"").length,String(game.categoryB||"").length);
+  const labelMax = longestLabel<=8?36:longestLabel<=12?30:longestLabel<=18?26:longestLabel<=26?22:19;
 
   // Guard: once we've advanced past the last question, stop rendering question/reveal UI.
   if(!cq) return null;
@@ -3366,15 +3482,22 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,isR
     }
   };
 
+  const isRight = chosen===cq.correctCategory;
+  const correctLabel = cq.correctCategory==="A"?cq._catA:cq._catB;
+
   return(
-    <div>
+    <div className="gp-wrap">
       <canvas ref={canvasRef} id="confetti-canvas" style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:9999}}/>
       {reaction&&<ReactionOverlay emoji={reaction}/>}
-      <div style={{marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+
+      <div className="gp-hdr-slot">
+        <HomeHeader player={player} sound={sound}
+                    onHelp={()=>setShowHelp(true)}
+                    onAccount={()=>onNav("account")}/>
+      </div>
+
+      <div className="gp-backrow">
         <button className="btn-sm" onClick={()=>onNav(isReplay?"archive":"home")}>← Back</button>
-        <div style={{fontFamily:"'Fredoka One',cursive",fontSize:12,color:"var(--teal-dark)",opacity:.7,maxWidth:210,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-          {isReplay?"📼 Replay: ":""}{game.themeTitle}
-        </div>
       </div>
 
       {isReplay&&(
@@ -3383,15 +3506,19 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,isR
         </div>
       )}
 
-      <ProgressDots total={qs.length} currentIndex={idx} answers={rec.answers} combo={combo}/>
+      {game.themeTitle&&<div className="gp-theme">{game.themeTitle}</div>}
+
+      <GameProgress total={qs.length} currentIndex={idx}/>
+
+      {/* The clue stays on screen in both states, so the reveal still shows
+          what was being asked about. */}
+      <div className="gp-clue">
+        <div className={`gp-clue-text ${clueSizeClass(cq.itemText)}`}>{cq.itemText}</div>
+      </div>
 
       {phase==="question"&&(
         <>
-          <div className="q-card">
-            <div className="q-deco">?</div>
-            <div className="item-text">{cq.itemText}</div>
-          </div>
-          <div className="ans-btns" style={{marginTop:10}}>
+          <div className="ans-btns">
             {[
               {cat:"A",label:cq._catA,img:game.categoryAImage,color:PALETTE.find(p=>p.id===(game.categoryAColor||"teal"))||PALETTE[0]},
               {cat:"B",label:cq._catB,img:game.categoryBImage,color:PALETTE.find(p=>p.id===(game.categoryBColor||"pink"))||PALETTE[1]}
@@ -3416,7 +3543,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,isR
                       {cat==="A"?"🎲":"🎬"}
                     </div>
                   )}
-                  <FitText className="ans-box-label" min={12} max={48} buffer={10} style={{color:isDark?"white":"var(--black)",textShadow:isDark?"1px 2px 0 rgba(0,0,0,0.2)":"none",WebkitTextStroke:isDark?"0.5px rgba(0,0,0,0.2)":"0"}}>
+                  <FitText className="ans-box-label" min={11} max={labelMax} buffer={10} style={{color:isDark?"white":"var(--black)",textShadow:isDark?"1px 2px 0 rgba(0,0,0,0.2)":"none",WebkitTextStroke:isDark?"0.5px rgba(0,0,0,0.2)":"0"}}>
                     {label}
                   </FitText>
                 </button>
@@ -3427,53 +3554,46 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,isR
       )}
 
       {phase==="beat"&&(
-        <>
-          <div className="q-card">
-            <div className="item-text">{cq.itemText}</div>
-          </div>
-          <div className="beat-overlay">
-            <span className="beat-emoji-pop">{e_ref.current}</span>
-          </div>
-        </>
+        <div className="beat-overlay">
+          <span className="beat-emoji-pop">{e_ref.current}</span>
+        </div>
       )}
 
       {phase==="reveal"&&(
-        <div className="reveal-card">
-          {/* Image zone — 60% */}
-          {cq.imageUrl ? (
-            <div className="reveal-img-zone">
-              {getYouTubeEmbedUrl(cq.imageUrl)?(
-                <iframe className="reveal-video" src={getYouTubeEmbedUrl(cq.imageUrl)} title={cq.imageAlt||cq.itemText} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen/>
-              ):(
-                <img src={cq.imageUrl} alt={cq.imageAlt||cq.itemText} className="reveal-img"/>
-              )}
-              {cq.imageSource&&(
-                <div className="reveal-img-overlay">
-                  <div className="img-source" style={{color:"rgba(255,255,255,.7)"}}>📷 {cq.imageSource}</div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="reveal-placeholder">
-              {chosen===cq.correctCategory?<FI name="trophy" size={80}/>:"💀"}
-            </div>
+        <div className="gp-reveal">
+          {/* One banner carries the result. The two choices are gone, and
+              nothing here reports the running score. */}
+          <div className={`gp-verdict ${isRight?"ok":"no"}`} role="status">
+            <span className="gp-verdict-emoji" aria-hidden="true">{isRight?"🎉":"😬"}</span>
+            <span className="gp-verdict-word">{isRight?"Correct!":"Nope!"}</span>
+            {/* The category is presented as a label after a dash rather than in a
+                sentence, so it reads correctly whatever the theme's wording is. */}
+            <span className="gp-verdict-dash" aria-hidden="true">&mdash;</span>
+            <span className="gp-verdict-tail">{correctLabel}</span>
+          </div>
+
+          <GameRevealMedia question={cq}/>
+
+          {cq.explanationCopy&&(
+            <section className="gp-panel gp-panel-info">
+              <h3 className="gp-panel-lbl">Actual info</h3>
+              <p className="gp-panel-body">{cq.explanationCopy}</p>
+            </section>
+          )}
+          {cq.flavorCopy&&(
+            <section className="gp-panel gp-panel-fun">
+              <h3 className="gp-panel-lbl">Needless commentary</h3>
+              <p className="gp-panel-body">{cq.flavorCopy}</p>
+            </section>
           )}
 
-          {/* Text zone — 40% */}
-          <div className="reveal-text-zone">
-            <div className={`verdict-bar ${chosen===cq.correctCategory?"ok":"no"}`}>
-              <span style={{fontSize:20}}>{chosen===cq.correctCategory?"🎉":"😬"}</span>
-              {chosen===cq.correctCategory?"Correct!!":"Nope!!"}&nbsp;
-              <span style={{fontSize:14,opacity:.85}}>It's a <strong>{cq.correctCategory==="A"?cq._catA:cq._catB}</strong>!</span>
-            </div>
-            {cq.flavorCopy&&<div className="flavor-box">"{cq.flavorCopy}"</div>}
-            {cq.explanationCopy&&<div className="expl-box">{cq.explanationCopy}</div>}
-            <button className={`btn ${chosen===cq.correctCategory?"btn-green":"btn-pink"}`} onClick={handleNext}>
-              {isLast?"See my score!! →":"Next →"}
-            </button>
-          </div>
+          <button className="btn btn-yellow gp-next" onClick={handleNext}>
+            {isLast?"See my score!! →":"Next question →"}
+          </button>
         </div>
       )}
+
+      {showHelp&&<HomeHelp game={game} onClose={()=>setShowHelp(false)}/>}
     </div>
   );
 }
@@ -4249,7 +4369,9 @@ function QForm({initial,catA,catB,onSave,onCancel}){
 }
 
 function AdminPreview({game,onBack}){
-  const dummySound={play:()=>{}};
+  // The preview uses a silent stand-in for the sound engine. It now also needs
+  // the mute controls, because the gameplay header renders a sound toggle.
+  const dummySound={play:()=>{},muted:false,setMuted:()=>{}};
   const[pr,setPr]=useState({date:game.date,themeTitle:game.themeTitle,totalQuestions:game.questions.length,currentIndex:0,answers:[],score:0,completed:false,startedAt:new Date().toISOString(),completedAt:null});
   const[view,setView]=useState("home");
   const onComplete=final=>{setPr(final);setView("score");};
@@ -4389,6 +4511,7 @@ export default function WhatTheFudgeTrivia(){
   },[loadAppData]);
 
   const todayGame = games.find(g=>g.date===today&&g.status==="published") || null;
+  const isGameplay = view==="game"||view==="replay";
 
   const showToast = m => { setToast(m); setTimeout(()=>setToast(null),2100); };
 
@@ -4589,7 +4712,10 @@ export default function WhatTheFudgeTrivia(){
       <style>{styles}</style>
       <div className="app">
         {view==="home"&&<LandingBackdrop/>}
-        {view!=="home"&&<div className="hdr">
+        {isGameplay&&<GameBackdrop/>}
+        {/* Gameplay carries its own public header (logo, sound, help, account).
+            Every other screen keeps the existing shared header unchanged. */}
+        {view!=="home"&&!isGameplay&&<div className="hdr">
           <div className="logo">
             <div className="logo-line1"><span className="logo-what">What The</span></div>
             <div className="logo-line2"><span className="logo-fudge">Fudge</span><span className="logo-emoji">🍬</span></div>
@@ -4635,6 +4761,7 @@ export default function WhatTheFudgeTrivia(){
               onComplete={handleComplete}
               onNav={setView}
               sound={sound}
+              player={player}
             />
           )}
 
@@ -4646,6 +4773,7 @@ export default function WhatTheFudgeTrivia(){
               onComplete={final=>{setReplayRecord(final);setView("replay-score");}}
               onNav={v=>{if(v==="archive")setView("archive");else setView(v);}}
               sound={sound}
+              player={player}
               isReplay={true}
             />
           )}
