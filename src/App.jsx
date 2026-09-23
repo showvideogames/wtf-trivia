@@ -69,9 +69,49 @@ const styles = `
     cursor: default;
   }
 
-  /* ===== DECORATIVE CANDY BACKDROP (landing page only) =====
-     Sits behind all content via z-index:-1, so no existing element needed
-     changing. Purely ornamental and never interactive. */
+  /* ===== WARM SPOTLIGHT BACKDROP (landing page only) =====
+     Two fixed layers behind all content, so no existing element needed
+     restyling. Both are inert decoration. */
+
+  /* Layer 1: the graded background itself. Covers the body dot pattern on
+     the landing page only; every other screen keeps the yellow dots.
+     Many closely spaced stops keep the falloff smooth and band-free. */
+  .landing-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    pointer-events: none;
+    /* The PAGE is yellow. A soft cream light sits behind the game, fading
+       outward back into yellow at the top, sides and bottom. */
+    background-color: #FFF0A8;
+    background-image:
+      /* Cream spotlight behind the central interface. */
+      radial-gradient(ellipse 52% 38% at 50% 33%,
+        rgba(255,251,239,0.97) 0%,
+        rgba(255,251,239,0.90) 16%,
+        rgba(255,251,239,0.74) 30%,
+        rgba(255,251,239,0.52) 45%,
+        rgba(255,251,239,0.31) 59%,
+        rgba(255,251,239,0.15) 72%,
+        rgba(255,251,239,0.05) 85%,
+        rgba(255,251,239,0) 100%),
+      /* Softer yellow halo so the cream does not meet the base abruptly. */
+      radial-gradient(ellipse 84% 60% at 50% 36%,
+        rgba(255,244,190,0.90) 0%,
+        rgba(255,244,190,0.66) 38%,
+        rgba(255,244,190,0.38) 62%,
+        rgba(255,244,190,0.14) 82%,
+        rgba(255,244,190,0) 100%),
+      /* Bottom stays unmistakably yellow at any viewport height. */
+      linear-gradient(180deg,
+        rgba(255,237,162,0) 48%,
+        rgba(255,237,162,0.34) 66%,
+        rgba(255,237,162,0.68) 82%,
+        rgba(255,237,162,0.94) 94%,
+        rgba(255,237,162,1) 100%);
+  }
+
+  /* Layer 2: the wrapped candies and sprinkles. */
   .candy-bg {
     position: fixed;
     inset: 0;
@@ -81,21 +121,23 @@ const styles = `
   }
   .candy-bg img {
     position: absolute;
-    width: var(--cw, 190px);
+    width: var(--cw, 90px);
     height: auto;
-    opacity: .9;
-    filter: drop-shadow(0 6px 0 rgba(0,0,0,0.13));
+    pointer-events: none;
     user-select: none;
   }
-  @media (max-width: 900px) {
-    .candy-bg img { opacity: .85; }
-  }
-  @media (max-width: 640px) {
-    /* Do not fade these over the yellow: pink reads orange and turquoise
-       reads green. Reduce size and count instead. */
-    .candy-bg img { opacity: .9; --cw: 132px; }
-    .candy-bg img.candy-hide-sm { display: none; }
-  }
+  /* Both candy and sprinkle art already contain their own shadows. */
+  .candy-bg img.decor-candy { filter: none; }
+  /* Sprinkle art already carries its own dimensional shadow — adding a CSS
+     one would double it up. */
+  .candy-bg img.decor-sprinkle { filter: none; }
+
+  /* One set visible per breakpoint. */
+  .decor-dt, .decor-tb, .decor-ph, .decor-ps { display: none; }
+  @media (min-width: 1100px) { .decor-dt { display: block; } }
+  @media (min-width: 600px) and (max-width: 1099px) { .decor-tb { display: block; } }
+  @media (max-width: 599px) and (min-height: 701px) { .decor-ph { display: block; } }
+  @media (max-width: 599px) and (max-height: 700px) { .decor-ps { display: block; } }
 
   /* ===== CONFETTI CANVAS ===== */
   #confetti-canvas {
@@ -2697,19 +2739,78 @@ function perfectRateCopy(rate){
 // SMALL SHARED COMPONENTS
 // ============================================================
 function Countdown(){const[t,setT]=useState(getCountdown());useEffect(()=>{const id=setInterval(()=>setT(getCountdown()),1000);return()=>clearInterval(id);},[]);return(<div className="cdown-box"><div className="cdown-lbl">Next game in</div><div className="cdown-time">{t}</div></div>);}
-function CandyBackdrop(){
-  const candies=[
-    {src:"/candy-pink.png",      style:{top:"4%",   left:"-3%",  "--cw":"210px", transform:"rotate(-18deg)"}, cls:"candy-hide-sm"},
-    {src:"/candy-turquoise.png", style:{top:"34%",  left:"1%",   "--cw":"165px", transform:"rotate(12deg)"},  cls:"candy-hide-sm"},
-    {src:"/candy-pink.png",      style:{bottom:"5%",left:"-2%",  "--cw":"180px", transform:"rotate(9deg)"}},
-    {src:"/candy-turquoise.png", style:{top:"7%",   right:"-3%", "--cw":"195px", transform:"rotate(16deg)"}, cls:"candy-hide-sm"},
-    {src:"/candy-pink.png",      style:{top:"41%",  right:"0%",  "--cw":"150px", transform:"rotate(-14deg)"}, cls:"candy-hide-sm"},
-    {src:"/candy-turquoise.png", style:{bottom:"6%",right:"-2%", "--cw":"200px", transform:"rotate(-11deg)"}}
-  ];
+// Decorative backdrop for the landing page: a warm spotlight gradient plus a
+// small amount of candy artwork. Sprinkle PNGs sit inside a large transparent
+// canvas (~36% of it is artwork), so element widths are ~2.7x the intended
+// visible size.
+// Three separately art-directed sets, after the Candy Confetti reference:
+// candies cropped at the edges, sprinkles scattered asymmetrically. Sprinkle
+// PNGs are ~36.5% artwork inside a transparent canvas, so element widths are
+// roughly 2.7x the intended visible dash (28-42px dash -> 77-115px element).
+const SP = {pink:"/sprinkle-pink.png", teal:"/sprinkle-turquoise.png", yellow:"/sprinkle-yellow.png"};
+
+// DESKTOP, 1100px and up: 4 candies, 10 sprinkles.
+const DECOR_DT = [
+  {src:"/candy-pink.png",      cls:"decor-candy", style:{top:"5%",  left:"-62px",  "--cw":"204px", transform:"rotate(-17deg)"}},
+  {src:"/candy-turquoise.png", cls:"decor-candy", style:{top:"11%", right:"-26px", "--cw":"158px", transform:"rotate(21deg)"}},
+  {src:"/candy-turquoise.png", cls:"decor-candy", style:{top:"66%", left:"-48px",  "--cw":"180px", transform:"rotate(9deg)"}},
+  {src:"/candy-pink.png",      cls:"decor-candy", style:{top:"73%", right:"-54px", "--cw":"194px", transform:"rotate(-12deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"4%",  left:"22%",  "--cw":"92px",  transform:"rotate(-38deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"15%", left:"12%",  "--cw":"104px", transform:"rotate(24deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"27%", left:"5%",   "--cw":"84px",  transform:"rotate(-8deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"44%", left:"14%",  "--cw":"78px",  transform:"rotate(47deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"7%",  right:"17%", "--cw":"98px",  transform:"rotate(33deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"24%", right:"7%",  "--cw":"112px", transform:"rotate(-21deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"40%", right:"13%", "--cw":"86px",  transform:"rotate(14deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"58%", right:"4%",  "--cw":"80px",  transform:"rotate(-45deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"84%", left:"31%",  "--cw":"90px",  transform:"rotate(18deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"91%", right:"29%", "--cw":"82px",  transform:"rotate(-29deg)"}}
+];
+
+// TABLET, 600-1099px: 2 candies drawn in closer to the card, 6 sprinkles.
+const DECOR_TB = [
+  {src:"/candy-pink.png",      cls:"decor-candy", style:{top:"8%",  left:"-46px",  "--cw":"168px", transform:"rotate(-15deg)"}},
+  {src:"/candy-turquoise.png", cls:"decor-candy", style:{top:"70%", right:"-40px", "--cw":"162px", transform:"rotate(16deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"14%", right:"2%",  "--cw":"92px", transform:"rotate(28deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"27%", left:"3%",   "--cw":"84px", transform:"rotate(-34deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"33%", right:"4%",  "--cw":"90px", transform:"rotate(19deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"55%", left:"6%",   "--cw":"78px", transform:"rotate(42deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"86%", left:"26%",  "--cw":"86px", transform:"rotate(-11deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"93%", right:"22%", "--cw":"80px", transform:"rotate(31deg)"}}
+];
+
+// PHONE, under 600px: sprinkles only -- no wrapped candies at this size.
+const DECOR_PH = [
+  {src:SP.yellow, cls:"decor-sprinkle", style:{bottom:"20%", left:"24%",  "--cw":"76px", transform:"rotate(-27deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{bottom:"13%", left:"46%",  "--cw":"70px", transform:"rotate(36deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{bottom:"5%",  left:"31%",  "--cw":"74px", transform:"rotate(12deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{bottom:"22%", right:"17%", "--cw":"68px", transform:"rotate(-41deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{bottom:"3%",  right:"31%", "--cw":"72px", transform:"rotate(22deg)"}}
+];
+
+// SHORT PHONE, under 600px wide and 700px tall (e.g. 375x667): sprinkles only,
+// tucked into the narrow band below the Stats/Archive tiles.
+const DECOR_PS = [
+  {src:SP.yellow, cls:"decor-sprinkle", style:{bottom:"20px",  left:"25%",  "--cw":"66px", transform:"rotate(-13deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{bottom:"25px",  left:"47%",  "--cw":"62px", transform:"rotate(11deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{bottom:"19px",  right:"26%", "--cw":"64px", transform:"rotate(-16deg)"}}
+];
+
+function LandingBackdrop(){
+  const render=(list,group)=>list.map((d,i)=>(
+    <img key={group+i} src={d.src} alt="" aria-hidden="true"
+         className={d.cls+" "+group} style={d.style}/>
+  ));
   return(
-    <div className="candy-bg" aria-hidden="true">
-      {candies.map((c,i)=><img key={i} src={c.src} alt="" className={c.cls||""} style={c.style}/>)}
-    </div>
+    <>
+      <div className="landing-bg" aria-hidden="true"/>
+      <div className="candy-bg" aria-hidden="true">
+        {render(DECOR_DT,"decor-dt")}
+        {render(DECOR_TB,"decor-tb")}
+        {render(DECOR_PH,"decor-ph")}
+        {render(DECOR_PS,"decor-ps")}
+      </div>
+    </>
   );
 }
 
@@ -4371,7 +4472,7 @@ export default function WhatTheFudgeTrivia(){
     <>
       <style>{styles}</style>
       <div className="app">
-        {view==="home"&&<CandyBackdrop/>}
+        {view==="home"&&<LandingBackdrop/>}
         <div className="hdr">
           <div className="logo">
             <div className="logo-line1"><span className="logo-what">What The</span></div>
