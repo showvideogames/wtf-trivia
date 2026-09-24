@@ -74,6 +74,15 @@ const styles = `
   html, body, #root {
     background: var(--warm-base);
   }
+  /* #root has no other reason to form a stacking context, so without this
+     its own background (a normal in-flow box) paints AFTER -- i.e. on top
+     of -- the fixed, negative-z-index candy/spotlight backdrop layers
+     nested inside it, hiding them completely. isolate makes #root paint
+     its background first, before its descendants, the way a positioned
+     ancestor normally would. */
+  #root {
+    isolation: isolate;
+  }
 
   body {
     font-family: 'Nunito', sans-serif;
@@ -82,12 +91,15 @@ const styles = `
     cursor: default;
   }
 
-  /* ===== WARM SPOTLIGHT BACKDROP (landing page only) =====
+  /* ===== WARM SPOTLIGHT BACKDROP (landing page + Archive) =====
      Two fixed layers behind all content, so no existing element needed
-     restyling. Both are inert decoration. */
+     restyling. Both are inert decoration. Shared by the homepage and
+     Archive so the two feel like the same visual family; every other
+     screen keeps the legacy yellow dots (or, for gameplay, its own
+     quieter GameBackdrop cousin below). */
 
   /* Layer 1: the graded background itself. Covers the body dot pattern on
-     the landing page only; every other screen keeps the yellow dots.
+     the screens that use it; every other screen keeps the yellow dots.
      Many closely spaced stops keep the falloff smooth and band-free. */
   .landing-bg {
     position: fixed;
@@ -3946,7 +3958,7 @@ function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onAdmin}){
 
   return(
     <div className="ah-wrap">
-      <GameBackdrop/>
+      <LandingBackdrop/>
       <PageHeader sound={sound} onBack={()=>onNav("home")} onHelp={()=>setShowHelp(true)} player={player} onAccount={()=>onNav("account")} onAdmin={onAdmin}/>
       <div className="ah-title-row">
         <h1 className="ah-title">Archive</h1>

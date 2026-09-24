@@ -15,6 +15,21 @@
   padding: 0 16px 40px;
 }
 
+/* home.css anchors the candy layer to the document (position:absolute,
+   height:100%) on phones, because the homepage is one short screen and the
+   layer needs a band below its footer to live in. Archive is a long
+   scrollable grid instead -- inheriting that override would stretch the
+   layer over the whole page height, collapsing every phone decoration down
+   near the true bottom of the list where it's never seen. Keep it pinned to
+   the viewport here instead, the same as tablet/desktop. */
+@media (max-width: 599px) {
+  .ah-wrap .candy-bg {
+    position: fixed;
+    inset: 0;
+    height: auto;
+  }
+}
+
 /* ===== REUSABLE PAGE HEADER =====
    Same grid approach as the gameplay header: two independent side tracks so
    the centred logo can never be crowded out at 360px, whichever side ends up
