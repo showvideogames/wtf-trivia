@@ -46,6 +46,11 @@ const styles = `
     --purple-dark: #7E22CE;
     --white: #FFFEF5;
     --black: #1A1A1A;
+    /* Warm pale base shared by the redesigned homepage/gameplay backdrops
+       (LandingBackdrop/GameBackdrop settle to this tone at their edges).
+       Used as the document canvas color so nothing brighter shows through
+       Safari's translucent chrome or the overscroll/bounce areas. */
+    --warm-base: #FFEDA0;
     --ink: 3px solid #1A1A1A;
     --ink-thick: 4px solid #1A1A1A;
     --shadow: 5px 5px 0px #1A1A1A;
@@ -61,11 +66,16 @@ const styles = `
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+  /* The document canvas itself: this is what shows beneath Safari's
+     translucent status bar/toolbar and in the overscroll/bounce areas, so
+     it must match the redesigned pages' warm base rather than the old
+     bright dotted yellow (which now lives only on .app.legacy-dots below). */
+  html, body, #root {
+    background: var(--warm-base);
+  }
+
   body {
     font-family: 'Nunito', sans-serif;
-    background: var(--yellow);
-    background-image: radial-gradient(circle, #1A1A1A 1.2px, transparent 1.2px);
-    background-size: 26px 26px;
     min-height: 100vh;
     overflow-x: hidden;
     cursor: default;
@@ -151,13 +161,21 @@ const styles = `
 
   /* ===== APP SHELL ===== */
   .app {
-    /* Background intentionally left to <body>, which paints the identical
-       yellow + dot pattern. Keeping .app transparent lets the decorative
-       candy layer sit between the background and the content. */
+    /* Home and gameplay paint their own full-bleed backdrop
+       (LandingBackdrop/GameBackdrop) behind this, so .app stays transparent
+       there. Every other screen keeps the old bright yellow + dot pattern,
+       applied via .legacy-dots below, scoped to this box rather than the
+       document background so it can't leak past .app's own bounds. */
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
+  }
+
+  .app.legacy-dots {
+    background: var(--yellow);
+    background-image: radial-gradient(circle, #1A1A1A 1.2px, transparent 1.2px);
+    background-size: 26px 26px;
   }
 
   /* ===== HEADER ===== */
@@ -4753,7 +4771,7 @@ export default function WhatTheFudgeTrivia(){
   return(
     <>
       <style>{styles}</style>
-      <div className="app">
+      <div className={`app${view!=="home"&&!isGameplay?" legacy-dots":""}`}>
         {view==="home"&&<LandingBackdrop/>}
         {isGameplay&&<GameBackdrop/>}
         {/* Gameplay carries its own public header (logo, sound, help, account).
