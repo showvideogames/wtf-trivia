@@ -348,17 +348,29 @@
   max-height: min(34vh, 250px);
 }
 
-/* ===== UNANSWERED SCREEN FILLS THE PHONE =====
-   Tightening the chrome above leaves a tall phone with a lot of empty space
-   under the choices. Rather than pad it out, the pair of cards takes whatever
-   height is left over: they grow on a tall screen and shrink on a short one,
-   so the screen is always full and never scrolls. */
+/* ===== FIXED GAME SCREEN, NEVER A SCROLLING PAGE =====
+   .app.gp-fullscreen gives the whole shell a hard dynamic-viewport height on
+   phones (see App.jsx styles), so .gp-wrap is a flex column with a real
+   ceiling instead of just a floor. Both phases use it: the unanswered pair of
+   cards grows to fill whatever is left over (as before), and the reveal's one
+   flexible region -- the media -- shrinks to absorb whatever is short,
+   instead of ever pushing the page taller than the screen. */
 @media (max-width: 599px) {
-  .gp-wrap.gp-q {
+  .gp-wrap {
     flex: 1 1 auto;
+    min-height: 0;
     display: flex;
     flex-direction: column;
   }
+  /* Chrome above the flexible content never shrinks -- there is nothing
+     sacrificial in it, so it always renders at its natural size. */
+  .gp-wrap > .gp-hdr,
+  .gp-wrap > .gp-replay,
+  .gp-wrap > .gp-theme,
+  .gp-wrap > .gp-clue {
+    flex: 0 0 auto;
+  }
+
   .gp-wrap.gp-q .ans-btns {
     flex: 1 1 auto;
     min-height: 196px;
@@ -372,6 +384,24 @@
     flex: 1 1 auto;
     min-height: 0;
     max-height: none;
+  }
+
+  /* Reveal: verdict, both explanation panels and Next are all protected --
+     none can lose anything without becoming unreadable or hiding a required
+     control -- so the media is the sole flex-shrink candidate, with a floor
+     that keeps it genuinely visible even under worst-case combined pressure. */
+  .gp-reveal {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .gp-reveal > .gp-verdict,
+  .gp-reveal > .gp-panel,
+  .gp-reveal > .gp-next {
+    flex: 0 0 auto;
+  }
+  .gp-reveal > .gp-media {
+    flex: 0 1 auto;
+    min-height: 64px;
   }
 }
 
@@ -483,25 +513,45 @@
   background: #14161A;
   position: relative;
   /* The tallest the media stage may become. A landscape still is already
-     shorter than this, so only tall artwork is actually reined in. */
+     shorter than this, so only tall artwork is actually reined in. Set on
+     the figure itself (not just the image inside) so the ceiling holds even
+     outside the mobile flex-shrink context, where the figure would otherwise
+     have no height of its own to measure a percentage against. */
   --gp-media-cap: 250px;
+  /* The figure's own box is sized border-box, so its 3px top+bottom border
+     eats 6px of --gp-media-cap before any content is drawn. The image and
+     video below need the space actually left over, not the raw cap, or
+     they'd render 6px taller than this box and lose that sliver to the
+     overflow:hidden above -- a real, if small, crop. */
+  --gp-media-inner: calc(var(--gp-media-cap) - 6px);
+  max-height: var(--gp-media-cap);
 }
 
 /* Stills keep their own proportions: contained, centred, never cropped and
    never stretched. A portrait cover is bounded by the stage height instead of
-   running to its natural height and swallowing the rest of the page. */
+   running to its natural height and swallowing the rest of the page. Capped
+   by the figure's actual inner height (not a percentage of it), so it holds
+   whether or not the figure is in a height-shrinking flex context. */
 .gp-media-img {
   display: block;
   margin: 0 auto;
   max-width: 100%;
   width: auto;
   height: auto;
-  max-height: var(--gp-media-cap);
+  max-height: var(--gp-media-inner);
   object-fit: contain;
 }
 
-/* Video needs a real box to live in, so the player gets a 16:9 frame. */
-.gp-media-video { aspect-ratio: 16 / 9; }
+/* Video needs a real box to live in, so the player gets a 16:9 frame. Width
+   (not height) is what's capped here -- deriving from the figure's inner
+   height via plain arithmetic -- so the box can never exceed the same
+   ceiling as a still, without fighting flexbox over which axis aspect-ratio
+   controls. */
+.gp-media-video {
+  width: min(100%, calc(var(--gp-media-inner) * 16 / 9));
+  aspect-ratio: 16 / 9;
+  margin: 0 auto;
+}
 .gp-media-frame {
   display: block;
   width: 100%;
@@ -628,13 +678,55 @@
 
 /* ===== SHORT VIEWPORTS =====
    At 375x667 and similar, trim the artwork square a little further so the clue
-   and both choices are comfortably above the fold. */
+   and both choices are comfortably above the fold. The same shrink applies to
+   the reveal's media stage and panel padding, so a tall image or two full
+   explanation panels stay clear of the fold too. */
 @media (max-height: 740px) and (max-width: 599px) {
   .gp-wrap .ans-box-img-wrap,
   .gp-wrap .ans-box-img-placeholder { max-height: 30vh; }
   .gp-hdr { padding: 7px 0 9px; }
   .gp-hdr-logo { max-height: 46px; }
   .gp-clue { padding: 9px 16px 10px; margin: 0 0 8px; gap: 7px; }
+
+  .gp-theme { padding: 3px 15px; margin-bottom: 6px; }
+  .gp-media { --gp-media-cap: 190px; margin-bottom: 8px; }
+  .gp-verdict { padding: 6px 14px; min-height: 42px; margin-bottom: 7px; }
+  .gp-panel { padding: 7px 11px 8px; margin-bottom: 6px; }
+  .gp-panel-body { font-size: 13.5px; line-height: 1.32; }
+}
+
+/* Tightest phones (360x640, 375x667 and similar): one more notch down. Body copy size
+   is untouched -- line-height tightens slightly, and everything decorative
+   around it (media cap, padding, the two panels' own separate borders) gives
+   the rest of the ground. */
+@media (max-height: 700px) and (max-width: 599px) {
+  .gp-hdr { padding: 3px 0 4px; }
+  .gp-replay { min-height: 18px; padding: 2px 8px; margin-bottom: 2px; font-size: 10.5px; }
+  .gp-theme { padding: 2px 14px; margin-bottom: 2px; }
+  .gp-clue { padding: 5px 14px 6px; margin: 0 0 2px; gap: 2px; }
+  .gp-media { --gp-media-cap: 120px; margin-bottom: 5px; }
+  .gp-verdict { padding: 3px 12px; min-height: 34px; margin-bottom: 3px; }
+  .gp-panel { padding: 3px 10px 3px; margin-bottom: 0; }
+  .gp-panel-lbl { margin-bottom: 1px; padding: 1px 7px; font-size: 9px; }
+  .gp-panel-body { line-height: 1.2; }
+  /* Combine the two explanation areas into one shared card: a single outer
+     border and margin instead of two, with a thin dashed rule where the
+     second panel's own border used to be. Each keeps its own colour wash and
+     label, so nothing about the read changes -- only the shared chrome. */
+  .gp-panel-info {
+    border-radius: 13px 13px 0 0;
+    border-bottom: none;
+    padding-bottom: 5px;
+  }
+  .gp-panel-fun {
+    border-radius: 0 0 13px 13px;
+    border-top: 1.5px dashed rgba(0, 0, 0, 0.18);
+    padding-top: 5px;
+    margin-bottom: 5px;
+  }
+  /* Higher specificity than the shared .btn class it also carries, which
+     otherwise wins on padding/font-size by loading later in the document. */
+  .gp-wrap .gp-next { padding: 12px 15px 11px; font-size: 18px; margin-top: 0; }
 }
 
 /* Laptop and tablet heights around 800px: trim the artwork square so the clue
@@ -659,6 +751,14 @@
   .gp-help { width: 36px; height: 36px; font-size: 17px; }
   .gp-sound { font-size: 19px; min-width: 34px; padding: 2px; }
   .gp-replay { font-size: 11.5px; padding: 4px 9px; }
+}
+
+/* Narrow AND short at once (360x640 and similar): the bottom padding above is
+   decorative breathing room the fixed game screen can't always spare. Placed
+   after the narrow-phone block above so it wins on the one property both
+   touch, regardless of which media query matched second. */
+@media (max-width: 599px) and (max-height: 700px) {
+  .gp-wrap { padding-bottom: 10px; }
 }
 
 /* ===== REDUCED MOTION =====
