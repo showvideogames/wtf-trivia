@@ -188,6 +188,22 @@ const DEMO_QUESTIONS = [
     imageAlt: "Stylised tile artwork",
     imageSource: "Demo artwork",
   },
+  // Thirteenth entry: matches the real daily puzzle's current question count
+  // (not just the round number 12), and doubles as the worst realistic combo
+  // — portrait media paired with longer-than-typical copy in both panels —
+  // so the reveal layout is checked under genuine combined pressure rather
+  // than only the single-worst-case text block above, which has no media.
+  {
+    itemText: "Wingspan: European Expansion",
+    correctCategory: "A",
+    explanationCopy:
+      "This fictional expansion imagines Wingspan's bird-collecting engine spreading across the moors, fjords and vineyards of Europe, adding new nectar tokens and a berry-hoarding mechanic nobody asked for but everybody secretly loves.",
+    flavorCopy:
+      "The rulebook clocks in at forty pages and somehow every reviewer still calls it approachable, which tells you everything you need to know about this hobby.",
+    imageUrl: /* @__PURE__ */ portrait("#294d3f", "#0b1f18", "Europe"),
+    imageAlt: "Stylised European bird sanctuary artwork",
+    imageSource: "Demo artwork",
+  },
 ];
 
 // A five-question archive puzzle, so a total that is not 12 can be checked.

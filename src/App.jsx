@@ -178,6 +178,73 @@ const styles = `
     background-size: 26px 26px;
   }
 
+  /* Gameplay is a fixed game screen on phones, never a scrolling page: a hard
+     dynamic-viewport height (not the min-height every other screen uses) is
+     what lets the flex chain below actually shrink content to fit, instead of
+     only ever growing to fill it. Desktop/tablet keep the ordinary flow. */
+  @media (max-width: 599px) {
+    .app.gp-fullscreen {
+      height: 100dvh;
+      min-height: 100dvh;
+    }
+  }
+
+  /* ===== LOADING SCREEN =====
+     Shown only while the boot fetch is in flight, with no artificial minimum
+     duration -- it unmounts the instant loadAppData settles either way. Uses
+     the same warm base as html/body (no dotted pattern here or beneath it),
+     so nothing flashes when it mounts or unmounts. */
+  .ld-screen {
+    min-height: 100dvh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    background: var(--warm-base);
+    text-align: center;
+    padding:
+      max(28px, env(safe-area-inset-top))
+      max(24px, env(safe-area-inset-right))
+      max(28px, env(safe-area-inset-bottom))
+      max(24px, env(safe-area-inset-left));
+  }
+  .ld-logo {
+    display: block;
+    width: min(230px, 58vw);
+    height: auto;
+  }
+  .ld-sprinkles {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    height: 22px;
+  }
+  .ld-sprinkle {
+    display: block;
+    width: 22px;
+    height: auto;
+    animation: ldBounce 1s ease-in-out infinite;
+  }
+  .ld-sprinkle-1 { animation-delay: 0s; }
+  .ld-sprinkle-2 { animation-delay: .15s; }
+  .ld-sprinkle-3 { animation-delay: .3s; }
+  @keyframes ldBounce {
+    0%, 100% { transform: translateY(0); opacity: .6; }
+    50%      { transform: translateY(-9px); opacity: 1; }
+  }
+  .ld-text {
+    font-family: 'Fredoka One', cursive;
+    font-size: 16px;
+    color: var(--teal-dark);
+    letter-spacing: 0.2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ld-sprinkle { animation: none; opacity: 0.9; }
+  }
+
   /* ===== HEADER ===== */
   .hdr {
     width: 100%;
@@ -286,6 +353,7 @@ const styles = `
     max-width: 500px;
     padding: 10px 16px 32px;
     flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
   }
@@ -4739,9 +4807,14 @@ export default function WhatTheFudgeTrivia(){
   if(loading) return(
     <>
       <style>{styles}</style>
-      <div style={{minHeight:"100vh",background:"var(--yellow)",backgroundImage:"radial-gradient(circle,#1A1A1A 1.2px,transparent 1.2px)",backgroundSize:"26px 26px",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
-        <div style={{fontFamily:"'Fredoka One',cursive",fontSize:32,color:"var(--black)"}}>What The Fudge</div>
-        <div style={{fontFamily:"'Fredoka One',cursive",fontSize:18,color:"var(--teal-dark)",animation:"pulseFade .8s ease infinite"}}>Loading... 🍬</div>
+      <div className="ld-screen" role="status" aria-live="polite">
+        <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="ld-logo"/>
+        <div className="ld-sprinkles" aria-hidden="true">
+          <img src="/sprinkle-pink.png" className="ld-sprinkle ld-sprinkle-1" alt=""/>
+          <img src="/sprinkle-turquoise.png" className="ld-sprinkle ld-sprinkle-2" alt=""/>
+          <img src="/sprinkle-yellow.png" className="ld-sprinkle ld-sprinkle-3" alt=""/>
+        </div>
+        <p className="ld-text">Mixing today&rsquo;s trivia&hellip;</p>
       </div>
     </>
   );
@@ -4771,7 +4844,7 @@ export default function WhatTheFudgeTrivia(){
   return(
     <>
       <style>{styles}</style>
-      <div className={`app${view!=="home"&&!isGameplay?" legacy-dots":""}`}>
+      <div className={`app${view!=="home"&&!isGameplay?" legacy-dots":""}${isGameplay?" gp-fullscreen":""}`}>
         {view==="home"&&<LandingBackdrop/>}
         {isGameplay&&<GameBackdrop/>}
         {/* Gameplay carries its own public header (logo, sound, help, account).
