@@ -1,0 +1,411 @@
+/* ================= ARCHIVE (visual catalog) =================
+   New `ah-` classes, plus the reusable `pgh-` internal-page header (used by
+   Archive now; Results can adopt it later without any changes here). Nothing
+   here reaches gameplay, Results, Stats, Sign in, Admin or the homepage. */
+
+.main:has(> .ah-wrap) {
+  max-width: none;
+  padding: 0;
+}
+
+.ah-wrap {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 16px 40px;
+}
+
+/* home.css anchors the candy layer to the document (position:absolute,
+   height:100%) on phones, because the homepage is one short screen and the
+   layer needs a band below its footer to live in. Archive is a long
+   scrollable grid instead -- inheriting that override would stretch the
+   layer over the whole page height, collapsing every phone decoration down
+   near the true bottom of the list where it's never seen. Keep it pinned to
+   the viewport here instead, the same as tablet/desktop. */
+@media (max-width: 599px) {
+  .ah-wrap .candy-bg {
+    position: fixed;
+    inset: 0;
+    height: auto;
+  }
+}
+
+/* ===== REUSABLE PAGE HEADER =====
+   Same grid approach as the gameplay header: two independent side tracks so
+   the centred logo can never be crowded out at 360px, whichever side ends up
+   with more controls. */
+.pgh-hdr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: max(10px, env(safe-area-inset-top)) 0 11px;
+}
+.pgh-hdr-left,
+.pgh-hdr-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.pgh-hdr-left { justify-self: start; }
+.pgh-hdr-right { justify-self: end; }
+.pgh-logo {
+  display: block;
+  justify-self: center;
+  min-width: 0;
+  width: auto;
+  height: auto;
+  max-width: 112px;
+  max-height: 51px;
+}
+
+.pgh-back,
+.pgh-sound,
+.pgh-help,
+.pgh-signin,
+.pgh-admin {
+  min-height: 40px;
+  cursor: pointer;
+  font-family: 'Fredoka One', cursive;
+  flex-shrink: 0;
+}
+
+/* Icon-only by default: with Sound and (when the flag allows it) Admin
+   sharing this same track, a text pill here is what pushes the other two
+   into the logo at every width below desktop. The label comes back once
+   there is genuinely room for it, at 600px and up. */
+.pgh-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: var(--white);
+  border: 2.5px solid var(--black);
+  box-shadow: 3px 3px 0 var(--black);
+  border-radius: 50%;
+  padding: 0;
+  font-size: 16px;
+  color: var(--black);
+  white-space: nowrap;
+}
+.pgh-back:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--black); }
+.pgh-back-arrow { font-size: 1.05em; line-height: 1; }
+.pgh-back-txt { display: none; }
+
+.pgh-sound {
+  background: none;
+  border: 0;
+  padding: 3px;
+  line-height: 0;
+  display: grid;
+  place-items: center;
+  min-width: 36px;
+  font-size: 20px;
+}
+
+.pgh-help,
+.pgh-admin {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2.5px solid var(--black);
+  box-shadow: 0 3px 0 var(--black);
+  font-size: 18px;
+  color: var(--black);
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.pgh-help { background: linear-gradient(180deg, #fff176, #ffe347 60%, #e6c800); }
+.pgh-admin { background: linear-gradient(180deg, #FF85AA, #FF5C8D 60%, #CC3366); border-color: var(--pink-dark); box-shadow: 0 3px 0 var(--pink-dark); }
+
+.pgh-signin {
+  white-space: nowrap;
+  background: linear-gradient(180deg, #fff176, #ffe347 60%, #e6c800);
+  border: 2.5px solid var(--black);
+  box-shadow: 0 3px 0 var(--black);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--black);
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pgh-signin.pgh-acct {
+  background: linear-gradient(180deg, #c084fc, #a855f7 60%, #7e22ce);
+  color: #fff;
+}
+.pgh-help:active,
+.pgh-admin:active,
+.pgh-signin:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--black); }
+
+.ah-wrap :focus-visible,
+.pgh-hdr :focus-visible {
+  outline: 3px solid #1D4ED8;
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+@media (min-width: 600px) {
+  .pgh-hdr { padding: 14px 0 16px; gap: 12px; }
+  .pgh-logo { max-width: 150px; max-height: 62px; }
+  .pgh-hdr-right { gap: 9px; }
+  /* Room for the label again at this width, even with three controls on
+     the left track. */
+  .pgh-back {
+    width: auto;
+    height: auto;
+    min-height: 44px;
+    border-radius: 999px;
+    padding: 9px 18px;
+    font-size: 16px;
+    gap: 6px;
+  }
+  .pgh-back-txt { display: inline; }
+  .pgh-help,
+  .pgh-admin { width: 44px; height: 44px; font-size: 21px; }
+  .pgh-signin { padding: 9px 18px; font-size: 16px; min-height: 44px; max-width: 150px; }
+  .pgh-sound { font-size: 25px; min-width: 44px; }
+}
+
+@media (max-width: 380px) {
+  .pgh-hdr { gap: 4px; }
+  .pgh-hdr-left,
+  .pgh-hdr-right { gap: 3px; }
+  .pgh-logo { max-width: 100px; max-height: 46px; }
+  .pgh-back { width: 36px; height: 36px; font-size: 15px; }
+  .pgh-signin { padding: 6px 10px; font-size: 12px; max-width: 76px; }
+  .pgh-help,
+  .pgh-admin { width: 36px; height: 36px; font-size: 17px; }
+  .pgh-sound { font-size: 19px; min-width: 34px; padding: 2px; }
+}
+
+/* ===== TITLE =====
+   Deliberately compact: the whole point of the redesign is that artwork
+   shows up fast, not that the banner does. */
+.ah-title-row {
+  text-align: center;
+  padding: 4px 0 16px;
+}
+.ah-title {
+  font-family: 'Fredoka One', cursive;
+  font-size: clamp(28px, 6vw, 38px);
+  color: var(--black);
+  margin: 0 0 4px;
+  line-height: 1.1;
+}
+.ah-sub {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--teal-dark);
+  margin: 0;
+}
+
+.ah-empty {
+  text-align: center;
+  padding: 48px 20px;
+  font-family: 'Fredoka One', cursive;
+  font-size: 18px;
+  color: rgba(26, 26, 26, 0.4);
+}
+
+/* ===== GRID =====
+   One column on phones; a spacious two-column grid from tablet up. Never
+   three or four -- the artwork stays the star at every width. */
+.ah-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+@media (min-width: 700px) {
+  .ah-grid { grid-template-columns: 1fr 1fr; gap: 26px; }
+}
+
+/* ===== CARD =====
+   A real <button> for every replayable puzzle: no separate Replay control to
+   miss, no nested interactive elements, a native focusable/keyboard target.
+   Today's card (see below) is deliberately not a button. */
+.ah-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--white);
+  border: var(--ink-thick);
+  border-radius: 24px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  color: inherit;
+  appearance: none;
+  transition: transform .12s, box-shadow .12s;
+}
+button.ah-card {
+  cursor: pointer;
+}
+button.ah-card:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+button.ah-card:hover:not(:disabled) {
+  transform: translate(-2px, -3px);
+  box-shadow: 10px 10px 0 var(--black);
+}
+button.ah-card:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 4px 4px 0 var(--black);
+}
+
+/* ===== ARTWORK =====
+   A fixed 3:2 frame with `contain`, never `cover`: the real header images run
+   from roughly 5:4 to 3:1 in their native proportions, and 3:2 both matches
+   the single most common ratio exactly (so most cards fill it edge to edge)
+   and, because nothing is ever cropped to reach it, an outlier just
+   letterboxes on the warm background instead of losing a subject off the
+   edge. The aspect-ratio reserves the space up front, so no layout shift
+   waits on the image to load. */
+.ah-art {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  background: linear-gradient(160deg, #FFFDF2 0%, #FFF3CE 100%);
+  border-bottom: var(--ink-thick);
+  overflow: hidden;
+}
+.ah-art-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.ah-art-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.ah-art-half {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.ah-art-half img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.ah-art-half span {
+  font-family: 'Fredoka One', cursive;
+  font-size: 16px;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  padding: 0 10px;
+  text-align: center;
+}
+
+.ah-card-body {
+  padding: 14px 18px 18px;
+}
+.ah-card-date {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--teal-dark);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.ah-card-title {
+  font-family: 'Fredoka One', cursive;
+  font-size: 20px;
+  line-height: 1.25;
+  color: var(--black);
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+.ah-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  min-height: 26px;
+}
+.ah-play-again {
+  font-family: 'Fredoka One', cursive;
+  font-size: 14px;
+  color: var(--teal-dark);
+  margin-left: auto;
+}
+
+.ah-score-pill {
+  display: inline-block;
+  font-family: 'Fredoka One', cursive;
+  font-size: 13px;
+  padding: 3px 12px;
+  border-radius: var(--r-pill);
+  border: 2px solid var(--black);
+  background: linear-gradient(180deg, #FFF176 0%, #FFE347 55%, #E6C800 100%);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25);
+}
+.ah-score-pill.perfect {
+  background: linear-gradient(180deg, #4ADE80 0%, #22C55E 55%, #16A34A 100%);
+  color: white;
+  border-color: var(--green-dark);
+}
+
+/* ===== TODAY =====
+   Distinct border/background and a badge, spanning the full grid width so it
+   reads as the featured entry -- larger, not just differently coloured. Not
+   a button: tapping today's entry in Archive has never navigated anywhere
+   (today is played from Home), and that stays exactly as it was. */
+.ah-today {
+  grid-column: 1 / -1;
+  position: relative;
+  border-color: var(--orange-dark);
+  background: linear-gradient(160deg, #FFFDF2 0%, #FFF3CE 100%);
+}
+.ah-today-badge {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  font-family: 'Fredoka One', cursive;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 5px 14px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(180deg, #FB923C 0%, #FF8C00 55%, #CC6600 100%);
+  color: white;
+  border: 2px solid var(--orange-dark);
+  box-shadow: 0 3px 0 var(--orange-dark);
+}
+.ah-today .ah-card-title { font-size: 23px; }
+
+@media (min-width: 700px) {
+  .ah-card-title { font-size: 22px; }
+  .ah-today .ah-card-title { font-size: 28px; }
+  .ah-card-body { padding: 18px 22px 22px; }
+}
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+  .ah-wrap *,
+  .ah-wrap *::before,
+  .ah-wrap *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  button.ah-card:hover:not(:disabled),
+  button.ah-card:active:not(:disabled) {
+    transform: none;
+  }
+}
