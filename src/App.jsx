@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react
 import { createClient } from "@supabase/supabase-js";
 import "./home.css";
 import "./game.css";
+import "./archive.css";
 import {
   demoGames as devDemoGames,
   devPlayer,
@@ -1484,79 +1485,8 @@ const styles = `
   .stat-tile:nth-child(4) .stat-lbl,
   .stat-tile:nth-child(5) .stat-lbl { color: rgba(255,255,255,0.75); }
 
-  /* ===== ARCHIVE ===== */
-  .archive-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 11px 8px;
-    border-bottom: 2px dashed rgba(45,212,191,0.25);
-    cursor: pointer;
-    transition: background .15s, transform .1s;
-    border-radius: 12px;
-    margin: 0 -6px;
-    gap: 8px;
-  }
-  .archive-row:last-child { border-bottom: none; }
-  .archive-row:hover { background: linear-gradient(160deg, var(--teal-light) 0%, #FFFBE6 100%); transform: translateX(2px); }
-  .archive-row.today-row { background: linear-gradient(160deg, #FFF9E0 0%, #FFFBE6 100%); }
-
-  .archive-date { font-size: 11px; font-weight: 800; color: var(--teal-dark); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 1px; }
-  .archive-theme { font-family: 'Fredoka One', cursive; font-size: 14px; color: var(--black); line-height: 1.3; }
-
-  .archive-right { display: flex; align-items: center; gap: 7px; flex-shrink: 0; margin-left: 8px; }
-
-  .score-pill {
-    font-family: 'Fredoka One', cursive;
-    font-size: 13px;
-    padding: 4px 12px;
-    border-radius: var(--r-pill);
-    border: 2px solid var(--black);
-    background: linear-gradient(180deg, #FFF176 0%, #FFE347 55%, #E6C800 100%);
-    box-shadow: 0 3px 0 rgba(0,0,0,0.25);
-    position: relative;
-  }
-  .score-pill::after {
-    content:''; position:absolute; inset:3px; border-radius:var(--r-pill);
-    background:linear-gradient(180deg,rgba(255,255,255,.45) 0%,transparent 60%);
-    pointer-events:none;
-  }
-
-  .score-pill.perfect { background: linear-gradient(180deg, #4ADE80 0%, #22C55E 55%, #16A34A 100%); color: white; border-color: var(--green-dark); }
-
-  .replay-chip {
-    font-family: 'Fredoka One', cursive;
-    font-size: 12px;
-    padding: 3px 10px;
-    border-radius: var(--r-pill);
-    border: 2px solid var(--teal-dark);
-    background: linear-gradient(180deg, #5EEAD4 0%, #2DD4BF 55%, #0F9488 100%);
-    color: var(--black);
-    box-shadow: 0 3px 0 var(--teal-dark);
-    position: relative;
-  }
-  .replay-chip::after {
-    content:''; position:absolute; inset:2px; border-radius:var(--r-pill);
-    background:linear-gradient(180deg,rgba(255,255,255,.4) 0%,transparent 60%);
-    pointer-events:none;
-  }
-
-  .today-chip {
-    font-family: 'Fredoka One', cursive;
-    font-size: 12px;
-    padding: 3px 10px;
-    border-radius: var(--r-pill);
-    border: 2px solid var(--orange-dark);
-    background: linear-gradient(180deg, #FB923C 0%, #FF8C00 55%, #CC6600 100%);
-    color: white;
-    box-shadow: 0 3px 0 var(--orange-dark);
-    position: relative;
-  }
-  .today-chip::after {
-    content:''; position:absolute; inset:2px; border-radius:var(--r-pill);
-    background:linear-gradient(180deg,rgba(255,255,255,.35) 0%,transparent 60%);
-    pointer-events:none;
-  }
+  /* Archive's list presentation (.archive-row, .score-pill, .replay-chip,
+     .today-chip) has been replaced by the visual catalog in archive.css. */
 
   .replay-banner {
     background: linear-gradient(160deg,#5EEAD4,#2DD4BF 55%,#0F9488);
@@ -1853,16 +1783,6 @@ const styles = `
     align-items: center;
     justify-content: center;
     background: linear-gradient(180deg, rgba(11,26,44,.12), rgba(11,26,44,.04));
-  }
-  .archive-thumb {
-    width: 48px;
-    height: 36px;
-    object-fit: contain;
-    border-radius: 8px;
-    border: 2px solid var(--black);
-    box-shadow: 2px 2px 0 var(--black);
-    flex-shrink: 0;
-    background: rgba(11, 26, 44, 0.12);
   }
   .lightning-mark {
     display: inline-block;
@@ -3882,11 +3802,132 @@ function StatsScreen({stats,onNav}){
   );
 }
 
-// ---- ARCHIVE (with replay) ----
-function ArchiveScreen({games,playerId,onNav,onReplay}){
+// ---- REUSABLE INTERNAL-PAGE HEADER ----
+// Logo centred between two button clusters, same proven grid approach as the
+// gameplay header (equal side tracks so neither can crowd the logo out of
+// legibility at 360px). Archive uses it now; Results can adopt it later
+// without any changes here. Admin only ever appears behind the existing
+// SHOW_ADMIN_LINK flag -- this header never shows it unconditionally.
+function PageHeader({sound,onBack,onHelp,player,onAccount,onAdmin}){
+  const signedIn = player && !player.isGuest;
+  return(
+    <header className="pgh-hdr">
+      <div className="pgh-hdr-left">
+        <button className="pgh-back" onClick={onBack} aria-label="Back to home">
+          <span className="pgh-back-arrow" aria-hidden="true">←</span>
+          <span className="pgh-back-txt">Home</span>
+        </button>
+        {sound&&<button className="pgh-sound" onClick={()=>sound.setMuted(m=>!m)}
+                aria-pressed={!sound.muted}
+                aria-label={sound.muted?"Turn sound on":"Turn sound off"}
+                title={sound.muted?"Turn sound on":"Turn sound off"}>
+          {sound.muted?"\u{1F507}":"\u{1F50A}"}
+        </button>}
+        {SHOW_ADMIN_LINK&&onAdmin&&(
+          <button className="pgh-admin" onClick={onAdmin} aria-label="Admin" title="Admin">
+            <FI name="gear" size={20}/>
+          </button>
+        )}
+      </div>
+      <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="pgh-logo"/>
+      <div className="pgh-hdr-right">
+        {onHelp&&<button className="pgh-help" onClick={onHelp} aria-label="How to play" title="How to play">?</button>}
+        <button className={signedIn?"pgh-signin pgh-acct":"pgh-signin"} onClick={onAccount}
+                title={signedIn?(player.email||"Account"):"Sign in"}>
+          {signedIn?formatAccountLabel(player.email):"Sign in"}
+        </button>
+      </div>
+    </header>
+  );
+}
+
+// ---- ARCHIVE ----
+
+// The card artwork. Mirrors HomePuzzleArt's fallback logic (a headerImage, or
+// a split of the two category images when there isn't one) but with its own
+// sizing: `contain` inside a fixed 3:2 frame rather than home's `cover`,
+// because the real header images range from roughly 5:4 to 3:1 in their
+// native proportions (checked against all 15 published puzzles), and 3:2
+// both matches the single most common ratio exactly and, with `contain`,
+// never has to crop the rest -- an outlier just letterboxes instead of
+// losing a subject off the edge.
+function ArchiveCardArt({game,eager}){
+  const loading = eager?"eager":"lazy";
+  if(game.headerImage){
+    return(
+      <div className="ah-art">
+        <img src={game.headerImage} alt={game.themeTitle} className="ah-art-img"
+             loading={loading} decoding="async"
+             onError={e=>{e.currentTarget.style.display="none";}}/>
+      </div>
+    );
+  }
+  const colA = PALETTE.find(p=>p.id===(game.categoryAColor||"teal"))||PALETTE[0];
+  const colB = PALETTE.find(p=>p.id===(game.categoryBColor||"pink"))||PALETTE[1];
+  return(
+    <div className="ah-art ah-art-split" role="img" aria-label={game.themeTitle}>
+      <div className="ah-art-half" style={{background:colA.mid}}>
+        {game.categoryAImage ? <img src={game.categoryAImage} alt="" loading={loading}/> : <span>{game.categoryA}</span>}
+      </div>
+      <div className="ah-art-half" style={{background:colB.mid}}>
+        {game.categoryBImage ? <img src={game.categoryBImage} alt="" loading={loading}/> : <span>{game.categoryB}</span>}
+      </div>
+    </div>
+  );
+}
+
+function archiveDateLabel(date){
+  return new Date(date+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+}
+
+// Not a button: today's entry has never navigated anywhere from Archive (the
+// player plays today's puzzle from Home), and that is preserved exactly --
+// this card is informational only, so it isn't given fake interactive
+// semantics for an activation that does nothing.
+function ArchiveTodayCard({game,record}){
+  return(
+    <div className="ah-card ah-today" aria-label={`Today's puzzle: ${game.themeTitle}`}>
+      <span className="ah-today-badge">Today</span>
+      <ArchiveCardArt game={game} eager/>
+      <div className="ah-card-body">
+        <div className="ah-card-title">{game.themeTitle}</div>
+        {record?.completed&&(
+          <div className="ah-card-foot">
+            <span className={`ah-score-pill${record.score===record.totalQuestions?" perfect":""}`}>{record.score}/{record.totalQuestions}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// The whole card is a single <button>: no separate Replay control to miss,
+// no nested interactive elements, and a real focusable, keyboard-operable
+// control for free. canReplay preserves the exact existing rule.
+function ArchivePastCard({game,record,onReplay,eager}){
+  const canReplay = game.questions?.length>0;
+  return(
+    <button type="button" className="ah-card" onClick={onReplay} disabled={!canReplay}>
+      <ArchiveCardArt game={game} eager={eager}/>
+      <div className="ah-card-body">
+        <div className="ah-card-date">{archiveDateLabel(game.date)}</div>
+        <div className="ah-card-title">{game.themeTitle}</div>
+        <div className="ah-card-foot">
+          {record?.completed&&(
+            <span className={`ah-score-pill${record.score===record.totalQuestions?" perfect":""}`}>{record.score}/{record.totalQuestions}</span>
+          )}
+          {canReplay&&<span className="ah-play-again">Play again →</span>}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onAdmin}){
   const sorted=[...games].filter(g=>g.status==="published").sort((a,b)=>b.date.localeCompare(a.date));
   const today=getLocalGameDay();
   const[records,setRecords]=useState({});
+  const[showHelp,setShowHelp]=useState(false);
 
   useEffect(()=>{
     if(!playerId||!sorted.length) return;
@@ -3900,40 +3941,28 @@ function ArchiveScreen({games,playerId,onNav,onReplay}){
     })();
   },[playerId, games.length]);
 
+  const todayGame = sorted.find(g=>g.date===today);
+  const pastGames = sorted.filter(g=>g.date!==today);
+
   return(
-    <div>
-      <div className="sec-head"><FI name="cal" size={52} style={{marginRight:10,verticalAlign:"middle"}}/>Archive</div>
-      <div className="sec-sub">Every theme ever. Tap any past game to replay it!</div>
-      <div className="card">
-        {sorted.length===0&&<div style={{textAlign:"center",color:"#aaa",padding:"24px 0",fontFamily:"'Fredoka One',cursive"}}>No games yet!</div>}
-        {sorted.map(g=>{
-          const r=records[g.date];
-          const isToday=g.date===today;
-          const canReplay=!isToday&&g.questions?.length>0;
-          return(
-            <div
-              className={`archive-row${isToday?" today-row":""}`}
-              key={g.date}
-              onClick={()=>canReplay&&onReplay(g)}
-              style={{cursor:canReplay?"pointer":"default"}}
-            >
-              {g.headerImage&&<img src={g.headerImage} alt={g.themeTitle} className="archive-thumb" onError={e=>e.target.style.display="none"}/>}
-              <div>
-                <div className="archive-date">{isToday?"Today":new Date(g.date+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>
-                <div className="archive-theme">{g.themeTitle}</div>
-              </div>
-              <div className="archive-right">
-                {r?.completed&&(
-                  <div className={`score-pill${r.score===r.totalQuestions?" perfect":""}`}>{r.score}/{r.totalQuestions}</div>
-                )}
-                {isToday&&<div className="today-chip">Today</div>}
-                {canReplay&&<div className="replay-chip">▶ Replay</div>}
-              </div>
-            </div>
-          );
-        })}
+    <div className="ah-wrap">
+      <GameBackdrop/>
+      <PageHeader sound={sound} onBack={()=>onNav("home")} onHelp={()=>setShowHelp(true)} player={player} onAccount={()=>onNav("account")} onAdmin={onAdmin}/>
+      <div className="ah-title-row">
+        <h1 className="ah-title">Archive</h1>
+        <p className="ah-sub">Every theme so far. Pick one and play!</p>
       </div>
-      <div style={{marginTop:12}}><button className="btn-sm" onClick={()=>onNav("home")}>← Back</button></div>
+      {sorted.length===0?(
+        <div className="ah-empty">No games yet!</div>
+      ):(
+        <div className="ah-grid">
+          {todayGame&&<ArchiveTodayCard game={todayGame} record={records[todayGame.date]}/>}
+          {pastGames.map((g,i)=>(
+            <ArchivePastCard key={g.date} game={g} record={records[g.date]} onReplay={()=>onReplay(g)} eager={!todayGame&&i===0}/>
+          ))}
+        </div>
+      )}
+      {showHelp&&<HomeHelp game={todayGame} onClose={()=>setShowHelp(false)}/>}
     </div>
   );
 }
@@ -4844,12 +4873,13 @@ export default function WhatTheFudgeTrivia(){
   return(
     <>
       <style>{styles}</style>
-      <div className={`app${view!=="home"&&!isGameplay?" legacy-dots":""}${isGameplay?" gp-fullscreen":""}`}>
+      <div className={`app${view!=="home"&&view!=="archive"&&!isGameplay?" legacy-dots":""}${isGameplay?" gp-fullscreen":""}`}>
         {view==="home"&&<LandingBackdrop/>}
         {isGameplay&&<GameBackdrop/>}
-        {/* Gameplay carries its own public header (logo, sound, help, account).
-            Every other screen keeps the existing shared header unchanged. */}
-        {view!=="home"&&!isGameplay&&<div className="hdr">
+        {/* Gameplay and Archive each carry their own public header (logo,
+            sound, help, account) and backdrop. Every other screen keeps the
+            existing shared header unchanged. */}
+        {view!=="home"&&view!=="archive"&&!isGameplay&&<div className="hdr">
           <div className="logo">
             <div className="logo-line1"><span className="logo-what">What The</span></div>
             <div className="logo-line2"><span className="logo-fudge">Fudge</span><span className="logo-emoji">🍬</span></div>
@@ -4933,8 +4963,11 @@ export default function WhatTheFudgeTrivia(){
             <ArchiveScreen
               games={games}
               playerId={player?.id}
+              player={player}
+              sound={sound}
               onNav={setView}
               onReplay={handleReplay}
+              onAdmin={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}
             />
           )}
         </div>
