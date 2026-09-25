@@ -58,6 +58,109 @@
       rgba(255, 235, 156, 0.92) 100%);
 }
 
+/* ===== EDGE SHAPES =====
+   A handful of large, soft brand-colour shapes cropped by the viewport edges,
+   so the game sits in a composed space rather than on a flat yellow sheet.
+   Deliberately few and quiet: they only ever show in the margins and gaps,
+   and they sit on their own inert layer between the page colour and the
+   sprinkles. The layer is fixed and clipped to the viewport, so nothing in it
+   can widen the page or reach into the safe areas' own layout. */
+.gp-shapes {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+.gp-shape,
+.gp-mark {
+  position: absolute;
+  display: block;
+}
+.gp-shape-teal {
+  width: 250px;
+  height: 214px;
+  top: -104px;
+  left: -128px;
+  background: radial-gradient(circle at 62% 64%, #9BE6DC 0%, #6FD8CA 100%);
+  border-radius: 58% 42% 55% 45% / 52% 60% 40% 48%;
+  opacity: 0.55;
+  transform: rotate(-14deg);
+}
+.gp-shape-pink {
+  width: 180px;
+  height: 250px;
+  top: 44%;
+  right: -128px;
+  background: radial-gradient(circle at 30% 40%, #FFC4D6 0%, #FFA3BF 100%);
+  border-radius: 46% 54% 40% 60% / 58% 44% 56% 42%;
+  opacity: 0.5;
+  transform: rotate(8deg);
+}
+.gp-shape-sun {
+  width: 280px;
+  height: 220px;
+  bottom: -132px;
+  left: -104px;
+  background: radial-gradient(circle at 60% 30%, #FFD66E 0%, #FFBE3D 100%);
+  border-radius: 52% 48% 62% 38% / 50% 56% 44% 50%;
+  opacity: 0.5;
+  transform: rotate(10deg);
+}
+.gp-shape-rose {
+  width: 200px;
+  height: 170px;
+  bottom: -104px;
+  right: -86px;
+  background: radial-gradient(circle at 30% 30%, #FFB6CC 0%, #FF8FB1 100%);
+  border-radius: 60% 40% 48% 52% / 46% 58% 42% 54%;
+  opacity: 0.42;
+  transform: rotate(-18deg);
+}
+
+/* Small three-stroke accent marks, the same shape the clue card uses to
+   frame its title, parked in the side margins. Tablet and up only: a phone's
+   16px gutter is too narrow to hold one without it reading as a stray
+   glyph beside a card. */
+.gp-mark {
+  display: none;
+  width: 18px;
+  height: 18px;
+  background: center / contain no-repeat;
+  opacity: 0.8;
+}
+.gp-mark-l {
+  top: 57%;
+  left: -1px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FF6F98' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M20 4l-4 3M21 12h-5M19 20l-4-3'/%3E%3C/svg%3E");
+}
+.gp-mark-r {
+  top: 31%;
+  right: -1px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2322BBA8' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M4 4l4 3M3 12h5M5 20l4-3'/%3E%3C/svg%3E");
+}
+
+@media (min-width: 600px) {
+  .gp-shape-teal { width: 420px; height: 360px; top: -170px; left: -190px; }
+  .gp-shape-pink { width: 300px; height: 400px; top: 40%; right: -190px; }
+  .gp-shape-sun  { width: 480px; height: 360px; bottom: -210px; left: -170px; }
+  .gp-shape-rose { width: 340px; height: 290px; bottom: -170px; right: -130px; }
+  .gp-mark { display: block; width: 26px; height: 26px; }
+  .gp-mark-l { left: 4%; }
+  .gp-mark-r { right: 4%; }
+}
+/* Desktop already carries the wrapped candies, so the shapes stay smaller and
+   paler here than their share of a phone screen would suggest. */
+@media (min-width: 1100px) {
+  .gp-shape { opacity: 0.34; }
+  .gp-shape-teal { width: 500px; height: 420px; top: -230px; left: -240px; }
+  .gp-shape-pink { width: 320px; height: 440px; top: 40%; right: -220px; }
+  .gp-shape-sun  { width: 560px; height: 420px; bottom: -270px; left: -200px; }
+  .gp-shape-rose { width: 400px; height: 330px; bottom: -220px; right: -160px; }
+  .gp-mark-l { top: 62%; left: 14%; }
+  .gp-mark-r { top: 24%; right: 14%; }
+}
+
 /* One decoration set per breakpoint, mirroring the homepage mechanism but
    with its own, sparser arrangement. Phones get sprinkles only. */
 .gpd-dt, .gpd-tb, .gpd-ph { display: none; }
@@ -186,8 +289,10 @@
   min-height: 30px;
   padding: 5px 12px;
   margin-bottom: 8px;
-  background: #CFF7F0;
-  border: 2px solid var(--teal-dark);
+  /* Status, not identity: a lighter, flatter strip than the matchup banner
+     below it, so the two never read as a matched pair of buttons. */
+  background: linear-gradient(180deg, #E4FBF7 0%, #CDF5EE 100%);
+  border: 1.5px solid rgba(15, 148, 136, 0.55);
   border-radius: 999px;
   font-family: 'Fredoka One', cursive;
   font-size: 12.5px;
@@ -214,7 +319,7 @@
   background: linear-gradient(160deg, #FFE1EC 0%, #FFC6DC 100%);
   border: 2.5px solid var(--pink-dark);
   border-radius: 999px;
-  box-shadow: 0 3px 0 var(--pink-dark);
+  box-shadow: 0 3px 0 var(--pink-dark), inset 0 1.5px 0 rgba(255, 255, 255, 0.75);
   padding: 4px 16px;
   margin-bottom: 8px;
   font-family: 'Fredoka One', cursive;
@@ -291,10 +396,13 @@
    short title. */
 .gp-clue {
   position: relative;
-  background: #FFFDF2;
-  border: 3.5px solid var(--black);
+  /* Supporting surface, not a control: a warm, light card with a soft golden
+     edge, leaving the heavy black outline to the header controls, media,
+     verdict and Next. */
+  background: linear-gradient(180deg, #FFFEF9 0%, #FFF8E2 100%);
+  border: 2.5px solid #EDCF7E;
   border-radius: 20px;
-  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 0 rgba(204, 150, 20, 0.28), 0 12px 22px -14px rgba(120, 80, 0, 0.35);
   padding: 10px 18px 12px;
   margin: 0 0 9px;
   /* One column: the progress row, then the title, both centred, with a small
@@ -307,11 +415,17 @@
 }
 
 .gp-clue-text {
+  position: relative;
+  /* Leaves just enough of the card's side padding free for the emphasis
+     marks below, so they never touch the edge even on a full-width line. */
+  max-width: calc(100% - 10px);
   font-family: 'Fredoka One', cursive;
   color: var(--black);
   text-align: center;
-  line-height: 1.16;
-  letter-spacing: 0.3px;
+  line-height: 1.14;
+  letter-spacing: 0.2px;
+  /* A buttery underglow gives the title weight without another outline. */
+  text-shadow: 0 2px 0 rgba(255, 214, 90, 0.55);
   /* Long titles wrap at spaces. They are never broken mid-word. */
   overflow-wrap: normal;
   word-break: normal;
@@ -319,8 +433,27 @@
 }
 /* Stepped down by title length, so a very long clue stays on the card without
    shrinking a short one. */
-.gp-clue-text.lg { font-size: clamp(27px, 7.4vw, 44px); }
-.gp-clue-text.md { font-size: clamp(23px, 6.0vw, 36px); }
+.gp-clue-text.lg { font-size: clamp(29px, 8.0vw, 46px); }
+.gp-clue-text.md { font-size: clamp(24px, 6.4vw, 38px); }
+
+/* A small pair of three-stroke marks either side of a short title. They hang
+   in the card's side padding, outside the text box, so they cost no height
+   and never change where a title wraps. Longer titles, which usually wrap
+   and fill the card, go without -- marks stranded at the card's edges would
+   read as stray rather than as emphasis. */
+.gp-clue-text.lg::before,
+.gp-clue-text.lg::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 13px;
+  height: 15px;
+  margin-top: -8px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 28' fill='none' stroke='%23F2B019' stroke-width='3.4' stroke-linecap='round'%3E%3Cpath d='M13 4l6 5M11 14h9M13 24l6-5'/%3E%3C/svg%3E") center / contain no-repeat;
+  pointer-events: none;
+}
+.gp-clue-text.lg::before { right: 100%; margin-right: 2px; }
+.gp-clue-text.lg::after { left: 100%; margin-left: 2px; transform: scaleX(-1); }
 .gp-clue-text.sm { font-size: clamp(19px, 4.8vw, 30px); }
 .gp-clue-text.xs { font-size: clamp(17px, 3.9vw, 24px); }
 
@@ -437,39 +570,93 @@
   border-radius: 16px;
   font-family: 'Fredoka One', cursive;
   color: #fff;
-  text-shadow: 1px 2px 0 rgba(0, 0, 0, 0.28);
   position: relative;
+  /* Keeps the decorative layers below inside the rounded banner. */
+  overflow: hidden;
+  isolation: isolate;
   margin-bottom: 10px;
   animation: gpVerdictPop 0.38s cubic-bezier(0.34, 1.5, 0.64, 1);
 }
+/* Every piece of copy sits above the gloss and the decoration layer. */
+.gp-verdict > span {
+  position: relative;
+  z-index: 2;
+}
+/* Top gloss: the same candy highlight as before, now kept under the text. */
 .gp-verdict::before {
   content: '';
   position: absolute;
-  top: 4px;
+  z-index: 1;
+  top: 3px;
   left: 12px;
   right: 12px;
-  height: 34%;
+  height: 36%;
   border-radius: 13px 13px 50% 50%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0) 100%);
   pointer-events: none;
 }
+/* The decoration layer: confetti for a right answer, a gentle wave and
+   sparkle for a wrong one. Drawn from inline SVG and parked at the two ends
+   of the banner, where a one-line result leaves room. It lands once with the banner and then
+   holds still -- nothing here loops. */
+.gp-verdict::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-position: left 5px center, right 5px center;
+  background-size: auto 86%, auto 86%;
+  pointer-events: none;
+  animation: gpVerdictDeco 0.5s ease-out 0.14s both;
+}
+@keyframes gpVerdictDeco {
+  from { opacity: 0; transform: scale(0.82); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Correct: a deeper, richer green with a faint diagonal ribbon texture and a
+   darker lower edge, so it reads as dimensional rather than as a flat
+   button. */
 .gp-verdict.ok {
-  background: linear-gradient(180deg, #5BE68B 0%, #22C55E 55%, #15803D 100%);
-  border-color: #0E5B2C;
-  box-shadow: 0 6px 0 #0E5B2C;
+  background:
+    radial-gradient(120% 80% at 50% 135%, rgba(4, 70, 32, 0.55) 0%, rgba(4, 70, 32, 0) 62%),
+    repeating-linear-gradient(118deg, rgba(255, 255, 255, 0.06) 0 9px, rgba(255, 255, 255, 0) 9px 21px),
+    linear-gradient(180deg, #3CCB70 0%, #1AA24C 50%, #0E7536 100%);
+  border-color: #093B1D;
+  box-shadow: 0 6px 0 #093B1D, 0 12px 20px -10px rgba(9, 59, 29, 0.55);
+  text-shadow: 0 2px 0 #0A5A2A, 0 3px 6px rgba(0, 0, 0, 0.18);
 }
+.gp-verdict.ok::after {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 40'%3E%3Crect x='3' y='3' width='3.6' height='9' rx='1.5' fill='%23FFE347' transform='rotate(-30 5 7)'/%3E%3Crect x='14' y='9' width='3.4' height='8' rx='1.5' fill='%23FF8FB1' transform='rotate(28 16 13)'/%3E%3Ccircle cx='7' cy='21' r='1.8' fill='%23ffffff' fill-opacity='.85'/%3E%3Crect x='4' y='27' width='3.4' height='8' rx='1.5' fill='%237FF0E0' transform='rotate(40 6 31)'/%3E%3Ccircle cx='16' cy='33' r='1.6' fill='%23FFE347'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 40'%3E%3Crect x='14' y='2' width='3.6' height='9' rx='1.5' fill='%23FF8FB1' transform='rotate(30 16 6)'/%3E%3Crect x='4' y='10' width='3.4' height='8' rx='1.5' fill='%237FF0E0' transform='rotate(-24 6 14)'/%3E%3Ccircle cx='15' cy='22' r='1.8' fill='%23ffffff' fill-opacity='.85'/%3E%3Crect x='13' y='27' width='3.4' height='9' rx='1.5' fill='%23FFE347' transform='rotate(-46 15 31)'/%3E%3Ccircle cx='5' cy='33' r='1.6' fill='%23FFE347'/%3E%3C/svg%3E");
+}
+
+/* Nope: the same finish in raspberry. A little wave, a soft sparkle and a dot
+   instead of confetti -- playful, not a penalty stamp. */
 .gp-verdict.no {
-  background: linear-gradient(180deg, #FF7AA4 0%, #ED2E63 55%, #AF1140 100%);
-  border-color: #7E0C2E;
-  box-shadow: 0 6px 0 #7E0C2E;
+  background:
+    radial-gradient(120% 80% at 50% 135%, rgba(96, 6, 36, 0.5) 0%, rgba(96, 6, 36, 0) 62%),
+    repeating-linear-gradient(118deg, rgba(255, 255, 255, 0.06) 0 9px, rgba(255, 255, 255, 0) 9px 21px),
+    linear-gradient(180deg, #F85A8C 0%, #DF2C63 50%, #AA1449 100%);
+  border-color: #640A2A;
+  box-shadow: 0 6px 0 #640A2A, 0 12px 20px -10px rgba(100, 10, 42, 0.5);
+  text-shadow: 0 2px 0 #8A0F3A, 0 3px 6px rgba(0, 0, 0, 0.16);
 }
+.gp-verdict.no::after {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 40'%3E%3Cpath d='M3 11q3-4 6 0t6 0' fill='none' stroke='%23ffffff' stroke-opacity='.55' stroke-width='2.2' stroke-linecap='round'/%3E%3Cpath d='M8 21l1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5z' fill='%23FFD1DF' fill-opacity='.9'/%3E%3Ccircle cx='17' cy='21' r='1.6' fill='%23ffffff' fill-opacity='.6'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 40'%3E%3Cpath d='M14 5l1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5z' fill='%23FFD1DF' fill-opacity='.9'/%3E%3Ccircle cx='5' cy='19' r='1.6' fill='%23ffffff' fill-opacity='.6'/%3E%3Cpath d='M5 30q3-4 6 0t6 0' fill='none' stroke='%23ffffff' stroke-opacity='.55' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
 .gp-verdict-emoji {
   font-size: clamp(22px, 5vw, 30px);
   line-height: 1;
   text-shadow: none;
 }
 /* The verdict word is never shrunk to make room for the category. */
-.gp-verdict-word { font-size: clamp(22px, 5.4vw, 32px); }
+.gp-verdict-word { font-size: clamp(22px, 5.4vw, 34px); }
 .gp-verdict-dash {
   font-size: clamp(18px, 4.2vw, 26px);
   opacity: 0.8;
@@ -485,8 +672,8 @@
   word-break: normal;
   hyphens: none;
 }
-.gp-verdict-tail.xl { font-size: clamp(23px, 6.0vw, 32px); }
-.gp-verdict-tail.lg { font-size: clamp(20px, 5.0vw, 28px); }
+.gp-verdict-tail.xl { font-size: clamp(23px, 6.0vw, 34px); }
+.gp-verdict-tail.lg { font-size: clamp(20px, 5.0vw, 29px); }
 .gp-verdict-tail.md { font-size: clamp(17px, 4.2vw, 23px); }
 /* The two longest tiers stay deliberately readable rather than shrinking to
    fit beside the verdict. When they no longer fit on that row the banner wraps
@@ -628,35 +815,67 @@
   text-align: center;
 }
 
-/* ===== EXPLANATION PANELS ===== */
+/* ===== EXPLANATION PANELS =====
+   Each panel has its own identity -- a small round badge and a coloured
+   heading in a coordinated turquoise or pink system -- on a soft tinted card
+   with a soft coloured edge (no black outline: these support the reveal,
+   they don't compete with it).
+
+   On phones the badge floats beside the heading and the first line of copy,
+   and the rest of the copy runs full width beneath it. A separate icon
+   column would narrow every line and add rows to long copy, which is height
+   the artwork would pay for. From tablet up there is room, and the badge
+   gets a column of its own. */
 .gp-panel {
   border-radius: 14px;
   padding: 8px 12px 9px;
   margin-bottom: 7px;
   border: 2px solid;
+  /* Contains the floated badge. */
+  display: flow-root;
 }
 .gp-panel-info {
-  background: #DFF8F3;
-  border-color: #7FD8CC;
+  background: linear-gradient(180deg, #E8FBF7 0%, #DAF6F0 100%);
+  border-color: #A3E3D9;
 }
 .gp-panel-fun {
-  background: #FFE6EF;
-  border-color: #F9AEC8;
+  background: linear-gradient(180deg, #FFF0F5 0%, #FFE4EE 100%);
+  border-color: #F8BCD1;
+}
+
+.gp-panel-ico {
+  float: left;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: 1px 9px 2px 0;
+  padding: 5px;
+  border-radius: 50%;
+  color: #fff;
+}
+.gp-panel-ico svg { display: block; }
+.gp-panel-info .gp-panel-ico {
+  background: linear-gradient(180deg, #34CDBB 0%, #11978A 100%);
+  box-shadow: 0 2px 0 #0B6E65, inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.gp-panel-fun .gp-panel-ico {
+  background: linear-gradient(180deg, #FF7DA5 0%, #DC3469 100%);
+  box-shadow: 0 2px 0 #A61D4D, inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .gp-panel-lbl {
-  display: inline-block;
+  display: block;
   font-family: 'Fredoka One', cursive;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: normal;
-  letter-spacing: 0.8px;
+  line-height: 1.2;
+  letter-spacing: 1.3px;
   text-transform: uppercase;
-  border-radius: 999px;
-  padding: 3px 9px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
-.gp-panel-info .gp-panel-lbl { background: #A5E9DF; color: #0B5F57; }
-.gp-panel-fun  .gp-panel-lbl { background: #FBC2D6; color: #96204C; }
+.gp-panel-info .gp-panel-lbl { color: #0B7A70; }
+.gp-panel-fun  .gp-panel-lbl { color: #C2285D; }
 
 .gp-panel-body {
   font-family: 'Nunito', sans-serif;
@@ -673,10 +892,84 @@
   .gp-panel-body { font-size: 15.5px; line-height: 1.45; }
 }
 
-/* ===== NEXT ===== */
-.gp-next {
-  width: 100%;
-  margin-top: 2px;
+/* ===== NEXT =====
+   The reveal's call to action: a physical game-show pill rather than the
+   shared rounded .btn. Selectors carry .btn as well so they outrank the
+   shared .btn rules, which load later in the document.
+
+   Motion is split across independent properties so nothing fights: the
+   breathing invitation uses `scale` (plus a 1px lift on `transform`), the
+   press uses `translate`, and the warmer glow at each breath lives on
+   ::after's opacity. So the button can be pressed mid-breath and still
+   visibly go down. No property that affects layout is ever animated. */
+.gp-wrap .gp-next.btn {
+  display: block;
+  width: 92%;
+  margin: 2px auto 0;
+  border-radius: 999px;
+  border: 3px solid var(--black);
+  background: linear-gradient(180deg, #FFF27A 0%, #FFE347 40%, #FFCD30 76%, #F6AA1C 100%);
+  box-shadow:
+    0 5px 0 #2B2106,
+    0 13px 20px -8px rgba(214, 138, 0, 0.5);
+  letter-spacing: 0.4px;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+  transition: translate 0.1s ease-out, box-shadow 0.1s ease-out;
+  animation: gpNextBreathe 2.4s ease-in-out 1.2s 3;
+}
+/* A pale, refined gloss across the top of the pill. */
+.gp-wrap .gp-next.btn::before {
+  top: 3px;
+  left: 20px;
+  right: 20px;
+  height: 40%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0) 100%);
+}
+/* The stronger warm glow at the peak of each breath. It is only an outer
+   shadow on a transparent box matching the button's border box, so it can
+   never paint over the button face. */
+.gp-wrap .gp-next.btn::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  box-shadow: 0 14px 26px -6px rgba(255, 164, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  animation: gpNextGlow 2.4s ease-in-out 1.2s 3;
+}
+@keyframes gpNextBreathe {
+  0%, 100% { scale: 1; transform: none; }
+  50%      { scale: 1.018; transform: translateY(-1px); }
+}
+@keyframes gpNextGlow {
+  0%, 100% { opacity: 0; }
+  50%      { opacity: 1; }
+}
+
+@media (hover: hover) {
+  .gp-wrap .gp-next.btn:hover {
+    transform: none;
+    translate: 0 -1px;
+    box-shadow:
+      0 6px 0 #2B2106,
+      0 15px 22px -8px rgba(214, 138, 0, 0.58);
+  }
+}
+/* Pressed: the pill travels down onto its lower edge, like a real button. */
+.gp-wrap .gp-next.btn:active {
+  transform: none;
+  translate: 0 4px;
+  box-shadow:
+    0 1px 0 #2B2106,
+    0 5px 10px -6px rgba(214, 138, 0, 0.4);
+}
+/* Keeps the pill shape under the shared focus ring, which otherwise sets a
+   6px radius on whatever it outlines. */
+.gp-wrap .gp-next.btn:focus-visible {
+  border-radius: 999px;
+  outline-offset: 4px;
 }
 
 /* ===== REVEAL SHELL =====
@@ -712,14 +1005,13 @@
   .gp-theme { min-height: 0; padding: 3px 14px; margin-bottom: 6px; }
   .gp-clue { padding: 8px 16px 10px; margin-bottom: 8px; gap: 6px; }
   .gp-verdict { min-height: 0; padding: 5px 12px; margin-bottom: 7px; border-width: 3px; }
-  .gp-verdict.ok { box-shadow: 0 4px 0 #0E5B2C; }
-  .gp-verdict.no { box-shadow: 0 4px 0 #7E0C2E; }
+  .gp-verdict.ok { box-shadow: 0 4px 0 #093B1D, 0 10px 16px -10px rgba(9, 59, 29, 0.55); }
+  .gp-verdict.no { box-shadow: 0 4px 0 #640A2A, 0 10px 16px -10px rgba(100, 10, 42, 0.5); }
   .gp-verdict-emoji { font-size: 20px; }
   .gp-media { margin-bottom: 8px; }
   .gp-panel { padding: 6px 11px 7px; margin-bottom: 6px; }
-  /* A block pill, not inline-block: an inline pill sits in a full-size text
-     line and quietly adds ~8px of empty strut to every panel. */
-  .gp-panel-lbl { display: block; width: fit-content; font-size: 9.5px; padding: 2px 8px; margin-bottom: 4px; }
+  .gp-panel-lbl { font-size: 10.5px; letter-spacing: 1.2px; margin-bottom: 1px; }
+  .gp-panel-ico { width: 28px; height: 28px; margin: 1px 8px 1px 0; }
   .gp-panel-body { font-size: 13.5px; line-height: 1.34; }
   .gp-wrap { padding-bottom: 12px; }
 }
@@ -749,8 +1041,23 @@
   .gp-dots { gap: 7px; }
   .gp-verdict { padding: 12px 20px; min-height: 60px; margin-bottom: 14px; }
   .gp-media { margin-bottom: 14px; --gp-media-cap: min(400px, 28vh); }
-  .gp-panel { padding: 12px 16px 13px; margin-bottom: 11px; }
-  .gp-panel-lbl { margin-bottom: 7px; }
+  .gp-panel {
+    padding: 12px 16px 13px;
+    margin-bottom: 11px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 13px;
+    align-items: start;
+  }
+  .gp-panel-ico {
+    float: none;
+    grid-row: 1 / span 2;
+    width: 38px;
+    height: 38px;
+    padding: 7px;
+    margin: 0;
+  }
+  .gp-panel-lbl { margin: 2px 0 4px; font-size: 12px; }
 }
 
 @media (min-width: 1100px) {
@@ -773,6 +1080,7 @@
   .gp-media { margin-bottom: 6px; }
   .gp-panel { padding: 5px 10px 6px; margin-bottom: 5px; }
   .gp-panel-body { font-size: 13px; line-height: 1.3; }
+  .gp-panel-ico { width: 26px; height: 26px; padding: 4.5px; margin: 1px 6px 0 0; }
 }
 
 /* Tightest phones (360x640, 375x667 and similar): one more notch down. Body
@@ -788,7 +1096,8 @@
   .gp-verdict { padding: 3px 10px; margin-bottom: 5px; }
   .gp-verdict-emoji { font-size: 18px; }
   .gp-panel { padding: 3px 10px 3px; margin-bottom: 0; }
-  .gp-panel-lbl { margin-bottom: 2px; padding: 1px 7px; font-size: 9px; }
+  .gp-panel-lbl { margin-bottom: 0; font-size: 10px; }
+  .gp-panel-ico { width: 24px; height: 24px; padding: 4px; margin: 1px 6px 0 0; }
   .gp-panel-body { line-height: 1.24; }
   /* Combine the two explanation areas into one shared card: a single outer
      border and margin instead of two, with a thin dashed rule where the
@@ -807,7 +1116,8 @@
   }
   /* Higher specificity than the shared .btn class it also carries, which
      otherwise wins on padding/font-size by loading later in the document. */
-  .gp-wrap .gp-next { padding: 12px 15px 11px; font-size: 18px; margin-top: 0; }
+  /* The tightest phones keep a little more of the width for the pill. */
+  .gp-wrap .gp-next.btn { padding: 12px 15px 11px; font-size: 18px; margin-top: 0; width: 96%; }
 }
 
 /* Laptop and tablet heights around 800px: trim the artwork square so the clue
@@ -853,6 +1163,11 @@
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+  /* The Next invitation is switched off outright, not just shortened. */
+  .gp-wrap .gp-next.btn,
+  .gp-wrap .gp-next.btn::after {
+    animation: none !important;
   }
   .gp-wrap .ans-box:hover:not(.dis),
   .gp-wrap .ans-box:active:not(.dis) {

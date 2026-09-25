@@ -2887,6 +2887,16 @@ function GameBackdrop(){
   return(
     <>
       <div className="gp-bg" aria-hidden="true"/>
+      {/* A few large, softly cropped brand shapes around the edges and two
+          small accent marks, all plain CSS (see .gp-shapes). */}
+      <div className="gp-shapes" aria-hidden="true">
+        <span className="gp-shape gp-shape-teal"/>
+        <span className="gp-shape gp-shape-pink"/>
+        <span className="gp-shape gp-shape-sun"/>
+        <span className="gp-shape gp-shape-rose"/>
+        <span className="gp-mark gp-mark-l"/>
+        <span className="gp-mark gp-mark-r"/>
+      </div>
       <div className="candy-bg" aria-hidden="true">
         {render(GAME_DECOR_DT,"gpd-dt")}
         {render(GAME_DECOR_TB,"gpd-tb")}
@@ -3437,6 +3447,31 @@ function GameProgressDots({total,currentIndex}){
   );
 }
 
+// The explanation panels' identity marks. Drawn inline rather than as emoji so
+// they look the same on every platform; purely decorative, since each panel's
+// heading already says what it is.
+function PanelIcon({kind}){
+  return(
+    <span className="gp-panel-ico" aria-hidden="true">
+      {kind==="info"?(
+        <svg viewBox="0 0 24 24" width="100%" height="100%">
+          <path d="M12 3.2a6.3 6.3 0 0 0-3.7 11.4c.6.5 1 1.1 1 1.8v.5h5.4v-.5c0-.7.4-1.3 1-1.8A6.3 6.3 0 0 0 12 3.2z" fill="currentColor"/>
+          <rect x="9.4" y="18.3" width="5.2" height="1.8" rx=".9" fill="currentColor"/>
+          <rect x="10.2" y="20.8" width="3.6" height="1.5" rx=".75" fill="currentColor"/>
+          <path d="M10 7.6a3 3 0 0 1 2-1" stroke="rgba(0,0,0,.18)" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+        </svg>
+      ):(
+        <svg viewBox="0 0 24 24" width="100%" height="100%">
+          <path d="M12 3.6c-5 0-9 3.2-9 7.3 0 2.3 1.3 4.4 3.3 5.7l-.8 3.3c-.1.5.4.8.8.6l3.8-2.3c.6.1 1.2.1 1.9.1 5 0 9-3.2 9-7.4S17 3.6 12 3.6z" fill="currentColor"/>
+          <circle cx="8" cy="11" r="1.35" fill="rgba(0,0,0,.2)"/>
+          <circle cx="12" cy="11" r="1.35" fill="rgba(0,0,0,.2)"/>
+          <circle cx="16" cy="11" r="1.35" fill="rgba(0,0,0,.2)"/>
+        </svg>
+      )}
+    </span>
+  );
+}
+
 // The category half of the result banner is sized by its own length, so a short
 // answer reads as boldly as the verdict instead of being held down to whatever
 // a long category would need.
@@ -3752,12 +3787,14 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
 
           {cq.explanationCopy&&(
             <section className="gp-panel gp-panel-info">
+              <PanelIcon kind="info"/>
               <h3 className="gp-panel-lbl">Actual info</h3>
               <p className="gp-panel-body">{cq.explanationCopy}</p>
             </section>
           )}
           {cq.flavorCopy&&(
             <section className="gp-panel gp-panel-fun">
+              <PanelIcon kind="fun"/>
               <h3 className="gp-panel-lbl">Needless commentary</h3>
               <p className="gp-panel-body">{cq.flavorCopy}</p>
             </section>
