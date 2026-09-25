@@ -3486,14 +3486,19 @@ function usePreloadedImageStatus(url){
 // has no media, so the explanation moves up instead of sitting under an empty
 // panel or a placeholder icon.
 //
-// The hook must run unconditionally (before the no-media early return) so it
-// is never skipped on some renders and not others of the same instance.
+// The hooks must run unconditionally (before the no-media early return) so
+// they are never skipped on some renders and not others of the same instance.
+//
+// The frame takes the still's own proportions (see .gp-media in game.css),
+// so the image is read here once it is in the DOM. The ratio is keyed by URL
+// because this instance is reused from question to question; until a still
+// has been measured -- and for the pending and failed states -- the frame
+// holds the standard 4:3.
 function GameRevealMedia({question}){
   const url=question.imageUrl;
   const embed=url?getYouTubeEmbedUrl(url):null;
   // Video is never preloaded as an image -- pass null so the hook is a no-op.
   const status=usePreloadedImageStatus(embed?null:url);
-  if(!url) return null;
   // Three distinct states, not two: loaded (the common case -- paints from
   // the already-decoded cache instantly), pending (rare -- preloading
   // almost always wins the race, shown as a quiet pulsing placeholder to
@@ -3501,14 +3506,63 @@ function GameRevealMedia({question}){
   // must not keep pulsing as though it's still loading).
   const loaded=Boolean(embed)||status==="loaded";
   const failed=!embed&&status==="error";
+  const imgRef=useRef(null);
+  const figRef=useRef(null);
+  const[measured,setMeasured]=useState(null); // {url, ratio}
+  const ratio=!embed&&measured?.url===url?measured.ratio:null;
+  const readRatio=img=>{
+    if(!img||!img.naturalWidth||!img.naturalHeight) return;
+    const ratio=img.naturalWidth/img.naturalHeight;
+    setMeasured(m=>m&&m.url===url&&m.ratio===ratio?m:{url,ratio});
+  };
+  // Which still last sat on screen as the pending placeholder, and the
+  // placeholder's height at the moment that still arrived. Only a still that
+  // was actually waited on can change the frame's shape after paint -- e.g. a
+  // wide legacy image replacing a 4:3 placeholder -- and that one resize is
+  // eased instead of snapping the copy below it upward mid-read.
+  const pendingUrl=useRef(null);
+  const settleFrom=useRef(null); // {url, h}
+  // An already-decoded still is complete as soon as it mounts, so reading it
+  // here (before paint) means it never flashes at the placeholder ratio.
+  // onLoad below covers a still that is not complete yet.
+  useLayoutEffect(()=>{
+    const fig=figRef.current;
+    if(embed||!fig) return;
+    if(!loaded){
+      if(!failed) pendingUrl.current=url;
+      return;
+    }
+    if(ratio===null){
+      // First commit with the still in it, still at the placeholder's 4:3.
+      if(pendingUrl.current===url) settleFrom.current={url,h:fig.getBoundingClientRect().height};
+      readRatio(imgRef.current);
+    }else if(settleFrom.current?.url===url){
+      const from=settleFrom.current.h;
+      settleFrom.current=null;
+      pendingUrl.current=null;
+      const to=fig.getBoundingClientRect().height;
+      const cs=getComputedStyle(fig);
+      const pad=parseFloat(cs.paddingTop)+parseFloat(cs.paddingBottom);
+      // Height briefly overrides the ratio-derived one; the image inside keeps
+      // its exact shape throughout (it is sized from the figure's container
+      // units), and when the animation ends the ratio takes over at the same
+      // height, so nothing jumps at either end.
+      if(Math.abs(to-from)>1&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+        fig.animate([{height:`${from-pad}px`},{height:`${to-pad}px`}],{duration:260,easing:"ease-out"});
+      }
+    }
+  });
+  if(!url) return null;
   return(
-    <figure className={`gp-media${embed?" gp-media-video":""}`}>
+    <figure ref={figRef} className={`gp-media${embed?" gp-media-video":""}`}
+            style={ratio?{"--gp-media-r":String(ratio)}:undefined}>
       {embed?(
         <iframe className="gp-media-frame" src={embed} title={question.imageAlt||question.itemText}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen/>
       ):loaded?(
-        <img className="gp-media-img" src={url} alt={question.imageAlt||question.itemText}
+        <img ref={imgRef} className="gp-media-img" src={url} alt={question.imageAlt||question.itemText}
+             onLoad={e=>readRatio(e.currentTarget)}
              onError={e=>{e.currentTarget.style.display="none";}}/>
       ):failed?(
         <div className="gp-media-failed">Image unavailable</div>
