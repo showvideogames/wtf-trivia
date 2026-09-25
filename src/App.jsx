@@ -3775,6 +3775,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
               It stays first in the DOM so it is announced and read before the
               media, and CSS alone moves the media above it visually. */}
           <div className={`gp-verdict ${isRight?"ok":"no"}`} role="status">
+            <span className="gp-verdict-gleam" aria-hidden="true"/>
             <span className="gp-verdict-emoji" aria-hidden="true">{isRight?"🎉":"😬"}</span>
             <span className="gp-verdict-word">{isRight?"Correct!":"Nope!"}</span>
             {/* The category is presented as a label after a dash rather than in a
@@ -3801,7 +3802,11 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
           )}
 
           <button className="btn btn-yellow gp-next" onClick={handleNext}>
-            {isLast?"See my score!! →":"Next question →"}
+            {isLast?"See my score!!":"Next question"}
+            {/* The label already says where it goes, so the arrow is decoration. */}
+            <svg className="gp-next-arrow" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 12h15M13 5.5l6.5 6.5-6.5 6.5" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </button>
         </div>
       )}

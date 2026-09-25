@@ -615,6 +615,39 @@
   to   { opacity: 1; transform: none; }
 }
 
+/* A periodic gleam: one soft diagonal band of light that crosses the banner
+   left to right in about a second, then a long still gap -- roughly every
+   8s while the reveal is up. It sits above the gloss but below the copy and
+   the confetti layer (::after comes later in the box), and the banner's own
+   overflow keeps it inside the rounded shape. Transform and opacity only. */
+.gp-verdict > .gp-verdict-gleam {
+  position: absolute;
+  z-index: 1;
+  top: -10%;
+  bottom: -10%;
+  left: 0;
+  width: 34%;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.10) 30%,
+    rgba(255, 255, 255, 0.32) 50%,
+    rgba(255, 255, 255, 0.10) 70%,
+    rgba(255, 255, 255, 0) 100%);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: gpVerdictGleam 8s linear 0.9s infinite both;
+}
+/* Travel is measured in the band's own width: from fully off the left edge
+   to fully off the right one. The sweep is the first ~13% of the cycle
+   (about 1s), and the rest is stillness. */
+@keyframes gpVerdictGleam {
+  0%        { transform: translateX(-130%) skewX(-20deg); opacity: 0; }
+  2%        { transform: translateX(-66%)  skewX(-20deg); opacity: 1; }
+  11%       { transform: translateX(250%)  skewX(-20deg); opacity: 1; }
+  13%, 100% { transform: translateX(310%)  skewX(-20deg); opacity: 0; }
+}
+
 /* Correct: a deeper, richer green with a faint diagonal ribbon texture and a
    darker lower edge, so it reads as dimensional rather than as a flat
    button. */
@@ -898,14 +931,31 @@
    shared .btn rules, which load later in the document.
 
    Motion is split across independent properties so nothing fights: the
-   breathing invitation uses `scale` (plus a 1px lift on `transform`), the
-   press uses `translate`, and the warmer glow at each breath lives on
-   ::after's opacity. So the button can be pressed mid-breath and still
-   visibly go down. No property that affects layout is ever animated. */
+   breathing invitation animates only `scale` (about the centre, so the
+   button never moves up or down), the press uses `translate`, and the
+   warmer glow at each breath lives on ::after's opacity. So the button can
+   be pressed mid-breath and still visibly go down. No property that affects
+   layout is ever animated.
+
+   The label is set larger than the shared .btn's 20px, and the vertical
+   padding is derived from it so the settled button keeps the exact height
+   it had before (padding + text line = 50px here, 41px on the shortest
+   phones below). */
 .gp-wrap .gp-next.btn {
-  display: block;
+  --gp-next-fs: clamp(22px, 6.4vw, 28px);
+  --gp-next-inner: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28em;
   width: 92%;
   margin: 2px auto 0;
+  font-size: var(--gp-next-fs);
+  padding:
+    calc((var(--gp-next-inner) - var(--gp-next-fs)) * 0.53)
+    15px
+    calc((var(--gp-next-inner) - var(--gp-next-fs)) * 0.47);
+  transform-origin: 50% 50%;
   border-radius: 999px;
   border: 3px solid var(--black);
   background: linear-gradient(180deg, #FFF27A 0%, #FFE347 40%, #FFCD30 76%, #F6AA1C 100%);
@@ -915,7 +965,15 @@
   letter-spacing: 0.4px;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
   transition: translate 0.1s ease-out, box-shadow 0.1s ease-out;
-  animation: gpNextBreathe 2.4s ease-in-out 1.2s 3;
+  animation: gpNextBreathe 5.6s ease-in-out 1.2s infinite;
+}
+/* A solid, rounded arrow sized with the label. */
+.gp-next-arrow {
+  flex: 0 0 auto;
+  width: 0.92em;
+  height: 0.92em;
+  margin-right: -0.1em;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.55));
 }
 /* A pale, refined gloss across the top of the pill. */
 .gp-wrap .gp-next.btn::before {
@@ -937,15 +995,19 @@
   box-shadow: 0 14px 26px -6px rgba(255, 164, 0, 0.6);
   opacity: 0;
   pointer-events: none;
-  animation: gpNextGlow 2.4s ease-in-out 1.2s 3;
+  animation: gpNextGlow 5.6s ease-in-out 1.2s infinite;
 }
+/* One slow breath every 5.6s: about 1.7s to swell, 1.7s to settle, then a
+   2.2s rest at normal size before the next. Scale only -- never a lift. */
 @keyframes gpNextBreathe {
-  0%, 100% { scale: 1; transform: none; }
-  50%      { scale: 1.018; transform: translateY(-1px); }
+  0%        { scale: 1; }
+  30%       { scale: 1.045; }
+  60%, 100% { scale: 1; }
 }
 @keyframes gpNextGlow {
-  0%, 100% { opacity: 0; }
-  50%      { opacity: 1; }
+  0%        { opacity: 0; }
+  30%       { opacity: 1; }
+  60%, 100% { opacity: 0; }
 }
 
 @media (hover: hover) {
@@ -1117,7 +1179,12 @@
   /* Higher specificity than the shared .btn class it also carries, which
      otherwise wins on padding/font-size by loading later in the document. */
   /* The tightest phones keep a little more of the width for the pill. */
-  .gp-wrap .gp-next.btn { padding: 12px 15px 11px; font-size: 18px; margin-top: 0; width: 96%; }
+  .gp-wrap .gp-next.btn {
+    --gp-next-fs: clamp(21px, 6vw, 24px);
+    --gp-next-inner: 41px;
+    margin-top: 0;
+    width: 96%;
+  }
 }
 
 /* Laptop and tablet heights around 800px: trim the artwork square so the clue
@@ -1164,11 +1231,13 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
-  /* The Next invitation is switched off outright, not just shortened. */
+  /* The Next invitation and the verdict gleam are switched off outright,
+     not just shortened. */
   .gp-wrap .gp-next.btn,
   .gp-wrap .gp-next.btn::after {
     animation: none !important;
   }
+  .gp-verdict > .gp-verdict-gleam { display: none; }
   .gp-wrap .ans-box:hover:not(.dis),
   .gp-wrap .ans-box:active:not(.dis) {
     transform: none;
