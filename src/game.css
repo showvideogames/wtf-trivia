@@ -575,6 +575,50 @@
 /* The player already has its own chrome along the bottom edge. */
 .gp-media-video .gp-media-src { display: none; }
 
+/* Rare fallback: the reveal-media preloader almost always finishes before
+   this ever mounts (the active window starts loading the moment the player
+   presses play, well before they answer). If a still is unexpectedly not
+   ready yet, this holds the frame at a stable, deliberate size instead of a
+   blank collapse or a mid-load pop-in. No spinner -- a slow, quiet pulse on
+   the still's own dark frame is enough to read as "still working". */
+.gp-media-loading {
+  display: block;
+  width: 100%;
+  height: var(--gp-media-inner);
+  max-height: var(--gp-media-inner);
+  background: linear-gradient(160deg, #1c1f24 0%, #14161A 100%);
+  animation: gpMediaPulse 1.6s ease-in-out infinite;
+}
+@keyframes gpMediaPulse {
+  0%, 100% { opacity: .85; }
+  50% { opacity: .6; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gp-media-loading { animation: none; opacity: .8; }
+}
+
+/* A permanently failed image: distinct from the loading state above on
+   purpose -- it must read as settled, not as something still in progress,
+   so it does not pulse. Same stable frame size and dark palette, just static
+   and labelled, matching the site's existing broken-image convention (hide
+   and carry on) but with a visible, restrained label here, since this frame
+   is meant to hold a deliberate size rather than collapse away. */
+.gp-media-failed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: var(--gp-media-inner);
+  max-height: var(--gp-media-inner);
+  background: linear-gradient(160deg, #1c1f24 0%, #14161A 100%);
+  color: rgba(255, 255, 255, 0.4);
+  font-family: 'Fredoka One', cursive;
+  font-size: 13px;
+  letter-spacing: .2px;
+  text-align: center;
+  padding: 12px;
+}
+
 /* ===== EXPLANATION PANELS ===== */
 .gp-panel {
   border-radius: 14px;

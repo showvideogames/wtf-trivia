@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import "./home.css";
 import "./game.css";
 import "./archive.css";
+import { preloadImage, getImageStatus, primeActiveWindow } from "./mediaPreloader.js";
 import {
   demoGames as devDemoGames,
   devPlayer,
@@ -2654,6 +2655,13 @@ function getYouTubeEmbedUrl(value){
   }
 }
 function isYouTubeUrl(value){return Boolean(getYouTubeEmbedUrl(value));}
+
+// The reveal-media preloader only ever handles plain images: index-aligned
+// with the puzzle's questions, null wherever a question has no media or its
+// media is a YouTube link (video is intentionally never preloaded).
+function getPuzzleImageUrls(game){
+  return (game?.questions||[]).map(q=>(q.imageUrl && !isYouTubeUrl(q.imageUrl)) ? q.imageUrl : null);
+}
 function formatAccountLabel(email){
   if(!email) return "Account";
   if(email.length<=18) return email;
@@ -3452,23 +3460,62 @@ function clueSizeClass(text){
   return"lg";
 }
 
+// Tracks one URL's preload status, synced with the module-level cache in
+// mediaPreloader.js. The lazy initial state means a URL the priority
+// preloader already finished (the common case, thanks to GameScreen's
+// current+2 priming) reports "loaded" on the very first render -- no flash.
+function usePreloadedImageStatus(url){
+  const[status,setStatus]=useState(()=>{
+    if(!url) return "none";
+    preloadImage(url);
+    return getImageStatus(url);
+  });
+  useEffect(()=>{
+    if(!url) return;
+    let cancelled=false;
+    // The lazy initializer above already set the correct status for this
+    // mount; this just subscribes to the (usually already-resolved) promise
+    // so a genuinely still-loading image updates once it settles.
+    preloadImage(url).then(s=>{ if(!cancelled) setStatus(s); });
+    return ()=>{ cancelled=true; };
+  },[url]);
+  return status;
+}
+
 // The reveal's media area. Deliberately renders nothing at all when a question
 // has no media, so the explanation moves up instead of sitting under an empty
 // panel or a placeholder icon.
+//
+// The hook must run unconditionally (before the no-media early return) so it
+// is never skipped on some renders and not others of the same instance.
 function GameRevealMedia({question}){
   const url=question.imageUrl;
+  const embed=url?getYouTubeEmbedUrl(url):null;
+  // Video is never preloaded as an image -- pass null so the hook is a no-op.
+  const status=usePreloadedImageStatus(embed?null:url);
   if(!url) return null;
-  const embed=getYouTubeEmbedUrl(url);
+  // Three distinct states, not two: loaded (the common case -- paints from
+  // the already-decoded cache instantly), pending (rare -- preloading
+  // almost always wins the race, shown as a quiet pulsing placeholder to
+  // read as "still working"), and failed (a permanent, static state that
+  // must not keep pulsing as though it's still loading).
+  const loaded=Boolean(embed)||status==="loaded";
+  const failed=!embed&&status==="error";
   return(
     <figure className={`gp-media${embed?" gp-media-video":""}`}>
       {embed?(
         <iframe className="gp-media-frame" src={embed} title={question.imageAlt||question.itemText}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen/>
+      ):loaded?(
+        <img className="gp-media-img" src={url} alt={question.imageAlt||question.itemText}
+             onError={e=>{e.currentTarget.style.display="none";}}/>
+      ):failed?(
+        <div className="gp-media-failed">Image unavailable</div>
       ):(
-        <img className="gp-media-img" src={url} alt={question.imageAlt||question.itemText}/>
+        <div className="gp-media-loading" aria-hidden="true"/>
       )}
-      {question.imageSource&&<figcaption className="gp-media-src">📷 {question.imageSource}</figcaption>}
+      {question.imageSource&&loaded&&<figcaption className="gp-media-src">📷 {question.imageSource}</figcaption>}
     </figure>
   );
 }
@@ -3497,6 +3544,20 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
   // keeps a long name shrinking rather than breaking inside a word.
   const longestLabel=Math.max(String(game.categoryA||"").length,String(game.categoryB||"").length);
   const labelMax = longestLabel<=8?32:longestLabel<=12?27:longestLabel<=18?22:longestLabel<=26?19:17;
+
+  // Keep the reveal-media active window warm for this puzzle: the current
+  // question's image plus the next two. Re-runs (and slides the window
+  // forward) every time `idx` advances; never reaches further ahead than
+  // that, so quitting early never causes the rest of the puzzle to download.
+  // Covers both the normal game and replay -- both render through this
+  // component -- and needs no separate handling for resuming a refreshed
+  // game, since `idx` already reflects the saved currentIndex on first
+  // mount. (handlePlay/handleReplay also prime this same window the instant
+  // the player commits to playing, before this component has even mounted;
+  // this effect is what keeps it current from then on.)
+  useEffect(()=>{
+    primeActiveWindow(getPuzzleImageUrls(game), idx, game.id);
+  },[game, idx]);
 
   // Guard: once we've advanced past the last question, stop rendering question/reveal UI.
   if(!cq) return null;
@@ -4683,6 +4744,25 @@ export default function WhatTheFudgeTrivia(){
   const todayGame = games.find(g=>g.date===today&&g.status==="published") || null;
   const isGameplay = view==="game"||view==="replay";
 
+  // Home-idle preload: once the player is looking at Home with an unfinished
+  // puzzle in front of them, quietly warm just the single image they'd see
+  // first -- their resume question if a game is in progress, otherwise
+  // question one. This is deliberately separate from the gameplay active
+  // window: a single image, not three, and scheduled for whenever the
+  // browser is next idle rather than immediately, so it can never compete
+  // with Home's own render or make boot/refresh take any longer. Skipped
+  // entirely on a flagged data-saver connection.
+  useEffect(()=>{
+    if(view!=="home" || !todayGame || gameRecord?.completed) return;
+    if(typeof navigator!=="undefined" && navigator.connection?.saveData) return;
+    const url = getPuzzleImageUrls(todayGame)[gameRecord?.currentIndex ?? 0];
+    if(!url) return;
+    const schedule = typeof requestIdleCallback==="function" ? requestIdleCallback : (fn)=>setTimeout(fn,300);
+    const cancel = typeof cancelIdleCallback==="function" ? cancelIdleCallback : clearTimeout;
+    const handle = schedule(()=>preloadImage(url));
+    return ()=>cancel(handle);
+  },[view, todayGame, gameRecord]);
+
   const showToast = m => { setToast(m); setTimeout(()=>setToast(null),2100); };
 
   const handleCreateAccount = async(email,password) => {
@@ -4787,6 +4867,13 @@ export default function WhatTheFudgeTrivia(){
   const handlePlay = async() => {
     if(!todayGame) return;
     sound.play("click");
+    // Prioritize the active window in this same click, before any of the
+    // awaits below -- not waiting for GameScreen to mount a moment later --
+    // so image loading has the longest possible head start behind the
+    // question screen that's about to appear. (GameScreen's own effect
+    // re-primes on mount too; this is what makes the window start warming
+    // immediately rather than one render cycle later.)
+    primeActiveWindow(getPuzzleImageUrls(todayGame), gameRecord?.currentIndex ?? 0, todayGame.id);
     try {
       let activePlayer = player;
       if(!activePlayer){
@@ -4839,6 +4926,7 @@ export default function WhatTheFudgeTrivia(){
 
   // Replay
   const handleReplay = g => {
+    primeActiveWindow(getPuzzleImageUrls(g), 0, g.id);
     setReplayGame(g);
     setReplayRecord({date:g.date,themeTitle:g.themeTitle,totalQuestions:g.questions.length,currentIndex:0,answers:[],score:0,completed:false,startedAt:new Date().toISOString(),completedAt:null});
     setView("replay");
