@@ -503,68 +503,86 @@
 
 /* ===== REVEAL MEDIA =====
    Only rendered when the question actually has media. There is no empty state,
-   no placeholder panel and no icon. */
+   no placeholder panel and no icon.
+
+   Reveal artwork is authored at 4:3, but every still is shown at its own
+   proportions: GameRevealMedia sets --gp-media-r from the image itself, and
+   everything below derives from it, so a correctly authored 4:3 image gets a
+   4:3 frame and an old ultra-wide one stays whole at its own shallow shape
+   (never cropped, blurred-filled or letterboxed to look standard).
+
+   The figure is an invisible sizing box. Its ratio gives it a natural height
+   (width / ratio, up to --gp-media-cap), and on phones it is the one reveal
+   element allowed to shrink. The visible frame -- border, radius, shadow --
+   lives on the image (or player/placeholder) inside it, sized from the
+   figure's container units to the largest box of that same ratio that fits.
+   So when the figure is squeezed, the frame gets narrower as well as shorter
+   instead of flattening, and nothing ever overflows the figure to be clipped.
+
+   The ratio is applied to content boxes, so it is the picture itself -- not
+   picture plus border -- that has the still's proportions: the figure's
+   padding is exactly the frame's border, and the frame's negative margin
+   lets that border sit in it. */
 .gp-media {
+  --gp-media-r: 4 / 3;
+  /* The tallest the art may become. Tied to the viewport so short phones are
+     not held below what they could show, and tall ones don't let the art
+     crowd out the copy. */
+  --gp-media-cap: min(280px, 30dvh);
+  container-type: size;
+  position: relative;
+  box-sizing: content-box;
+  padding: 3px;
+  width: calc(100% - 6px);
+  aspect-ratio: var(--gp-media-r);
+  max-height: var(--gp-media-cap);
   margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gp-media-video { --gp-media-r: 16 / 9; }
+
+.gp-media-img,
+.gp-media-frame,
+.gp-media-loading,
+.gp-media-failed {
+  box-sizing: content-box;
+  width: min(100cqw, calc(100cqh * (var(--gp-media-r))));
+  height: auto;
+  aspect-ratio: var(--gp-media-r);
+  margin: -3px;
   border: 3px solid var(--black);
   border-radius: 18px;
-  overflow: hidden;
   box-shadow: 0 5px 0 rgba(0, 0, 0, 0.18);
   background: #14161A;
-  position: relative;
-  /* The tallest the media stage may become. A landscape still is already
-     shorter than this, so only tall artwork is actually reined in. Set on
-     the figure itself (not just the image inside) so the ceiling holds even
-     outside the mobile flex-shrink context, where the figure would otherwise
-     have no height of its own to measure a percentage against. */
-  --gp-media-cap: 250px;
-  /* The figure's own box is sized border-box, so its 3px top+bottom border
-     eats 6px of --gp-media-cap before any content is drawn. The image and
-     video below need the space actually left over, not the raw cap, or
-     they'd render 6px taller than this box and lose that sliver to the
-     overflow:hidden above -- a real, if small, crop. */
-  --gp-media-inner: calc(var(--gp-media-cap) - 6px);
-  max-height: var(--gp-media-cap);
 }
 
-/* Stills keep their own proportions: contained, centred, never cropped and
-   never stretched. A portrait cover is bounded by the stage height instead of
-   running to its natural height and swallowing the rest of the page. Capped
-   by the figure's actual inner height (not a percentage of it), so it holds
-   whether or not the figure is in a height-shrinking flex context. */
+/* The frame already has the still's own ratio, so contain is only a guard
+   for the instant before the ratio is read: never cropped, never stretched. */
 .gp-media-img {
   display: block;
-  margin: 0 auto;
-  max-width: 100%;
-  width: auto;
-  height: auto;
-  max-height: var(--gp-media-inner);
   object-fit: contain;
 }
 
-/* Video needs a real box to live in, so the player gets a 16:9 frame. Width
-   (not height) is what's capped here -- deriving from the figure's inner
-   height via plain arithmetic -- so the box can never exceed the same
-   ceiling as a still, without fighting flexbox over which axis aspect-ratio
-   controls. */
-.gp-media-video {
-  width: min(100%, calc(var(--gp-media-inner) * 16 / 9));
-  aspect-ratio: 16 / 9;
-  margin: 0 auto;
-}
+/* The player keeps its existing embed; only its box is sized here, at a true
+   16:9. */
 .gp-media-frame {
   display: block;
-  width: 100%;
-  height: 100%;
-  border: 0;
+  background: #000;
 }
 
+/* Sits along the frame's bottom edge, inside its border, whatever width the
+   frame has shrunk to. */
 .gp-media-src {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 16px 14px 7px;
+  left: 50%;
+  bottom: 3px;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  width: min(100cqw, calc(100cqh * (var(--gp-media-r))));
+  border-radius: 0 0 15px 15px;
+  padding: 14px 12px 6px;
   background: linear-gradient(0deg, rgba(0, 0, 0, 0.6) 0%, transparent 100%);
   font-size: 11px;
   font-weight: 800;
@@ -578,14 +596,11 @@
 /* Rare fallback: the reveal-media preloader almost always finishes before
    this ever mounts (the active window starts loading the moment the player
    presses play, well before they answer). If a still is unexpectedly not
-   ready yet, this holds the frame at a stable, deliberate size instead of a
-   blank collapse or a mid-load pop-in. No spinner -- a slow, quiet pulse on
-   the still's own dark frame is enough to read as "still working". */
+   ready yet, this holds a standard 4:3 frame instead of a blank collapse or
+   a mid-load pop-in. No spinner -- a slow, quiet pulse on the still's own
+   dark frame is enough to read as "still working". */
 .gp-media-loading {
   display: block;
-  width: 100%;
-  height: var(--gp-media-inner);
-  max-height: var(--gp-media-inner);
   background: linear-gradient(160deg, #1c1f24 0%, #14161A 100%);
   animation: gpMediaPulse 1.6s ease-in-out infinite;
 }
@@ -599,24 +614,18 @@
 
 /* A permanently failed image: distinct from the loading state above on
    purpose -- it must read as settled, not as something still in progress,
-   so it does not pulse. Same stable frame size and dark palette, just static
-   and labelled, matching the site's existing broken-image convention (hide
-   and carry on) but with a visible, restrained label here, since this frame
-   is meant to hold a deliberate size rather than collapse away. */
+   so it does not pulse. Same 4:3 frame as the pending state it replaces, so
+   the page doesn't jump, just static and labelled. */
 .gp-media-failed {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: var(--gp-media-inner);
-  max-height: var(--gp-media-inner);
   background: linear-gradient(160deg, #1c1f24 0%, #14161A 100%);
   color: rgba(255, 255, 255, 0.4);
   font-family: 'Fredoka One', cursive;
   font-size: 13px;
   letter-spacing: .2px;
   text-align: center;
-  padding: 12px;
 }
 
 /* ===== EXPLANATION PANELS ===== */
@@ -678,12 +687,41 @@
 .gp-reveal {
   display: flex;
   flex-direction: column;
-  animation: gpRevealIn 0.3s cubic-bezier(0.34, 1.35, 0.64, 1);
+  /* Grows in from the top edge rather than rising from below: a reveal that
+     starts pushed down (or overshoots past full size) briefly reaches below
+     the fixed game screen and reads as overflow. Scaling up to 1 from the top
+     never extends past where it settles. */
+  transform-origin: 50% 0;
+  animation: gpRevealIn 0.3s ease-out;
 }
 .gp-reveal .gp-media { order: -1; }
 @keyframes gpRevealIn {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: scale(0.97); }
   to   { opacity: 1; transform: none; }
+}
+
+/* ===== PHONE DENSITY =====
+   The reveal's supporting content, a notch tighter on phones so the artwork
+   gets the room: less panel padding and fewer fixed minimum heights, never
+   less copy. Explanation text stays at 13px or more, and the clue title,
+   header controls and Next are not touched. Placed after the base rules so
+   it wins on equal specificity; the short-viewport tiers below still refine
+   it. */
+@media (max-width: 599px) {
+  .gp-replay { min-height: 0; padding: 3px 10px; margin-bottom: 6px; font-size: 11.5px; }
+  .gp-theme { min-height: 0; padding: 3px 14px; margin-bottom: 6px; }
+  .gp-clue { padding: 8px 16px 10px; margin-bottom: 8px; gap: 6px; }
+  .gp-verdict { min-height: 0; padding: 5px 12px; margin-bottom: 7px; border-width: 3px; }
+  .gp-verdict.ok { box-shadow: 0 4px 0 #0E5B2C; }
+  .gp-verdict.no { box-shadow: 0 4px 0 #7E0C2E; }
+  .gp-verdict-emoji { font-size: 20px; }
+  .gp-media { margin-bottom: 8px; }
+  .gp-panel { padding: 6px 11px 7px; margin-bottom: 6px; }
+  /* A block pill, not inline-block: an inline pill sits in a full-size text
+     line and quietly adds ~8px of empty strut to every panel. */
+  .gp-panel-lbl { display: block; width: fit-content; font-size: 9.5px; padding: 2px 8px; margin-bottom: 4px; }
+  .gp-panel-body { font-size: 13.5px; line-height: 1.34; }
+  .gp-wrap { padding-bottom: 12px; }
 }
 
 /* ===== FOCUS VISIBILITY =====
@@ -710,49 +748,48 @@
   .gp-clue { padding: 14px 22px 16px; margin: 0 0 12px; gap: 10px; }
   .gp-dots { gap: 7px; }
   .gp-verdict { padding: 12px 20px; min-height: 60px; margin-bottom: 14px; }
-  .gp-media { margin-bottom: 14px; --gp-media-cap: 360px; }
+  .gp-media { margin-bottom: 14px; --gp-media-cap: min(400px, 28vh); }
   .gp-panel { padding: 12px 16px 13px; margin-bottom: 11px; }
   .gp-panel-lbl { margin-bottom: 7px; }
 }
 
 @media (min-width: 1100px) {
   .gp-hdr-logo { max-width: 190px; max-height: 76px; }
-  .gp-media { --gp-media-cap: 420px; }
 }
 
 /* ===== SHORT VIEWPORTS =====
    At 375x667 and similar, trim the artwork square a little further so the clue
-   and both choices are comfortably above the fold. The same shrink applies to
-   the reveal's media stage and panel padding, so a tall image or two full
-   explanation panels stay clear of the fold too. */
+   and both choices are comfortably above the fold. On the reveal the spacing
+   and panel padding tighten too; the media itself has no fixed cap here -- it
+   already shrinks, ratio intact, to whatever the copy leaves. */
 @media (max-height: 740px) and (max-width: 599px) {
   .gp-wrap .ans-box-img-wrap,
   .gp-wrap .ans-box-img-placeholder { max-height: 30vh; }
   .gp-hdr { padding: 7px 0 9px; }
   .gp-hdr-logo { max-height: 46px; }
-  .gp-clue { padding: 9px 16px 10px; margin: 0 0 8px; gap: 7px; }
+  .gp-clue { padding: 6px 14px 8px; margin: 0 0 6px; gap: 4px; }
 
   .gp-theme { padding: 3px 15px; margin-bottom: 6px; }
-  .gp-media { --gp-media-cap: 190px; margin-bottom: 8px; }
-  .gp-verdict { padding: 6px 14px; min-height: 42px; margin-bottom: 7px; }
-  .gp-panel { padding: 7px 11px 8px; margin-bottom: 6px; }
-  .gp-panel-body { font-size: 13.5px; line-height: 1.32; }
+  .gp-media { margin-bottom: 6px; }
+  .gp-panel { padding: 5px 10px 6px; margin-bottom: 5px; }
+  .gp-panel-body { font-size: 13px; line-height: 1.3; }
 }
 
-/* Tightest phones (360x640, 375x667 and similar): one more notch down. Body copy size
-   is untouched -- line-height tightens slightly, and everything decorative
-   around it (media cap, padding, the two panels' own separate borders) gives
-   the rest of the ground. */
+/* Tightest phones (360x640, 375x667 and similar): one more notch down. Body
+   copy holds at 13px with a usable line-height, and everything decorative
+   around it (padding, the two panels' own separate borders) gives the rest of
+   the ground. */
 @media (max-height: 700px) and (max-width: 599px) {
   .gp-hdr { padding: 3px 0 4px; }
-  .gp-replay { min-height: 18px; padding: 2px 8px; margin-bottom: 2px; font-size: 10.5px; }
-  .gp-theme { padding: 2px 14px; margin-bottom: 2px; }
-  .gp-clue { padding: 5px 14px 6px; margin: 0 0 2px; gap: 2px; }
-  .gp-media { --gp-media-cap: 120px; margin-bottom: 5px; }
-  .gp-verdict { padding: 3px 12px; min-height: 34px; margin-bottom: 3px; }
+  .gp-replay { margin-bottom: 3px; }
+  .gp-theme { padding: 2px 12px; margin-bottom: 3px; }
+  .gp-clue { padding: 5px 14px 6px; margin: 0 0 4px; gap: 2px; }
+  .gp-media { margin-bottom: 5px; }
+  .gp-verdict { padding: 3px 10px; margin-bottom: 5px; }
+  .gp-verdict-emoji { font-size: 18px; }
   .gp-panel { padding: 3px 10px 3px; margin-bottom: 0; }
-  .gp-panel-lbl { margin-bottom: 1px; padding: 1px 7px; font-size: 9px; }
-  .gp-panel-body { line-height: 1.2; }
+  .gp-panel-lbl { margin-bottom: 2px; padding: 1px 7px; font-size: 9px; }
+  .gp-panel-body { line-height: 1.24; }
   /* Combine the two explanation areas into one shared card: a single outer
      border and margin instead of two, with a thin dashed rule where the
      second panel's own border used to be. Each keeps its own colour wash and
@@ -797,12 +834,13 @@
   .gp-replay { font-size: 11.5px; padding: 4px 9px; }
 }
 
-/* Narrow AND short at once (360x640 and similar): the bottom padding above is
-   decorative breathing room the fixed game screen can't always spare. Placed
-   after the narrow-phone block above so it wins on the one property both
-   touch, regardless of which media query matched second. */
+/* Narrow AND short at once (360x640 and similar): the bottom padding and the
+   replay strip's padding above are room the fixed game screen can't always
+   spare. Placed after the narrow-phone block above so it wins on the
+   properties both touch, regardless of which media query matched second. */
 @media (max-width: 599px) and (max-height: 700px) {
   .gp-wrap { padding-bottom: 10px; }
+  .gp-replay { padding: 1px 8px; font-size: 10.5px; }
 }
 
 /* ===== REDUCED MOTION =====
