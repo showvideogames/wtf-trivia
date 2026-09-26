@@ -632,9 +632,9 @@
 
   /* Unanswered: the question module takes all the height left under the
      clue card. Inside it the mystery stage keeps its natural 4:3 size, and
-     the answer row takes the rest -- growing from a 96px floor up to the old
-     292px large-card cap -- so the cards extend down the screen on taller
-     phones instead of leaving empty backdrop. If a screen were ever too
+     the answer row takes the rest -- growing from a 96px floor up to a 220px
+     cap -- so the cards extend down the screen on taller phones, and any
+     height beyond the cap stays as backdrop below. If a screen were ever too
      short for both, the stage is what gives: it shrinks, still exactly 4:3
      and centred, down to its own floor, and the choices never shrink below
      theirs. */
@@ -649,7 +649,7 @@
   .gp-qmod > .ans-btns {
     flex: 1 0 96px;
     min-height: 96px;
-    max-height: 292px;
+    max-height: 220px;
   }
   .gp-qmod .ans-box {
     height: auto;
