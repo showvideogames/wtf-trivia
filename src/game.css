@@ -510,6 +510,17 @@
     /* Capped: the category artwork is square, so letting the card grow much
        past its own width only letterboxes the art inside a tall slab. */
     max-height: 292px;
+    /* Built up from the bottom of the phone, toward the player's thumbs.
+       The row still flexes first (up to its cap), so it keeps exactly the
+       size it had; only the space left over once it is capped moves above
+       it, between the clue card and the choices. */
+    margin-top: auto;
+  }
+  /* The gap under the choices: 12px from the bottom of the cards' own 8px
+     lower edge to the screen edge, plus whatever the home indicator needs.
+     Unanswered state only -- the reveal keeps its own spacing. */
+  .gp-wrap.gp-q {
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   }
   .gp-wrap.gp-q .ans-box-img-wrap,
   .gp-wrap.gp-q .ans-box-img-placeholder {
@@ -616,10 +627,11 @@
 }
 
 /* A periodic gleam: one soft diagonal band of light that crosses the banner
-   left to right in about a second, then a long still gap -- roughly every
-   8s while the reveal is up. It sits above the gloss but below the copy and
-   the confetti layer (::after comes later in the box), and the banner's own
-   overflow keeps it inside the rounded shape. Transform and opacity only. */
+   left to right in about a second, first ~0.7s after the verdict lands and
+   then every 5s while the reveal is up. It sits above the gloss but below
+   the copy and the confetti layer (::after comes later in the box), and the
+   banner's own overflow keeps it inside the rounded shape. Transform and
+   opacity only. */
 .gp-verdict > .gp-verdict-gleam {
   position: absolute;
   z-index: 1;
@@ -636,16 +648,18 @@
   opacity: 0;
   pointer-events: none;
   will-change: transform, opacity;
-  animation: gpVerdictGleam 8s linear 0.9s infinite both;
+  animation: gpVerdictGleam 5s linear 0.7s infinite both;
 }
 /* Travel is measured in the band's own width: from fully off the left edge
-   to fully off the right one. The sweep is the first ~13% of the cycle
-   (about 1s), and the rest is stillness. */
+   to fully off the right one. The sweep is the first 20% of the 5s cycle
+   (1s) at one constant speed -- the keyframes sit on a single straight line
+   so there is no hitch where the fades meet the travel -- and the rest is
+   stillness. The band is invisible when it jumps back to the start. */
 @keyframes gpVerdictGleam {
   0%        { transform: translateX(-130%) skewX(-20deg); opacity: 0; }
-  2%        { transform: translateX(-66%)  skewX(-20deg); opacity: 1; }
-  11%       { transform: translateX(250%)  skewX(-20deg); opacity: 1; }
-  13%, 100% { transform: translateX(310%)  skewX(-20deg); opacity: 0; }
+  3%        { transform: translateX(-64%)  skewX(-20deg); opacity: 1; }
+  17%       { transform: translateX(244%)  skewX(-20deg); opacity: 1; }
+  20%, 100% { transform: translateX(310%)  skewX(-20deg); opacity: 0; }
 }
 
 /* Correct: a deeper, richer green with a faint diagonal ribbon texture and a
@@ -965,7 +979,7 @@
   letter-spacing: 0.4px;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
   transition: translate 0.1s ease-out, box-shadow 0.1s ease-out;
-  animation: gpNextBreathe 5.6s ease-in-out 1.2s infinite;
+  animation: gpNextBreathe 3.6s ease-in-out 1.2s infinite;
 }
 /* A solid, rounded arrow sized with the label. */
 .gp-next-arrow {
@@ -984,30 +998,30 @@
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0) 100%);
 }
-/* The stronger warm glow at the peak of each breath. It is only an outer
+/* The warmer glow at the full point of each breath. It is only an outer
    shadow on a transparent box matching the button's border box, so it can
-   never paint over the button face. */
+   never paint over the button face, and it is centred on the button (no
+   offset) so brightening it never reads as the button lifting. */
 .gp-wrap .gp-next.btn::after {
   content: '';
   position: absolute;
   inset: -3px;
   border-radius: 999px;
-  box-shadow: 0 14px 26px -6px rgba(255, 164, 0, 0.6);
+  box-shadow: 0 0 22px 1px rgba(255, 164, 0, 0.45);
   opacity: 0;
   pointer-events: none;
-  animation: gpNextGlow 5.6s ease-in-out 1.2s infinite;
+  animation: gpNextGlow 3.6s ease-in-out 1.2s infinite;
 }
-/* One slow breath every 5.6s: about 1.7s to swell, 1.7s to settle, then a
-   2.2s rest at normal size before the next. Scale only -- never a lift. */
+/* A continuous slow breath: 1.8s to swell, 1.8s to settle, straight into
+   the next, with no rest in between. Scale only, about the centre -- never
+   a lift. */
 @keyframes gpNextBreathe {
-  0%        { scale: 1; }
-  30%       { scale: 1.045; }
-  60%, 100% { scale: 1; }
+  0%, 100% { scale: 1; }
+  50%      { scale: 1.045; }
 }
 @keyframes gpNextGlow {
-  0%        { opacity: 0; }
-  30%       { opacity: 1; }
-  60%, 100% { opacity: 0; }
+  0%, 100% { opacity: 0; }
+  50%      { opacity: 1; }
 }
 
 @media (hover: hover) {
