@@ -4,7 +4,7 @@ import "./home.css";
 import "./game.css";
 import "./archive.css";
 import "./results.css";
-import { preloadImage, getImageStatus, primeActiveWindow } from "./mediaPreloader.js";
+import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from "./mediaPreloader.js";
 import {
   demoGames as devDemoGames,
   devPlayer,
@@ -1847,6 +1847,49 @@ const styles = `
   .img-uploader-wrap.preset-header .img-preview img { max-height: 180px; }
   .img-uploader-wrap.compact.preset-header .img-preview img { max-height: 150px; }
   .img-preview iframe { width: 100%; aspect-ratio: 16/9; min-height: 160px; display: block; border: 0; background: #000; }
+  /* A faint checkerboard behind the preview, so transparent areas read as
+     transparent instead of as the panel colour. */
+  .img-preview img {
+    width: auto;
+    max-width: 100%;
+    margin: 0 auto;
+    background-color: #2a2f38;
+    background-image: linear-gradient(45deg, #353b46 25%, transparent 25%, transparent 75%, #353b46 75%), linear-gradient(45deg, #353b46 25%, transparent 25%, transparent 75%, #353b46 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 8px 8px;
+  }
+  .img-drop-zone.busy { cursor: progress; border-color: rgba(255,227,71,.45); background: rgba(255,227,71,.04); }
+  .img-drop-zone.busy input[type=file] { cursor: progress; }
+  .img-drop-hint { font-size: 10px; font-weight: 700; color: rgba(255,255,255,.28); margin-top: 3px; }
+  .img-stage { display: inline-flex; align-items: center; gap: 7px; color: var(--yellow); }
+  .img-spinner {
+    width: 12px; height: 12px; flex: none;
+    border: 2px solid rgba(255,227,71,.25); border-top-color: var(--yellow);
+    border-radius: 50%;
+    animation: img-spin .8s linear infinite;
+  }
+  @keyframes img-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .img-spinner { animation-duration: 2.4s; } }
+  .img-preview-broken { padding: 16px 12px; font-size: 11px; font-weight: 700; color: rgba(255,255,255,.55); text-align: center; }
+  .img-preview.pending img { opacity: .55; }
+  .img-report {
+    margin-top: 6px; padding: 6px 9px;
+    border-radius: 8px; background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.28);
+    font-size: 11px; font-weight: 700; color: rgba(255,255,255,.72); line-height: 1.4;
+  }
+  .img-report b { color: rgb(74,222,128); font-weight: 900; }
+  .img-report-note { margin-top: 3px; color: rgba(255,227,71,.8); }
+  .img-error {
+    margin-top: 6px; padding: 7px 9px;
+    border-radius: 8px; background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.35);
+    font-size: 11px; font-weight: 700; color: rgba(255,255,255,.85); line-height: 1.4;
+  }
+  .img-error-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .img-error-actions button {
+    padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(255,255,255,.25);
+    background: rgba(255,255,255,.08); color: #fff; font: 800 11px 'Nunito', sans-serif; cursor: pointer;
+  }
+  .img-error-actions button.primary { background: var(--yellow); border-color: var(--yellow); color: #1a1a1a; }
   .img-preview-label {
     position: absolute;
     top: 6px; left: 6px;
@@ -2261,7 +2304,18 @@ function isImportableExternalImageUrl(value){
     return false;
   }
 }
-async function uploadBytesToStorage(bytes, mime, folder="images"){
+// LOCAL DEV ONLY: with no Supabase key, an "upload" becomes a local blob: URL
+// after a short pause, so the admin upload flow can be exercised without
+// touching storage. Set localStorage "wtf-dev-upload" to "fail" or "slow" to
+// rehearse a failed or sluggish upload. Stripped from production builds.
+async function devFakeUpload(body, mime){
+  const mode = (()=>{try{return localStorage.getItem("wtf-dev-upload");}catch{return null;}})();
+  await new Promise(r=>setTimeout(r, mode==="slow"?3000:700));
+  if(mode==="fail") throw new Error("Simulated upload failure (wtf-dev-upload=fail)");
+  return URL.createObjectURL(body instanceof Blob ? body : new Blob([body], {type:mime}));
+}
+async function uploadBytesToStorage(body, mime, folder="images"){
+  if(OFFLINE_PREVIEW) return devFakeUpload(body, mime);
   if(!SUPABASE_READY) throw new Error("Supabase is not configured.");
   const cleanMime = mime || "image/png";
   const ext = (cleanMime.split("/")[1] || "png").replace(/[^a-z0-9]/gi,"").replace(/^jpeg$/,"jpg") || "png";
@@ -2274,9 +2328,10 @@ async function uploadBytesToStorage(bytes, mime, folder="images"){
       "apikey": SB_KEY,
       "Authorization": `Bearer ${token}`,
       "Content-Type": cleanMime,
-      "Cache-Control": "31536000"
+      // Every upload gets a new, never-reused name, so it can be cached for a year.
+      "Cache-Control": "max-age=31536000"
     },
-    body: bytes
+    body
   });
   let res = await postWithToken(session?.access_token || SB_KEY);
   if(!res.ok && session?.access_token) res = await postWithToken(SB_KEY);
@@ -2290,7 +2345,11 @@ async function uploadImage(dataUri, folder="images"){
   const bytes = Uint8Array.from(atob(b64), c=>c.charCodeAt(0));
   return uploadBytesToStorage(bytes, mime, folder);
 }
-async function importExternalImageUrl(value, {folder="images", preset="default", label="image"}={}){
+// The admin-only optimizer, fetched the first time an image is processed so
+// it never ships in the player bundle.
+const loadImageOptimizer = ()=>import("./admin/imageOptimizer.js");
+
+async function importExternalImageUrl(value, {folder="images", preset="question", label="image"}={}){
   if(!isImportableExternalImageUrl(value)) return value;
   let response;
   try{
@@ -2307,9 +2366,17 @@ async function importExternalImageUrl(value, {folder="images", preset="default",
   const blob = await response.blob();
   const mime = blob.type || type;
   if(!mime.startsWith("image/")) throw new Error(`Couldn't import ${label}. That URL did not return an image.`);
-  const dataUrl = await fileToDataUrl(blob);
-  const optimized = await optimizeImageDataUrl(dataUrl, preset);
-  return uploadImage(optimized, folder);
+  let optimized;
+  try{
+    const { optimizeImage } = await loadImageOptimizer();
+    optimized = await optimizeImage(blob, preset, {acceptAvif:true});
+  }catch(e){
+    // A pasted GIF/SVG/etc. was always archived exactly as fetched; keep
+    // doing that rather than failing the publish over a format we don't convert.
+    if(e?.name==="ImageOptimizeError" && (e.code==="unsupported" || e.code==="animated")) return uploadBytesToStorage(blob, mime, folder);
+    throw new Error(`Couldn't import ${label}. ${e?.name==="ImageOptimizeError" ? e.message : "Try uploading the image file instead."}`);
+  }
+  return uploadBytesToStorage(optimized.blob, optimized.mime, folder);
 }
 async function prepareImageForSave(value, options, archiveExternal=false){
   if(!value) return value;
@@ -2641,7 +2708,10 @@ function isYouTubeUrl(value){return Boolean(getYouTubeEmbedUrl(value));}
 // with the puzzle's questions, null wherever a question has no media or its
 // media is a YouTube link (video is intentionally never preloaded).
 function getPuzzleImageUrls(game){
-  return (game?.questions||[]).map(q=>(q.imageUrl && !isYouTubeUrl(q.imageUrl)) ? q.imageUrl : null);
+  return (game?.questions||[]).map(q=>{
+    const url = usableMediaUrl(q?.imageUrl);
+    return url && !isYouTubeUrl(url) ? url : null;
+  });
 }
 function formatAccountLabel(email){
   if(!email) return "Account";
@@ -2679,55 +2749,6 @@ function buildShare(gr){
   const answers = Array.isArray(gr?.answers) ? gr.answers : [];
   const g=answers.map(a=>a.correct?"🟢":"🔴").join("");
   return`What The Fudge Trivia 🍬\n${gr?.themeTitle||"Puzzle Results"}\n${gr?.score||0}/${gr?.totalQuestions||0} ${g}\nwhatthefudgetrivia.com`;
-}
-const IMAGE_UPLOAD_PRESETS = {
-  default: { maxWidth: 1600, maxHeight: 1600, quality: 0.82 },
-  header: { maxWidth: 1600, maxHeight: 900, quality: 0.82 },
-  category: { maxWidth: 1200, maxHeight: 1200, quality: 0.82 },
-  question: { maxWidth: 1400, maxHeight: 1400, quality: 0.84 }
-};
-function fileToDataUrl(file){
-  return new Promise((resolve,reject)=>{
-    const reader = new FileReader();
-    reader.onload = ev=>resolve(ev.target?.result||"");
-    reader.onerror = ()=>reject(new Error("Couldn't read image file."));
-    reader.readAsDataURL(file);
-  });
-}
-function loadImageElement(src){
-  return new Promise((resolve,reject)=>{
-    const img = new Image();
-    img.onload = ()=>resolve(img);
-    img.onerror = ()=>reject(new Error("Couldn't load image for optimization."));
-    img.src = src;
-  });
-}
-async function optimizeImageDataUrl(dataUrl,preset="default"){
-  if(!dataUrl||!dataUrl.startsWith("data:image/")) return dataUrl;
-  const presetCfg = IMAGE_UPLOAD_PRESETS[preset]||IMAGE_UPLOAD_PRESETS.default;
-  const mimeMatch = dataUrl.match(/^data:(image\/[^;]+);/i);
-  const inputMime = mimeMatch?.[1]?.toLowerCase()||"image/jpeg";
-  if(inputMime==="image/svg+xml"||inputMime==="image/gif") return dataUrl;
-
-  const img = await loadImageElement(dataUrl);
-  const scale = Math.min(1, presetCfg.maxWidth/img.width, presetCfg.maxHeight/img.height);
-  const targetWidth = Math.max(1, Math.round(img.width*scale));
-  const targetHeight = Math.max(1, Math.round(img.height*scale));
-
-  const canvas = document.createElement("canvas");
-  canvas.width = targetWidth;
-  canvas.height = targetHeight;
-  const ctx = canvas.getContext("2d");
-  if(!ctx) return dataUrl;
-  ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-
-  const outputMime = "image/webp";
-  const optimized = canvas.toDataURL(outputMime, presetCfg.quality);
-  return optimized.length < dataUrl.length ? optimized : dataUrl;
-}
-async function readOptimizedImageFile(file,preset="default"){
-  const dataUrl = await fileToDataUrl(file);
-  return optimizeImageDataUrl(dataUrl,preset);
 }
 function averageScoreCopy(score,total){
   return `Average chaos level: ${score}/${total}`;
@@ -3102,59 +3123,152 @@ function ColorPicker({value, onChange, label}){
 // ============================================================
 // IMAGE UPLOADER — upload file or paste URL, with live preview
 // ============================================================
-function ImageUploader({value, onChange, label="Image", compact=false, preset="default", allowYouTube=false}){
-  const[tab,setTab]=useState(value&&!value.startsWith("data:")?"url":"upload");
-  const[urlDraft,setUrlDraft]=useState(value&&!value.startsWith("data:")?value:"");
-  const[err,setErr]=useState(false);
-  const[loading,setLoading]=useState(false);
+// A chosen file is validated, oriented, resized and compressed in the
+// browser (admin/imageOptimizer.js, loaded on first use) and uploaded
+// straight away. The field only changes once the upload has succeeded, so a
+// failure at any step leaves the current image exactly as it was.
+const UPLOAD_FOLDERS = {header:"headers", question:"questions", category:"categories"};
+const UPLOAD_STAGE_COPY = {checking:"Checking image…", optimizing:"Optimizing image…", uploading:"Uploading…"};
+const UPLOAD_ACCEPT = "image/jpeg,image/png,image/webp";
+function isUploadedImageValue(v){
+  return Boolean(v) && (v.startsWith("data:") || v.startsWith("blob:") || isStorageImageUrl(v));
+}
+function roughBytes(n){return n<1024*1024?`${Math.max(1,Math.round(n/1024))} KB`:`${(n/1024/1024).toFixed(1)} MB`;}
+
+function ImageUploader({value:rawValue, onChange, label="Image", compact=false, preset="question", allowYouTube=false, onBusyChange}){
+  const value = typeof rawValue==="string" ? rawValue : "";
+  const[tab,setTab]=useState(value&&!isUploadedImageValue(value)?"url":"upload");
+  const[urlDraft,setUrlDraft]=useState(value&&!isUploadedImageValue(value)?value:"");
+  const[stage,setStage]=useState(null); // null | "checking" | "optimizing" | "uploading"
+  const[error,setError]=useState(null); // {message, retry}
+  const[report,setReport]=useState(null); // what the last successful upload did, keyed by its URL
+  const[pending,setPending]=useState(null); // {result, previewUrl} awaiting (re)upload
+  const[brokenPreview,setBrokenPreview]=useState(null);
   const fileRef=useRef(null);
+  const busyRef=useRef(false);
+  const mountedRef=useRef(true);
+  const pendingRef=useRef(null);
+  const onBusyRef=useRef(onBusyChange);
+  onBusyRef.current=onBusyChange;
+  const busy=Boolean(stage);
   const youtubePreview = allowYouTube ? getYouTubeEmbedUrl(value) : null;
 
-  const handleFile=async e=>{
-    const f=e.target.files?.[0];
-    if(!f)return;
-    if(!f.type.startsWith("image/")){setErr(true);setTimeout(()=>setErr(false),2000);return;}
+  useEffect(()=>{ onBusyRef.current?.(busy); },[busy]);
+  useEffect(()=>{
+    mountedRef.current=true;
+    return ()=>{
+      mountedRef.current=false;
+      if(pendingRef.current) URL.revokeObjectURL(pendingRef.current.previewUrl);
+      pendingRef.current=null;
+      onBusyRef.current?.(false);
+    };
+  },[]);
+
+  const replacePending=next=>{
+    if(pendingRef.current && pendingRef.current!==next) URL.revokeObjectURL(pendingRef.current.previewUrl);
+    pendingRef.current=next;
+    setPending(next);
+  };
+
+  const upload=async job=>{
+    busyRef.current=true;
+    setError(null);
+    setStage("uploading");
     try{
-      setLoading(true);
-      const optimized = await readOptimizedImageFile(f,preset);
-      onChange(optimized);
-    }catch{
-      setErr(true);
-      setTimeout(()=>setErr(false),2000);
+      const url = await uploadBytesToStorage(job.result.blob, job.result.mime, UPLOAD_FOLDERS[preset]||"images");
+      if(!mountedRef.current) return;
+      const r = job.result;
+      setReport({url, summary:r.summary, note:r.note, reused:r.reused, hasAlpha:r.hasAlpha, orientationCorrected:r.orientationCorrected});
+      replacePending(null);
+      onChange(url);
+    }catch(err){
+      console.error(err);
+      if(!mountedRef.current) return;
+      setError({message:`Upload failed, so ${value?"your current image is unchanged":"nothing was saved"}. Check your connection and try again.`, retry:true});
     }finally{
-      setLoading(false);
-      e.target.value="";
+      busyRef.current=false;
+      if(mountedRef.current) setStage(null);
     }
   };
 
-  const handleUrl=v=>{
-    setUrlDraft(v);
-    // basic debounce — apply on blur or Enter
+  const handleFile=async e=>{
+    const f=e.target.files?.[0];
+    e.target.value=""; // lets the same file be chosen again after an error
+    if(!f||busyRef.current) return;
+    busyRef.current=true;
+    setError(null);
+    setStage("checking");
+    let result;
+    try{
+      const { optimizeImage } = await loadImageOptimizer();
+      result = await optimizeImage(f, preset, {onStage:s=>{ if(mountedRef.current) setStage(s); }});
+    }catch(err){
+      busyRef.current=false;
+      if(err?.name!=="ImageOptimizeError") console.error(err);
+      if(!mountedRef.current) return;
+      setStage(null);
+      replacePending(null);
+      setError({
+        message: err?.name==="ImageOptimizeError"
+          ? err.message
+          : `Something went wrong while preparing that image, so ${value?"your current image is unchanged":"nothing was saved"}. Try again, or try a different file.`,
+        retry:false
+      });
+      return;
+    }
+    if(!mountedRef.current) return;
+    const job={result, previewUrl:URL.createObjectURL(result.blob)};
+    replacePending(job);
+    await upload(job);
   };
+
+  const retry=()=>{ if(pending&&!busyRef.current) upload(pending); };
+  const dismissError=()=>{ setError(null); replacePending(null); };
+  const chooseAnother=()=>{ setError(null); replacePending(null); fileRef.current?.click(); };
+
   const applyUrl=()=>{
     const v=urlDraft.trim();
-    if(!v){onChange("");return;}
+    if(v===value) return;
+    setReport(null);
     onChange(v);
   };
 
-  const clear=e=>{e.stopPropagation();onChange("");setUrlDraft("");};
+  const clear=e=>{
+    e.preventDefault();
+    e.stopPropagation();
+    if(busyRef.current) return;
+    setReport(null);
+    setError(null);
+    setUrlDraft("");
+    onChange("");
+  };
+
+  const showingPending = stage==="uploading" && pending;
+  const previewSrc = showingPending ? pending.previewUrl : value;
+  const stageText = stage==="uploading" && pending
+    ? `Uploading ${roughBytes(pending.result.size)} ${pending.result.mime==="image/webp"?"WebP":pending.result.mime.split("/")[1].toUpperCase()}…`
+    : UPLOAD_STAGE_COPY[stage];
+  const shownReport = !busy && !error && report && report.url===value ? report : null;
 
   return(
     <div className={`adm-field img-uploader-wrap preset-${preset}${compact?" compact":""}`}>
       {label&&<label>{label}</label>}
       <div className="img-uploader">
         <div className="img-tab-row">
-          <button className={`img-tab${tab==="upload"?" on":""}`} onClick={()=>setTab("upload")}>📁 Upload</button>
-          <button className={`img-tab${tab==="url"?" on":""}`} onClick={()=>setTab("url")}>🔗 URL</button>
+          <button type="button" className={`img-tab${tab==="upload"?" on":""}`} onClick={()=>setTab("upload")}>📁 Upload</button>
+          <button type="button" className={`img-tab${tab==="url"?" on":""}`} onClick={()=>setTab("url")} disabled={busy}>🔗 URL</button>
         </div>
 
         {tab==="upload"&&(
-          <label className="img-drop-zone" style={{cursor:"pointer"}}>
-            <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} style={{display:"none"}}/>
+          <label className={`img-drop-zone${busy?" busy":""}`} aria-busy={busy}>
+            <input ref={fileRef} type="file" accept={UPLOAD_ACCEPT} onChange={handleFile} disabled={busy} style={{display:"none"}}/>
             <div style={{fontSize:compact?18:24}}>📸</div>
-            <div className="img-drop-lbl">{loading?"Optimizing image...":err?"Couldn't load image file!":"Tap to choose an image"}</div>
-            {!compact&&<div className="img-drop-lbl" style={{fontSize:11,color:"rgba(255,255,255,.3)",marginTop:3}}>Large uploads are automatically resized for faster loading</div>}
-            {value&&value.startsWith("data:")&&<div className="img-drop-lbl" style={{color:"rgba(34,197,94,.7)",marginTop:3}}>✓ Image loaded</div>}
+            <div className="img-drop-lbl" role="status" aria-live="polite">
+              {busy
+                ? <span className="img-stage"><span className="img-spinner" aria-hidden="true"/>{stageText}</span>
+                : value ? "Tap to replace the image" : "Tap to choose an image"}
+            </div>
+            <div className="img-drop-hint">JPEG, PNG or WebP · resized and compressed automatically</div>
           </label>
         )}
 
@@ -3164,7 +3278,7 @@ function ImageUploader({value, onChange, label="Image", compact=false, preset="d
               className="adm-input"
               value={urlDraft}
               placeholder={allowYouTube?"Paste an image URL or YouTube link":"https://example.com/image.jpg"}
-              onChange={e=>handleUrl(e.target.value)}
+              onChange={e=>setUrlDraft(e.target.value)}
               onBlur={applyUrl}
               onKeyDown={e=>e.key==="Enter"&&applyUrl()}
               style={{marginBottom:0}}
@@ -3173,15 +3287,38 @@ function ImageUploader({value, onChange, label="Image", compact=false, preset="d
           </div>
         )}
 
-        {value&&(
-          <div className="img-preview">
-            {youtubePreview?(
+        {error&&(
+          <div className="img-error" role="alert">
+            {error.message}
+            <div className="img-error-actions">
+              {error.retry&&pending&&<button type="button" className="primary" onClick={retry}>Try again</button>}
+              <button type="button" onClick={chooseAnother}>Choose another file</button>
+              <button type="button" onClick={dismissError}>Dismiss</button>
+            </div>
+          </div>
+        )}
+
+        {previewSrc&&(
+          <div className={`img-preview${showingPending?" pending":""}`}>
+            {youtubePreview&&!showingPending?(
               <iframe className="reveal-video" src={youtubePreview} title="YouTube preview" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen/>
+            ):brokenPreview===previewSrc?(
+              <div className="img-preview-broken">This image couldn't be loaded. Check the link, or upload the file instead.</div>
             ):(
-              <img src={value} alt="preview" onError={()=>onChange("")}/>
+              <img src={previewSrc} alt="preview" onError={()=>setBrokenPreview(previewSrc)}/>
             )}
-            <div className="img-preview-label">Preview ✓</div>
-            <button className="img-clear-btn" onClick={clear} title="Remove image">✕</button>
+            <div className="img-preview-label">{showingPending?"Uploading…":"Preview ✓"}</div>
+            {!busy&&<button type="button" className="img-clear-btn" onClick={clear} title="Remove image">✕</button>}
+          </div>
+        )}
+
+        {shownReport&&(
+          <div className="img-report">
+            <b>✓ Uploaded</b> · {shownReport.summary}
+            {(shownReport.hasAlpha||shownReport.orientationCorrected)&&(
+              <div>{[shownReport.hasAlpha&&"Transparency kept",shownReport.orientationCorrected&&"Rotated upright from the photo's orientation tag"].filter(Boolean).join(" · ")}</div>
+            )}
+            {shownReport.note&&<div className="img-report-note">{shownReport.note}</div>}
           </div>
         )}
       </div>
@@ -3520,8 +3657,12 @@ function usePreloadedImageStatus(url){
 // because this instance is reused from question to question; until a still
 // has been measured -- and for the pending and failed states -- the frame
 // holds the standard 4:3.
+//
+// A missing, null, blank or malformed imageUrl all mean "no usable image",
+// normalised to null up front, so nothing below ever compares against (or
+// reads a ratio from) an undefined URL.
 function GameRevealMedia({question}){
-  const url=question.imageUrl;
+  const url=usableMediaUrl(question?.imageUrl);
   const embed=url?getYouTubeEmbedUrl(url):null;
   // Video is never preloaded as an image -- pass null so the hook is a no-op.
   const status=usePreloadedImageStatus(embed?null:url);
@@ -3535,7 +3676,7 @@ function GameRevealMedia({question}){
   const imgRef=useRef(null);
   const figRef=useRef(null);
   const[measured,setMeasured]=useState(null); // {url, ratio}
-  const ratio=!embed&&measured?.url===url?measured.ratio:null;
+  const ratio=url&&!embed&&measured&&measured.url===url?measured.ratio:null;
   const readRatio=img=>{
     if(!img||!img.naturalWidth||!img.naturalHeight) return;
     const ratio=img.naturalWidth/img.naturalHeight;
@@ -4637,6 +4778,11 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
   const[preview,setPreview]=useState(false);
   const[autoSaveState,setAutoSaveState]=useState("idle");
   const[lastAutoSavedAt,setLastAutoSavedAt]=useState(()=>safeRead(getEditorDraftKey(ig.id))?.savedAt||null);
+  // Which image fields are mid-upload. Saving is held until they finish, so a
+  // save can never go out with the old image while the new one is uploading.
+  const[busyImages,setBusyImages]=useState({});
+  const trackImage=key=>busy=>setBusyImages(m=>Boolean(m[key])===busy?m:{...m,[key]:busy});
+  const imagesBusy=Object.values(busyImages).some(Boolean);
   const st=(m,ms=2100)=>{setToast(m);setTimeout(()=>setToast(null),ms);};
   const set=(f,v)=>setGame(g=>({...g,[f]:v}));
   const qc=game.questions?.length??0;
@@ -4679,8 +4825,9 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
 
   const pub=async()=>{if(!validateDate())return;if(!ok){st(`Need 4–15 questions (have ${qc})`);return;}const s={...game,status:"published"};st("Publishing + archiving images... ⏳",8000);try{const saved=await onSave(s);clearEditorDraft((saved||s).id);setGame(saved||s);setLastAutoSavedAt(null);setAutoSaveState("idle");}catch(e){st(e?.message||"Save failed 😬",6000);}};
   const dft=async()=>{if(!validateDate())return;const s={...game,status:game.status==="published"?"published":"draft"};if(!s.id)s.id=`g-${Date.now()}`;if(!s.questions)s.questions=[];st("Saving... ⏳");try{const saved=await onSave(s);clearEditorDraft((saved||s).id);setGame(saved||s);setLastAutoSavedAt(null);setAutoSaveState("idle");}catch(e){st(e?.message||"Save failed 😬",6000);}};
-  const pubSafe=async()=>{if(!validateDate())return;await pub();};
-  const dftSafe=async()=>{if(!validateDate())return;await dft();};
+  const waitForImages=()=>{if(imagesBusy){st("Hang on, an image is still uploading…");return true;}return false;};
+  const pubSafe=async()=>{if(waitForImages()||!validateDate())return;await pub();};
+  const dftSafe=async()=>{if(waitForImages()||!validateDate())return;await dft();};
   const addQ=q=>{setGame(g=>({...g,questions:[...(g.questions??[]),{...q,id:`q-${Date.now()}`,orderIndex:(g.questions?.length??0)+1}]}));setShowQF(false);setEditQ(null);};
   const updQ=u=>setGame(g=>({...g,questions:g.questions.map(q=>q.id===u.id?u:q)}));
   const delQ=q=>{
@@ -4728,10 +4875,10 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
           </div>
           <div style={{display:"flex",gap:9}}>
             <div style={{flex:1}}>
-              <ImageUploader label={`Category A Image${game.categoryA?" ("+game.categoryA+")":""}`} value={game.categoryAImage||""} onChange={v=>set("categoryAImage",v)} preset="category" compact={true}/>
+              <ImageUploader label={`Category A Image${game.categoryA?" ("+game.categoryA+")":""}`} value={game.categoryAImage||""} onChange={v=>set("categoryAImage",v)} preset="category" compact={true} onBusyChange={trackImage("categoryAImage")}/>
             </div>
             <div style={{flex:1}}>
-              <ImageUploader label={`Category B Image${game.categoryB?" ("+game.categoryB+")":""}`} value={game.categoryBImage||""} onChange={v=>set("categoryBImage",v)} preset="category" compact={true}/>
+              <ImageUploader label={`Category B Image${game.categoryB?" ("+game.categoryB+")":""}`} value={game.categoryBImage||""} onChange={v=>set("categoryBImage",v)} preset="category" compact={true} onBusyChange={trackImage("categoryBImage")}/>
             </div>
           </div>
           <div style={{display:"flex",gap:9}}>
@@ -4742,10 +4889,10 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
               <ColorPicker label={`Category B Color${game.categoryB?" ("+game.categoryB+")":""}`} value={game.categoryBColor||"pink"} onChange={v=>set("categoryBColor",v)}/>
             </div>
           </div>
-          <ImageUploader label="Header Image (shown on home screen & archive)" value={game.headerImage||""} onChange={v=>set("headerImage",v)} preset="header" compact={true}/>
+          <ImageUploader label="Header Image (shown on home screen & archive)" value={game.headerImage||""} onChange={v=>set("headerImage",v)} preset="header" compact={true} onBusyChange={trackImage("headerImage")}/>
           <div style={{display:"flex",gap:7,marginTop:2}}>
-            <button className="btn-adm btn-adm-g" onClick={dftSafe}>Save Draft</button>
-            <button className={`btn-adm ${canPublish?"btn-adm-green":""}`} style={!canPublish?{opacity:.5,cursor:"not-allowed"}:{}} onClick={pubSafe}>{game.status==="published"?"✓ Published":"Publish"}</button>
+            <button className="btn-adm btn-adm-g" onClick={dftSafe} disabled={imagesBusy} style={imagesBusy?{opacity:.5,cursor:"progress"}:undefined}>{imagesBusy?"Uploading image…":"Save Draft"}</button>
+            <button className={`btn-adm ${canPublish&&!imagesBusy?"btn-adm-green":""}`} style={!canPublish||imagesBusy?{opacity:.5,cursor:imagesBusy?"progress":"not-allowed"}:{}} disabled={imagesBusy} onClick={pubSafe}>{game.status==="published"?"✓ Published":"Publish"}</button>
           </div>
         </div>
         <div className="adm-card">
@@ -4789,6 +4936,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
 function QForm({initial,catA,catB,onSave,onCancel}){
   const[q,setQ]=useState(initial||{itemText:"",correctCategory:"A",flavorCopy:"",explanationCopy:"",imageUrl:"",imageAlt:"",imageSource:""});
   const up=(f,v)=>setQ(p=>({...p,[f]:v}));
+  const[imageBusy,setImageBusy]=useState(false);
   return(
     <div className="q-form-box">
       <div className="q-form-title">{initial?"Edit Question":"New Question"}</div>
@@ -4803,12 +4951,12 @@ function QForm({initial,catA,catB,onSave,onCancel}){
         </div>
         <div className="adm-field"><label>Flavor Copy</label><textarea className="adm-input adm-ta" value={q.flavorCopy} placeholder="Funny reaction line..." onChange={e=>up("flavorCopy",e.target.value)}/></div>
         <div className="adm-field"><label>Explanation Copy</label><textarea className="adm-input adm-ta" value={q.explanationCopy} placeholder="One factual sentence..." onChange={e=>up("explanationCopy",e.target.value)}/></div>
-        <div className="q-form-wide"><ImageUploader label="Reveal Media (image or YouTube link)" value={q.imageUrl||""} onChange={v=>up("imageUrl",v)} preset="question" allowYouTube={true} compact={true}/></div>
+        <div className="q-form-wide"><ImageUploader label="Reveal Media (image or YouTube link)" value={q.imageUrl||""} onChange={v=>up("imageUrl",v)} preset="question" allowYouTube={true} compact={true} onBusyChange={setImageBusy}/></div>
         {q.imageUrl&&!isYouTubeUrl(q.imageUrl)&&<div className="adm-field"><label>Alt Text *</label><input className="adm-input" value={q.imageAlt} placeholder="Screen reader description..." onChange={e=>up("imageAlt",e.target.value)}/></div>}
         {q.imageUrl&&<div className="adm-field"><label>Media Source</label><input className="adm-input" value={q.imageSource} placeholder={isYouTubeUrl(q.imageUrl)?"Official music video, lyric video, etc.":"Via Wikimedia Commons"} onChange={e=>up("imageSource",e.target.value)}/></div>}
       </div>
       <div style={{display:"flex",gap:7,marginTop:7}}>
-        <button className="btn-adm btn-adm-y" onClick={()=>q.itemText.trim()&&onSave({...q})}>{initial?"Update":"Add"}</button>
+        <button className="btn-adm btn-adm-y" disabled={imageBusy} style={imageBusy?{opacity:.5,cursor:"progress"}:undefined} onClick={()=>!imageBusy&&q.itemText.trim()&&onSave({...q})}>{imageBusy?"Uploading image…":initial?"Update":"Add"}</button>
         <button className="btn-adm btn-adm-g" onClick={onCancel}>Cancel</button>
       </div>
     </div>
