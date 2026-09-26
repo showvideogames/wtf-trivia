@@ -2500,6 +2500,8 @@ async function dbGetPuzzleCommunityStats(date, userScore){
       const correct = Number(correctCounts[idx]||0);
       return {
         index: idx,
+        answered,
+        correct,
         correctRate: answered ? Math.round(correct/answered*100) : 0
       };
     });
@@ -3824,6 +3826,16 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
 }
 
 // ---- SCORE ----
+// Nerd Mode audience split. Every answer is one of the two categories, so the
+// share choosing each side follows from the correct count and the answer key.
+// The correct side is rounded exactly like "N% of players got it right" and
+// the other side takes the remainder, so the pair always adds to 100.
+function categorySplit(correctCategory,correctCount,answeredCount){
+  if(!(answeredCount>0)||(correctCategory!=="A"&&correctCategory!=="B")) return null;
+  const correctPct=Math.round(correctCount/answeredCount*100);
+  return correctCategory==="A"?{A:correctPct,B:100-correctPct}:{A:100-correctPct,B:correctPct};
+}
+
 // Pips per row, balanced so a long puzzle never leaves a lonely last pip:
 // 13 answers at a max of 8 per row become 7 + 6, not 8 + 5.
 function balancedPipColumns(count,maxPerRow){
@@ -3871,6 +3883,19 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false,withChrome=fals
   const shareLines=txt.split("\n");
   const pipCount=safeRecord.answers.length;
   const pipLineEms=(`${safeRecord.score}/${safeRecord.totalQuestions} `.length*0.62)+pipCount*1.3+0.4;
+
+  // Nerd Mode: the two categories exactly as gameplay shows them (A left,
+  // B right, same colours), and this player's own pick per question, matched
+  // by its saved questionIndex. No saved index or pick means no YOU marker.
+  const nerdCategories={
+    A:{name:game?.categoryA||"Category A",color:PALETTE.find(p=>p.id===(game?.categoryAColor||"teal"))||PALETTE[0]},
+    B:{name:game?.categoryB||"Category B",color:PALETTE.find(p=>p.id===(game?.categoryBColor||"pink"))||PALETTE[1]}
+  };
+  const playerPicks=new Map(
+    safeRecord.answers
+      .filter(a=>Number.isInteger(a?.questionIndex)&&(a.chosenCategory==="A"||a.chosenCategory==="B"))
+      .map(a=>[a.questionIndex,a.chosenCategory])
+  );
 
   const content=(
     <div className="rs-page">
@@ -3959,14 +3984,65 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false,withChrome=fals
             </button>
             {showAdvanced&&(
               <div className="advanced-panel">
-                {(Array.isArray(communityStats.questionAccuracies)?communityStats.questionAccuracies:[]).map((q,idx)=>(
-                  <div key={q.index} className="advanced-card">
-                    <div className="advanced-card-top">Question {idx+1}</div>
-                    <div className="advanced-card-title">{game?.questions?.[idx]?.itemText||"Accuracy"}</div>
-                    <div className="rs-bar" aria-hidden="true"><span style={{width:`${q.correctRate}%`}}/></div>
-                    <div className="advanced-card-sub">{q.correctRate}% of players got it right</div>
-                  </div>
-                ))}
+                {(Array.isArray(communityStats.questionAccuracies)?communityStats.questionAccuracies:[]).map(q=>{
+                  const question=game?.questions?.[q.index];
+                  const correctCat=question?.correctCategory;
+                  const split=categorySplit(correctCat,q.correct,q.answered);
+                  const pick=playerPicks.get(q.index);
+                  const summary=split&&[
+                    ...["A","B"].map(cat=>`${split[cat]}% chose ${nerdCategories[cat].name}${cat===correctCat?", the correct answer":""}.`),
+                    pick?`You chose ${nerdCategories[pick].name}.`:""
+                  ].join(" ").trim();
+                  return(
+                    <div key={q.index} className="advanced-card">
+                      <div className="advanced-card-top">Question {q.index+1}</div>
+                      <div className="advanced-card-title">{question?.itemText||"Accuracy"}</div>
+                      {!(q.answered>0)?(
+                        <div className="advanced-card-sub">No community answers for this one yet.</div>
+                      ):(
+                        <div className="advanced-card-sub">{q.correctRate}% of players got it right</div>
+                      )}
+                      {split&&(
+                        <>
+                          <div className="rs-split" aria-hidden="true">
+                            <div className="rs-split-bar">
+                              {["A","B"].map(cat=>{
+                                const c=nerdCategories[cat].color;
+                                return <span key={cat} style={{flexBasis:`${split[cat]}%`,background:`linear-gradient(180deg,${c.light} 0%,${c.mid} 100%)`}}/>;
+                              })}
+                            </div>
+                            <div className="rs-split-sides">
+                              {["A","B"].map(cat=>{
+                                const c=nerdCategories[cat].color;
+                                return(
+                                  <div key={cat} className={`rs-side rs-side-${cat.toLowerCase()}`}>
+                                    <div className="rs-side-label">
+                                      <span className="rs-side-pct" style={{color:c.isDark?c.dark:"var(--black)"}}>
+                                        <span className="rs-swatch" style={{background:c.mid,borderColor:c.dark}}/>{split[cat]}%
+                                      </span> {nerdCategories[cat].name}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {/* One shared marker row: A's markers hug the left
+                                edge, B's the right, so two pills on one side
+                                never have to squeeze into a half-width column. */}
+                            <div className="rs-split-marks">
+                              {["A","B"].map(cat=>(
+                                <div key={cat} className={`rs-marks rs-marks-${cat.toLowerCase()}`}>
+                                  {pick===cat&&<span className="rs-you">YOU</span>}
+                                  {correctCat===cat&&<span className="rs-correct">✓ Correct</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <span className="rs-sr">{summary}</span>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
