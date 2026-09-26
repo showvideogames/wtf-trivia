@@ -457,9 +457,107 @@
 .gp-clue-text.sm { font-size: clamp(19px, 4.8vw, 30px); }
 .gp-clue-text.xs { font-size: clamp(17px, 3.9vw, 24px); }
 
-/* ===== ANSWER CARDS =====
-   The existing .ans-box markup, motion and per-puzzle colours are kept as they
-   are. Only sizing and label typography are adjusted here. */
+/* ===== QUESTION MODULE =====
+   The unanswered state is one question-and-answer module under the clue: a
+   4:3 mystery stage, then the two choices close beneath it. The stage sits in
+   the same place the reveal's media will occupy once the player answers.
+
+   The stage uses the reveal media's sizing technique (see .gp-media): the
+   outer box is an invisible sizer whose ratio gives it a natural height and
+   which, on phones, is allowed to shrink; the visible frame inside is the
+   largest 4:3 box that fits it, centred. So on a squeezed screen the frame
+   gets narrower as well as shorter and never stops being exactly 4:3. The
+   sizer's padding is the frame's border, so -- as with the reveal media --
+   it is the picture area inside the border that is 4:3. */
+.gp-qmod {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.gp-mystery {
+  container-type: size;
+  box-sizing: content-box;
+  padding: 3px;
+  width: calc(100% - 6px);
+  aspect-ratio: 4 / 3;
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gp-mystery-frame {
+  position: relative;
+  overflow: hidden;
+  box-sizing: content-box;
+  width: min(100cqw, calc(100cqh * 4 / 3));
+  aspect-ratio: 4 / 3;
+  margin: -3px;
+  border: 3px solid var(--black);
+  border-radius: 18px;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.18);
+  /* Warm cream at the centre, easing to pale butter at the edges. */
+  background: radial-gradient(ellipse 72% 68% at 50% 50%,
+    #FFFDF4 0%, #FFF6D6 44%, #FFEDB0 78%, #FFE38E 100%);
+}
+/* Soft rays from the centre, faded out well before the edges. */
+.gp-mystery-rays {
+  position: absolute;
+  inset: -20%;
+  background: repeating-conic-gradient(from 4deg at 50% 50%,
+    rgba(255, 255, 255, 0.55) 0deg 7deg,
+    rgba(255, 255, 255, 0) 7deg 22.5deg);
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 12%, rgba(0, 0, 0, 0.5) 38%, transparent 62%);
+  mask-image: radial-gradient(circle at 50% 50%, #000 12%, rgba(0, 0, 0, 0.5) 38%, transparent 62%);
+  opacity: 0.7;
+  pointer-events: none;
+}
+/* The mark itself, centred. The transparent WebP already carries its ink
+   outline and teal offset. */
+.gp-mystery-mark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: 60%;
+  width: auto;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+/* Two small sparkles and a pair of three-stroke emphasis marks -- the same
+   mark the clue card uses -- flanking the question mark. */
+.gp-mystery-spark,
+.gp-mystery-dash {
+  position: absolute;
+  background: center / contain no-repeat;
+  pointer-events: none;
+}
+.gp-mystery-spark {
+  width: 7%;
+  aspect-ratio: 1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 1.5c.7 5.6 4.9 9.8 10.5 10.5-5.6.7-9.8 4.9-10.5 10.5-.7-5.6-4.9-9.8-10.5-10.5C7.1 11.3 11.3 7.1 12 1.5z' fill='%23F7BE2A'/%3E%3C/svg%3E");
+}
+.gp-mystery-spark-a { left: 23%; top: 26%; }
+.gp-mystery-spark-b { right: 25%; bottom: 23%; width: 5.5%; }
+.gp-mystery-dash {
+  top: 50%;
+  width: 9%;
+  aspect-ratio: 24 / 28;
+  transform: translateY(-50%);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 28' fill='none' stroke='%23F2B019' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M13 4l6 5M11 14h9M13 24l6-5'/%3E%3C/svg%3E");
+  opacity: 0.85;
+}
+.gp-mystery-dash-l { left: 19%; }
+.gp-mystery-dash-r { right: 19%; transform: translateY(-50%) scaleX(-1); }
+
+/* ===== ANSWER BUTTONS =====
+   The existing .ans-box markup, motion, per-puzzle colours and candy
+   treatment are kept. Here they become side-by-side buttons: the category
+   icon above, the label below. The label band is a fixed height; the icon
+   band takes whatever height the button has beyond it, so as a button grows
+   (on phones, with the space under the mystery stage) only the icon area
+   gets taller. */
 .gp-wrap .ans-btns {
   display: flex;
   flex-direction: row;
@@ -468,17 +566,45 @@
 }
 
 .gp-wrap .ans-box {
+  --gp-ans-h: 108px;
   flex: 1 1 0;
   min-width: 0;
+  height: var(--gp-ans-h);
   border-radius: 22px;
+  /* Lets the emoji fallback below scale with the button's height. */
+  container-type: size;
 }
 
-/* Category artwork keeps its square, capped on short viewports so the pair of
-   choices still fits without scrolling. */
+/* The icon band: everything above the label. The icon is contained within
+   it -- never stretched -- and capped, so a tall button gets a moderately
+   larger icon with more room around it rather than an enormous one. */
 .gp-wrap .ans-box-img-wrap,
 .gp-wrap .ans-box-img-placeholder {
-  aspect-ratio: 1;
-  max-height: min(34vh, 250px);
+  aspect-ratio: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  max-height: none;
+  padding-top: 7px;
+  border-bottom: 0;
+  box-sizing: border-box;
+}
+.gp-wrap .ans-box-img {
+  width: auto;
+  height: 100%;
+  max-height: 128px;
+  max-width: 80%;
+  object-fit: contain;
+  /* Softens category art that is a full square tile rather than a
+     transparent icon; a transparent icon is unaffected. */
+  border-radius: 10px;
+}
+/* A puzzle with no category art shows an emoji. Its inline background band
+   read as a stripe across a compact button, so the button's own colour shows
+   through instead. */
+.gp-wrap .ans-box-img-placeholder {
+  font-size: clamp(30px, calc((100cqh - 60px) * 0.5), 72px);
+  background: none !important;
 }
 
 /* ===== FIXED GAME SCREEN, NEVER A SCROLLING PAGE =====
@@ -504,30 +630,34 @@
     flex: 0 0 auto;
   }
 
-  .gp-wrap.gp-q .ans-btns {
-    flex: 1 1 auto;
-    min-height: 196px;
-    /* Capped: the category artwork is square, so letting the card grow much
-       past its own width only letterboxes the art inside a tall slab. */
-    max-height: 292px;
-    /* Built up from the bottom of the phone, toward the player's thumbs.
-       The row still flexes first (up to its cap), so it keeps exactly the
-       size it had; only the space left over once it is capped moves above
-       it, between the clue card and the choices. */
-    margin-top: auto;
-  }
-  /* The gap under the choices: 12px from the bottom of the cards' own 8px
-     lower edge to the screen edge, plus whatever the home indicator needs.
-     Unanswered state only -- the reveal keeps its own spacing. */
-  .gp-wrap.gp-q {
-    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-  }
-  .gp-wrap.gp-q .ans-box-img-wrap,
-  .gp-wrap.gp-q .ans-box-img-placeholder {
-    aspect-ratio: auto;
+  /* Unanswered: the question module takes all the height left under the
+     clue card. Inside it the mystery stage keeps its natural 4:3 size, and
+     the answer row takes the rest -- growing from a 96px floor up to the old
+     292px large-card cap -- so the cards extend down the screen on taller
+     phones instead of leaving empty backdrop. If a screen were ever too
+     short for both, the stage is what gives: it shrinks, still exactly 4:3
+     and centred, down to its own floor, and the choices never shrink below
+     theirs. */
+  .gp-qmod {
     flex: 1 1 auto;
     min-height: 0;
-    max-height: none;
+  }
+  .gp-qmod > .gp-mystery {
+    flex: 0 1 auto;
+    min-height: 120px;
+  }
+  .gp-qmod > .ans-btns {
+    flex: 1 0 96px;
+    min-height: 96px;
+    max-height: 292px;
+  }
+  .gp-qmod .ans-box {
+    height: auto;
+  }
+  /* Breathing room under the cards: 18px below their border (10px below
+     their painted lower edge), or more when the home indicator needs it. */
+  .gp-wrap.gp-q {
+    padding-bottom: max(18px, calc(env(safe-area-inset-bottom, 0px) + 8px));
   }
 
   /* Reveal: verdict, both explanation panels and Next are all protected --
@@ -549,17 +679,20 @@
   }
 }
 
-/* The label half is a fixed, equal-height band on both cards. The auto-fitting
-   text component picks the largest size that fits inside it, so a label shrinks
-   long before it would ever break inside a word. */
+/* The label band is a fixed height at the foot of the button, whatever
+   the button's height, so labels read the same on every phone. The
+   auto-fitting text picks the largest size that fits it -- two lines at
+   most, since the band is only a little over two lines tall at the smallest
+   size allowed -- and both buttons then share the smaller of their two
+   sizes (see GameScreen), so a label shrinks long before it would ever
+   break inside a word, and the pair always match. */
 .gp-wrap .ans-box-label {
   aspect-ratio: auto;
-  /* Tall enough for a two-line label at the shared ceiling, so a two-word name
-     sits at the same size as a one-word one instead of being shrunk to fit.
-     The floor also clears a three-line worst case at 360px without clipping. */
-  height: clamp(72px, 21vw, 94px);
-  padding: 7px 9px;
-  line-height: 1.1;
+  flex: 0 0 auto;
+  min-height: 0;
+  height: 60px;
+  padding: 2px 8px 8px;
+  line-height: 1.08;
 }
 .gp-wrap .ans-box-label .fit-text-content {
   overflow-wrap: normal;
@@ -1104,6 +1237,11 @@
    The density work above is aimed at phones. From tablet up the same layout
    is allowed to relax again. */
 @media (min-width: 600px) {
+  /* The question module keeps its phone structure, capped so the stage
+     doesn't become enormous on a wide screen. */
+  .gp-qmod { max-width: 500px; margin: 0 auto; }
+  .gp-mystery { margin-bottom: 12px; }
+  .gp-wrap .ans-box { --gp-ans-h: 120px; }
   .gp-hdr { padding: 14px 0 16px; gap: 12px; }
   .gp-hdr-logo { max-width: 150px; max-height: 62px; }
   .gp-hdr-right { gap: 9px; }
@@ -1141,13 +1279,10 @@
 }
 
 /* ===== SHORT VIEWPORTS =====
-   At 375x667 and similar, trim the artwork square a little further so the clue
-   and both choices are comfortably above the fold. On the reveal the spacing
+   At 375x667 and similar, tighten the chrome a notch. On the reveal the spacing
    and panel padding tighten too; the media itself has no fixed cap here -- it
    already shrinks, ratio intact, to whatever the copy leaves. */
 @media (max-height: 740px) and (max-width: 599px) {
-  .gp-wrap .ans-box-img-wrap,
-  .gp-wrap .ans-box-img-placeholder { max-height: 30vh; }
   .gp-hdr { padding: 7px 0 9px; }
   .gp-hdr-logo { max-height: 46px; }
   .gp-clue { padding: 6px 14px 8px; margin: 0 0 6px; gap: 4px; }
@@ -1199,13 +1334,6 @@
     margin-top: 0;
     width: 96%;
   }
-}
-
-/* Laptop and tablet heights around 800px: trim the artwork square so the clue
-   and both choices still land above the fold. */
-@media (min-width: 600px) and (max-height: 880px) {
-  .gp-wrap .ans-box-img-wrap,
-  .gp-wrap .ans-box-img-placeholder { max-height: 26vh; }
 }
 
 /* Narrowest phones: shave the header controls just enough that Back, the

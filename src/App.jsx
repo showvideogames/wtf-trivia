@@ -2955,11 +2955,18 @@ function shouldKeepFitTextOnOneLine(value){
   return Boolean(text) && !/[\s-]/.test(text);
 }
 
-function FitText({children, className="", style, min=12, max=48, oneLine, as="div", buffer=4}){
+// onFit reports the size this instance fits at on its own; forceSize, when
+// given, is what it actually displays instead. Together they let a group of
+// labels (the two answer buttons) each measure independently and then all
+// show the smallest of their sizes, so they always match.
+function FitText({children, className="", style, min=12, max=48, oneLine, as="div", buffer=4, onFit, forceSize}){
   const text = String(children??"");
   const wrapRef = useRef(null);
   const textRef = useRef(null);
   const [fontSize,setFontSize] = useState(max);
+  const onFitRef = useRef(onFit);
+  const forceRef = useRef(forceSize);
+  useLayoutEffect(()=>{ onFitRef.current = onFit; forceRef.current = forceSize; });
   const noWrap = oneLine ?? shouldKeepFitTextOnOneLine(text);
 
   useLayoutEffect(()=>{
@@ -2991,7 +2998,11 @@ function FitText({children, className="", style, min=12, max=48, oneLine, as="di
             high = mid;
           }
         }
-        setFontSize(Math.floor(best*10)/10);
+        const fitted = Math.floor(best*10)/10;
+        // The search leaves a trial size on the node; put back what is shown.
+        node.style.fontSize = `${forceRef.current ?? fitted}px`;
+        setFontSize(fitted);
+        onFitRef.current?.(fitted);
       });
     };
     fit();
@@ -3005,7 +3016,7 @@ function FitText({children, className="", style, min=12, max=48, oneLine, as="di
   },[text,min,max,noWrap,buffer]);
 
   const boxClass = `fit-text-box ${noWrap?"fit-text-one-line":""} ${className}`;
-  const content = <span ref={textRef} className="fit-text-content" style={{fontSize}}>{children}</span>;
+  const content = <span ref={textRef} className="fit-text-content" style={{fontSize:forceSize ?? fontSize}}>{children}</span>;
   if(as==="span"){
     return (
       <span ref={wrapRef} className={boxClass} style={style}>
@@ -3015,7 +3026,7 @@ function FitText({children, className="", style, min=12, max=48, oneLine, as="di
   }
   return (
     <div ref={wrapRef} className={boxClass} style={style}>
-      <span ref={textRef} className="fit-text-content" style={{fontSize}}>{children}</span>
+      <span ref={textRef} className="fit-text-content" style={{fontSize:forceSize ?? fontSize}}>{children}</span>
     </div>
   );
 }
@@ -3617,6 +3628,8 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
   const[reaction,setReaction]=useState(null);
   const[combo,setCombo]=useState(0);
   const[showHelp,setShowHelp]=useState(false);
+  // Each answer label's own best-fit size; both buttons display the smaller.
+  const[labelFit,setLabelFit]=useState({});
   const{play}=sound;
   const{canvasRef,shoot}=useConfetti();
   const beatOpts=["🤔","🤔","🤔","😬"];
@@ -3725,7 +3738,20 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
       </div>
 
       {phase==="question"&&(
-        <>
+        <div className="gp-qmod">
+          {/* The mystery stage holds the place the reveal media will take once
+              the player answers. Its artwork is decoration; the stage itself
+              is labelled for assistive tech. */}
+          <div className="gp-mystery">
+            <div className="gp-mystery-frame" role="img" aria-label="Mystery image — answer to reveal">
+              <span className="gp-mystery-rays" aria-hidden="true"/>
+              <span className="gp-mystery-dash gp-mystery-dash-l" aria-hidden="true"/>
+              <span className="gp-mystery-dash gp-mystery-dash-r" aria-hidden="true"/>
+              <span className="gp-mystery-spark gp-mystery-spark-a" aria-hidden="true"/>
+              <span className="gp-mystery-spark gp-mystery-spark-b" aria-hidden="true"/>
+              <img className="gp-mystery-mark" src="/mystery-question.webp" alt="" aria-hidden="true" draggable="false"/>
+            </div>
+          </div>
           <div className="ans-btns">
             {[
               {cat:"A",label:cq._catA,img:game.categoryAImage,color:PALETTE.find(p=>p.id===(game.categoryAColor||"teal"))||PALETTE[0]},
@@ -3751,14 +3777,17 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
                       {cat==="A"?"🎲":"🎬"}
                     </div>
                   )}
-                  <FitText className="ans-box-label" min={11} max={labelMax} buffer={10} style={{color:isDark?"white":"var(--black)",textShadow:isDark?"1px 2px 0 rgba(0,0,0,0.2)":"none",WebkitTextStroke:isDark?"0.5px rgba(0,0,0,0.2)":"0"}}>
+                  <FitText className="ans-box-label" min={14} max={labelMax} buffer={4}
+                    onFit={size=>setLabelFit(f=>f[cat]===size?f:{...f,[cat]:size})}
+                    forceSize={labelFit.A&&labelFit.B?Math.min(labelFit.A,labelFit.B):undefined}
+                    style={{color:isDark?"white":"var(--black)",textShadow:isDark?"1px 2px 0 rgba(0,0,0,0.2)":"none",WebkitTextStroke:isDark?"0.5px rgba(0,0,0,0.2)":"0"}}>
                     {label}
                   </FitText>
                 </button>
               );
             })}
           </div>
-        </>
+        </div>
       )}
 
       {phase==="beat"&&(
