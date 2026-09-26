@@ -4019,7 +4019,8 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false,withChrome=fals
                                     <div className="rs-side-label">
                                       <span className="rs-side-pct" style={{color:c.isDark?c.dark:"var(--black)"}}>
                                         <span className="rs-swatch" style={{background:c.mid,borderColor:c.dark}}/>{split[cat]}%
-                                      </span> {nerdCategories[cat].name}
+                                      </span>
+                                      <span className="rs-side-name">{nerdCategories[cat].name}</span>
                                     </div>
                                   </div>
                                 );

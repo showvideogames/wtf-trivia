@@ -233,11 +233,19 @@
   color: var(--black);
   overflow-wrap: anywhere;
 }
+/* Percentage on its own line, category name always on the line(s) below,
+   so both sides' percentages and names line up across the card. */
 .rs-page .rs-side-pct {
+  display: block;
   font-family: 'Fredoka One', cursive;
   font-weight: 400;
   font-size: 15px;
+  line-height: 1.2;
   white-space: nowrap;
+}
+.rs-page .rs-side-name {
+  display: block;
+  margin-top: 1px;
 }
 .rs-page .rs-swatch {
   display: inline-block;
