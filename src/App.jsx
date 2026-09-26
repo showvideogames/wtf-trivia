@@ -3900,7 +3900,7 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false,withChrome=fals
             <div className="emoji-grid rs-pips"
                  style={{"--pips-narrow":balancedPipColumns(pipCount,8),"--pips-wide":balancedPipColumns(pipCount,13)}}>
               {safeRecord.answers.map((a,i)=>(
-                <div key={i} className={`emoji-cell ${a.correct?'correct-dot':'wrong-dot'}`} style={{animationDelay:`${i*65}ms`}}/>
+                <div key={i} className={`emoji-cell ${a.correct?'correct-dot':'wrong-dot'}`} style={{"--i":i}}/>
               ))}
             </div>
           </div>

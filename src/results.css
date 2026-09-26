@@ -114,8 +114,8 @@
 /* ===== SCORE + SHARE ===== */
 .rs-page .score-msg { margin-bottom: 6px; }
 
-/* Pips pop in once and then stay put. Rows are balanced by
-   balancedPipColumns(): the width cap below holds exactly that many. */
+/* Rows are balanced by balancedPipColumns(): the width cap below holds
+   exactly that many. */
 .rs-page .rs-pips {
   max-width: calc(var(--pips-narrow) * 36px - 8px);
   margin: 6px auto 2px;
@@ -123,6 +123,24 @@
 }
 @container rs (min-width: 560px) {
   .rs-page .rs-pips { max-width: calc(var(--pips-wide) * 36px - 8px); }
+}
+
+/* The staggered pop-in entrance, then -- once every pip has landed -- a
+   scale-only wave across them every 5s, in DOM order (so on a 7 + 6 phone
+   layout it runs straight on into the second row). Transform only: pips
+   never fade, remount or change colour, and nothing around them moves.
+   --i is each pip's index. */
+.rs-page .rs-pips .emoji-cell {
+  animation:
+    popIn .4s cubic-bezier(.34,1.56,.64,1) backwards,
+    rsPipWave 5s ease-in-out infinite;
+  animation-delay:
+    calc(var(--i) * 65ms),
+    calc(2s + var(--i) * 62ms);
+}
+@keyframes rsPipWave {
+  0%, 13%, 100% { transform: scale(1); }
+  6.5%          { transform: scale(1.17); }
 }
 
 .rs-page .rs-share { margin-top: 8px; }
@@ -210,5 +228,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rs-page .emoji-cell { animation: none; }
+  .rs-page .rs-pips .emoji-cell { animation: none; }
 }
