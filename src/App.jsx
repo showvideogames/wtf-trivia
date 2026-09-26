@@ -2887,6 +2887,16 @@ function GameBackdrop(){
   return(
     <>
       <div className="gp-bg" aria-hidden="true"/>
+      {/* A few large, softly cropped brand shapes around the edges and two
+          small accent marks, all plain CSS (see .gp-shapes). */}
+      <div className="gp-shapes" aria-hidden="true">
+        <span className="gp-shape gp-shape-teal"/>
+        <span className="gp-shape gp-shape-pink"/>
+        <span className="gp-shape gp-shape-sun"/>
+        <span className="gp-shape gp-shape-rose"/>
+        <span className="gp-mark gp-mark-l"/>
+        <span className="gp-mark gp-mark-r"/>
+      </div>
       <div className="candy-bg" aria-hidden="true">
         {render(GAME_DECOR_DT,"gpd-dt")}
         {render(GAME_DECOR_TB,"gpd-tb")}
@@ -2945,11 +2955,18 @@ function shouldKeepFitTextOnOneLine(value){
   return Boolean(text) && !/[\s-]/.test(text);
 }
 
-function FitText({children, className="", style, min=12, max=48, oneLine, as="div", buffer=4}){
+// onFit reports the size this instance fits at on its own; forceSize, when
+// given, is what it actually displays instead. Together they let a group of
+// labels (the two answer buttons) each measure independently and then all
+// show the smallest of their sizes, so they always match.
+function FitText({children, className="", style, min=12, max=48, oneLine, as="div", buffer=4, onFit, forceSize}){
   const text = String(children??"");
   const wrapRef = useRef(null);
   const textRef = useRef(null);
   const [fontSize,setFontSize] = useState(max);
+  const onFitRef = useRef(onFit);
+  const forceRef = useRef(forceSize);
+  useLayoutEffect(()=>{ onFitRef.current = onFit; forceRef.current = forceSize; });
   const noWrap = oneLine ?? shouldKeepFitTextOnOneLine(text);
 
   useLayoutEffect(()=>{
@@ -2981,7 +2998,11 @@ function FitText({children, className="", style, min=12, max=48, oneLine, as="di
             high = mid;
           }
         }
-        setFontSize(Math.floor(best*10)/10);
+        const fitted = Math.floor(best*10)/10;
+        // The search leaves a trial size on the node; put back what is shown.
+        node.style.fontSize = `${forceRef.current ?? fitted}px`;
+        setFontSize(fitted);
+        onFitRef.current?.(fitted);
       });
     };
     fit();
@@ -2995,7 +3016,7 @@ function FitText({children, className="", style, min=12, max=48, oneLine, as="di
   },[text,min,max,noWrap,buffer]);
 
   const boxClass = `fit-text-box ${noWrap?"fit-text-one-line":""} ${className}`;
-  const content = <span ref={textRef} className="fit-text-content" style={{fontSize}}>{children}</span>;
+  const content = <span ref={textRef} className="fit-text-content" style={{fontSize:forceSize ?? fontSize}}>{children}</span>;
   if(as==="span"){
     return (
       <span ref={wrapRef} className={boxClass} style={style}>
@@ -3005,7 +3026,7 @@ function FitText({children, className="", style, min=12, max=48, oneLine, as="di
   }
   return (
     <div ref={wrapRef} className={boxClass} style={style}>
-      <span ref={textRef} className="fit-text-content" style={{fontSize}}>{children}</span>
+      <span ref={textRef} className="fit-text-content" style={{fontSize:forceSize ?? fontSize}}>{children}</span>
     </div>
   );
 }
@@ -3437,6 +3458,31 @@ function GameProgressDots({total,currentIndex}){
   );
 }
 
+// The explanation panels' identity marks. Drawn inline rather than as emoji so
+// they look the same on every platform; purely decorative, since each panel's
+// heading already says what it is.
+function PanelIcon({kind}){
+  return(
+    <span className="gp-panel-ico" aria-hidden="true">
+      {kind==="info"?(
+        <svg viewBox="0 0 24 24" width="100%" height="100%">
+          <path d="M12 3.2a6.3 6.3 0 0 0-3.7 11.4c.6.5 1 1.1 1 1.8v.5h5.4v-.5c0-.7.4-1.3 1-1.8A6.3 6.3 0 0 0 12 3.2z" fill="currentColor"/>
+          <rect x="9.4" y="18.3" width="5.2" height="1.8" rx=".9" fill="currentColor"/>
+          <rect x="10.2" y="20.8" width="3.6" height="1.5" rx=".75" fill="currentColor"/>
+          <path d="M10 7.6a3 3 0 0 1 2-1" stroke="rgba(0,0,0,.18)" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+        </svg>
+      ):(
+        <svg viewBox="0 0 24 24" width="100%" height="100%">
+          <path d="M12 3.6c-5 0-9 3.2-9 7.3 0 2.3 1.3 4.4 3.3 5.7l-.8 3.3c-.1.5.4.8.8.6l3.8-2.3c.6.1 1.2.1 1.9.1 5 0 9-3.2 9-7.4S17 3.6 12 3.6z" fill="currentColor"/>
+          <circle cx="8" cy="11" r="1.35" fill="rgba(0,0,0,.2)"/>
+          <circle cx="12" cy="11" r="1.35" fill="rgba(0,0,0,.2)"/>
+          <circle cx="16" cy="11" r="1.35" fill="rgba(0,0,0,.2)"/>
+        </svg>
+      )}
+    </span>
+  );
+}
+
 // The category half of the result banner is sized by its own length, so a short
 // answer reads as boldly as the verdict instead of being held down to whatever
 // a long category would need.
@@ -3582,6 +3628,8 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
   const[reaction,setReaction]=useState(null);
   const[combo,setCombo]=useState(0);
   const[showHelp,setShowHelp]=useState(false);
+  // Each answer label's own best-fit size; both buttons display the smaller.
+  const[labelFit,setLabelFit]=useState({});
   const{play}=sound;
   const{canvasRef,shoot}=useConfetti();
   const beatOpts=["🤔","🤔","🤔","😬"];
@@ -3690,7 +3738,20 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
       </div>
 
       {phase==="question"&&(
-        <>
+        <div className="gp-qmod">
+          {/* The mystery stage holds the place the reveal media will take once
+              the player answers. Its artwork is decoration; the stage itself
+              is labelled for assistive tech. */}
+          <div className="gp-mystery">
+            <div className="gp-mystery-frame" role="img" aria-label="Mystery image — answer to reveal">
+              <span className="gp-mystery-rays" aria-hidden="true"/>
+              <span className="gp-mystery-dash gp-mystery-dash-l" aria-hidden="true"/>
+              <span className="gp-mystery-dash gp-mystery-dash-r" aria-hidden="true"/>
+              <span className="gp-mystery-spark gp-mystery-spark-a" aria-hidden="true"/>
+              <span className="gp-mystery-spark gp-mystery-spark-b" aria-hidden="true"/>
+              <img className="gp-mystery-mark" src="/mystery-question.webp" alt="" aria-hidden="true" draggable="false"/>
+            </div>
+          </div>
           <div className="ans-btns">
             {[
               {cat:"A",label:cq._catA,img:game.categoryAImage,color:PALETTE.find(p=>p.id===(game.categoryAColor||"teal"))||PALETTE[0]},
@@ -3716,14 +3777,17 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
                       {cat==="A"?"🎲":"🎬"}
                     </div>
                   )}
-                  <FitText className="ans-box-label" min={11} max={labelMax} buffer={10} style={{color:isDark?"white":"var(--black)",textShadow:isDark?"1px 2px 0 rgba(0,0,0,0.2)":"none",WebkitTextStroke:isDark?"0.5px rgba(0,0,0,0.2)":"0"}}>
+                  <FitText className="ans-box-label" min={14} max={labelMax} buffer={4}
+                    onFit={size=>setLabelFit(f=>f[cat]===size?f:{...f,[cat]:size})}
+                    forceSize={labelFit.A&&labelFit.B?Math.min(labelFit.A,labelFit.B):undefined}
+                    style={{color:isDark?"white":"var(--black)",textShadow:isDark?"1px 2px 0 rgba(0,0,0,0.2)":"none",WebkitTextStroke:isDark?"0.5px rgba(0,0,0,0.2)":"0"}}>
                     {label}
                   </FitText>
                 </button>
               );
             })}
           </div>
-        </>
+        </div>
       )}
 
       {phase==="beat"&&(
@@ -3740,6 +3804,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
               It stays first in the DOM so it is announced and read before the
               media, and CSS alone moves the media above it visually. */}
           <div className={`gp-verdict ${isRight?"ok":"no"}`} role="status">
+            <span className="gp-verdict-gleam" aria-hidden="true"/>
             <span className="gp-verdict-emoji" aria-hidden="true">{isRight?"🎉":"😬"}</span>
             <span className="gp-verdict-word">{isRight?"Correct!":"Nope!"}</span>
             {/* The category is presented as a label after a dash rather than in a
@@ -3752,19 +3817,25 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
 
           {cq.explanationCopy&&(
             <section className="gp-panel gp-panel-info">
+              <PanelIcon kind="info"/>
               <h3 className="gp-panel-lbl">Actual info</h3>
               <p className="gp-panel-body">{cq.explanationCopy}</p>
             </section>
           )}
           {cq.flavorCopy&&(
             <section className="gp-panel gp-panel-fun">
+              <PanelIcon kind="fun"/>
               <h3 className="gp-panel-lbl">Needless commentary</h3>
               <p className="gp-panel-body">{cq.flavorCopy}</p>
             </section>
           )}
 
           <button className="btn btn-yellow gp-next" onClick={handleNext}>
-            {isLast?"See my score!! →":"Next question →"}
+            {isLast?"See my score!!":"Next question"}
+            {/* The label already says where it goes, so the arrow is decoration. */}
+            <svg className="gp-next-arrow" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 12h15M13 5.5l6.5 6.5-6.5 6.5" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </button>
         </div>
       )}
