@@ -1,0 +1,311 @@
+/* ================= RESULTS (layout + integration pass) =================
+   The Results content keeps its existing components and styles (score,
+   perfect banner, pips, share box, Game Show Recap, crowd cards, Nerd Mode,
+   countdown). This file only places them inside the shared warm backdrop and
+   PageHeader, and makes the layout respond to the space it's given.
+
+   Layout follows the width of .rs-page (a size container), not the viewport,
+   so Admin preview -- which renders the same content inside a 500px shell --
+   keeps the phone layout on a desktop screen.
+
+   Selectors are prefixed with .rs-page because App.jsx's inline <style>
+   block is injected after this file and would otherwise win every tie. */
+
+.main:has(> .rs-wrap) {
+  max-width: none;
+  padding: 0;
+}
+
+.rs-wrap {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 16px 40px;
+}
+
+/* Same reasoning as Archive: Results is a long page, so on phones the candy
+   layer stays pinned to the viewport instead of stretching down the page. */
+@media (max-width: 599px) {
+  .rs-wrap .candy-bg {
+    position: fixed;
+    inset: 0;
+    height: auto;
+  }
+}
+
+/* The header sits above the confetti layer; everything else stays beneath. */
+.rs-wrap .pgh-hdr {
+  position: relative;
+  z-index: 50;
+}
+.rs-confetti {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+}
+
+.rs-page {
+  container: rs / inline-size;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+}
+@media (min-width: 960px) {
+  .rs-page { max-width: none; }
+}
+
+.rs-page .rs-card {
+  padding: 22px 18px 24px;
+}
+@container rs (min-width: 860px) {
+  .rs-page .rs-card { padding: 30px 34px 32px; }
+}
+
+/* ===== REPLAY STATUS =====
+   Status, not identity: a flat strip rather than a second teal pill. */
+.rs-page .rs-replay {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 14px;
+  margin-bottom: 12px;
+  background: linear-gradient(180deg, #E4FBF7 0%, #CDF5EE 100%);
+  border: 1.5px solid rgba(15, 148, 136, 0.55);
+  border-radius: 999px;
+  font-family: 'Fredoka One', cursive;
+  font-size: 13px;
+  color: var(--teal-dark);
+  position: relative;
+}
+
+/* ===== PUZZLE TITLE =====
+   A heading, not a button-shaped pill, so long titles wrap as titles. */
+.rs-page .rs-title-block {
+  margin: 0 auto 14px;
+  max-width: 42em;
+  position: relative;
+}
+.rs-page .rs-kicker {
+  font-family: 'Fredoka One', cursive;
+  font-size: 12px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--teal-dark);
+  margin-bottom: 4px;
+}
+.rs-page .rs-title {
+  font-family: 'Fredoka One', cursive;
+  font-weight: 400;
+  font-size: clamp(19px, 4.6cqi, 26px);
+  line-height: 1.15;
+  color: var(--black);
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+/* The trophy and "PERFECT SCORE!!" break as a balanced pair on phones. */
+.rs-page .perfect-title {
+  font-size: clamp(22px, 7cqi, 28px);
+  text-wrap: balance;
+}
+
+/* ===== SCORE + SHARE ===== */
+.rs-page .score-msg { margin-bottom: 6px; }
+
+/* Rows are balanced by balancedPipColumns(): the width cap below holds
+   exactly that many. */
+.rs-page .rs-pips {
+  max-width: calc(var(--pips-narrow) * 36px - 8px);
+  margin: 6px auto 2px;
+  padding: 6px 0 10px;
+}
+@container rs (min-width: 560px) {
+  .rs-page .rs-pips { max-width: calc(var(--pips-wide) * 36px - 8px); }
+}
+
+/* The staggered pop-in entrance, then -- once every pip has landed -- a
+   pop-and-bounce wave across them every 4.8s, 80ms apart in DOM order (so on
+   a 7 + 6 phone layout it runs straight on into the second row). Each pip
+   swells to 1.35x as it hops 6px, squashes on landing, rebounds once, then
+   settles exactly back to rest. Transform only: pips never fade, remount or
+   change colour, and nothing around them moves. --i is each pip's index.
+   Timings below are percentages of the 4.8s cycle (1% = 48ms). */
+.rs-page .rs-pips .emoji-cell {
+  animation:
+    popIn .4s cubic-bezier(.34,1.56,.64,1) backwards,
+    rsPipBounce 4.8s linear infinite;
+  animation-delay:
+    calc(var(--i) * 65ms),
+    calc(2s + var(--i) * 80ms);
+}
+@keyframes rsPipBounce {
+  0%    { transform: translateY(0) scale(1);            animation-timing-function: cubic-bezier(.2,.7,.35,1); }
+  5%    { transform: translateY(-6px) scale(1.35);      animation-timing-function: cubic-bezier(.55,0,.8,.4); }
+  9%    { transform: translateY(1px) scale(1.14, .86);  animation-timing-function: ease-out; }
+  11.5% { transform: translateY(-1.5px) scale(.95, 1.06); animation-timing-function: ease-in-out; }
+  14%, 100% { transform: translateY(0) scale(1); }
+}
+
+.rs-page .rs-share { margin-top: 8px; }
+.rs-page .rs-share-preview {
+  container-type: inline-size;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+/* The pip line never wraps: it shrinks to fit the preview instead. */
+.rs-page .rs-share-pips {
+  white-space: nowrap;
+  font-size: min(1em, calc(100cqi / var(--pip-line-ems)));
+}
+.rs-page .rs-share-btn { margin: 0; }
+
+/* Phones: the preview keeps only the lines unique to this game (title, and
+   score with pips). The brand line and URL are still in the copied text --
+   they're just not repeated on a narrow screen, so the crowd arrives sooner. */
+@container rs (max-width: 559px) {
+  .rs-page .rs-share-preview > div:first-child,
+  .rs-page .rs-share-preview > div:last-child { display: none; }
+}
+
+/* Desktop: score on the left, sharing on the right -- the same order,
+   side by side. Replay has no share block and stays a single column. */
+@container rs (min-width: 860px) {
+  .rs-page .rs-hero-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: 28px;
+    align-items: center;
+  }
+  .rs-page .rs-hero-split .rs-share { margin-top: 0; }
+}
+
+.rs-page .results-jazz { margin: 12px 0; }
+/* Sized to stay on one line down to 360px instead of wrapping to two; on
+   anything narrower it still wraps rather than clipping. */
+.rs-page .results-marquee-main {
+  font-size: clamp(16px, calc((100cqi - 76px) / 14.6), 22px);
+  text-wrap: balance;
+}
+
+/* ===== HOW THE CROWD SURVIVED ===== */
+.rs-page .crowd-wrap {
+  container: crowd / inline-size;
+}
+@container crowd (min-width: 700px) {
+  .rs-page .crowd-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rs-page .advanced-panel { grid-template-columns: 1fr 1fr; }
+}
+
+/* Nerd Mode: each question shows how the audience split between the two
+   categories (A always left, B always right, in their gameplay colours),
+   which side was correct, and which side this player picked. Category
+   colour, ✓ Correct and YOU are three separate signals. The visual split is
+   aria-hidden; .rs-sr carries the same result as one sentence. */
+.rs-page .advanced-card { padding: 9px 12px 10px; }
+.rs-page .rs-split { margin-top: 7px; }
+.rs-page .rs-split-bar {
+  display: flex;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1.5px solid rgba(26, 26, 26, 0.22);
+  background: rgba(26, 26, 26, 0.06);
+}
+.rs-page .rs-split-bar > span { display: block; min-width: 0; }
+/* A thin light seam where the two colours meet. */
+.rs-page .rs-split-bar > span + span { box-shadow: inset 2px 0 0 rgba(255, 255, 255, 0.85); }
+.rs-page .rs-split-sides {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 6px;
+}
+.rs-page .rs-side { min-width: 0; }
+.rs-page .rs-side-b { text-align: right; }
+.rs-page .rs-side-label {
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--black);
+  overflow-wrap: anywhere;
+}
+/* Percentage on its own line, category name always on the line(s) below,
+   so both sides' percentages and names line up across the card. */
+.rs-page .rs-side-pct {
+  display: block;
+  font-family: 'Fredoka One', cursive;
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.rs-page .rs-side-name {
+  display: block;
+  margin-top: 1px;
+}
+.rs-page .rs-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid;
+  margin-right: 4px;
+  vertical-align: 1px;
+}
+.rs-page .rs-split-marks {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 5px;
+}
+.rs-page .rs-marks { display: flex; gap: 4px; }
+.rs-page .rs-you,
+.rs-page .rs-correct {
+  font-family: 'Fredoka One', cursive;
+  font-size: 10.5px;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.rs-page .rs-you { background: var(--black); color: #fff; }
+.rs-page .rs-correct {
+  background: var(--green-light);
+  color: var(--green-dark);
+  border: 1.5px solid rgba(21, 128, 61, 0.45);
+}
+.rs-page .rs-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ===== FOOTER: back + countdown ===== */
+.rs-page .rs-foot {
+  margin-top: 16px;
+  display: grid;
+  gap: 14px;
+}
+.rs-page .rs-foot .cdown-box { margin-top: 0; }
+@container rs (min-width: 860px) {
+  .rs-page .rs-foot-split {
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rs-page .rs-pips .emoji-cell { animation: none; }
+}

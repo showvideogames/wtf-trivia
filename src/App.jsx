@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import "./home.css";
 import "./game.css";
 import "./archive.css";
+import "./results.css";
 import { preloadImage, getImageStatus, primeActiveWindow } from "./mediaPreloader.js";
 import {
   demoGames as devDemoGames,
@@ -92,10 +93,10 @@ const styles = `
     cursor: default;
   }
 
-  /* ===== WARM SPOTLIGHT BACKDROP (landing page + Archive) =====
+  /* ===== WARM SPOTLIGHT BACKDROP (landing page, Archive, Results) =====
      Two fixed layers behind all content, so no existing element needed
-     restyling. Both are inert decoration. Shared by the homepage and
-     Archive so the two feel like the same visual family; every other
+     restyling. Both are inert decoration. Shared by the homepage, Archive
+     and Results so they feel like the same visual family; every other
      screen keeps the legacy yellow dots (or, for gameplay, its own
      quieter GameBackdrop cousin below). */
 
@@ -1115,28 +1116,6 @@ const styles = `
     height: 16%;
     border-radius: 18px 18px 50% 50%;
     background: linear-gradient(180deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,0) 100%);
-    pointer-events: none;
-  }
-
-  .score-theme-tag {
-    display: inline-block;
-    background: linear-gradient(180deg, #5EEAD4 0%, #2DD4BF 55%, #0F9488 100%);
-    border: 2.5px solid var(--teal-dark);
-    border-radius: var(--r-pill);
-    padding: 5px 16px;
-    font-family: 'Fredoka One', cursive;
-    font-size: 13px;
-    box-shadow: 0 3px 0 var(--teal-dark);
-    margin-bottom: 14px;
-    color: var(--black);
-    position: relative;
-  }
-  .score-theme-tag::after {
-    content: '';
-    position: absolute;
-    inset: 3px;
-    border-radius: var(--r-pill);
-    background: linear-gradient(180deg, rgba(255,255,255,.45) 0%, transparent 60%);
     pointer-events: none;
   }
 
@@ -2521,6 +2500,8 @@ async function dbGetPuzzleCommunityStats(date, userScore){
       const correct = Number(correctCounts[idx]||0);
       return {
         index: idx,
+        answered,
+        correct,
         correctRate: answered ? Math.round(correct/answered*100) : 0
       };
     });
@@ -2751,11 +2732,10 @@ async function readOptimizedImageFile(file,preset="default"){
 function averageScoreCopy(score,total){
   return `Average chaos level: ${score}/${total}`;
 }
+// beatRate counts every finisher who scored the same as you or lower (you
+// and anyone tied included), so the copy says exactly that at every level.
 function beatRateCopy(rate){
-  if(rate>=90) return `You crushed ${rate}% of the crowd`;
-  if(rate>=60) return `You out-weirded ${rate}% of players`;
-  if(rate>=35) return `You edged out ${rate}% of players`;
-  return `You survived better than ${rate}% of players`;
+  return `You scored as well as or better than ${rate}% of players.`;
 }
 function perfectRateCopy(rate){
   if(rate===0) return "Nobody else nailed a perfect score yet";
@@ -3846,7 +3826,26 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
 }
 
 // ---- SCORE ----
-function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
+// Nerd Mode audience split. Every answer is one of the two categories, so the
+// share choosing each side follows from the correct count and the answer key.
+// The correct side is rounded exactly like "N% of players got it right" and
+// the other side takes the remainder, so the pair always adds to 100.
+function categorySplit(correctCategory,correctCount,answeredCount){
+  if(!(answeredCount>0)||(correctCategory!=="A"&&correctCategory!=="B")) return null;
+  const correctPct=Math.round(correctCount/answeredCount*100);
+  return correctCategory==="A"?{A:correctPct,B:100-correctPct}:{A:100-correctPct,B:correctPct};
+}
+
+// Pips per row, balanced so a long puzzle never leaves a lonely last pip:
+// 13 answers at a max of 8 per row become 7 + 6, not 8 + 5.
+function balancedPipColumns(count,maxPerRow){
+  if(count<=0) return 1;
+  return Math.ceil(count/Math.ceil(count/maxPerRow));
+}
+
+// withChrome: the real Results page, with the shared warm backdrop and page
+// header. Admin preview renders the bare content inside its own shell.
+function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false,withChrome=false,player,onAccount,onAdmin}){
   const safeRecord = {
     themeTitle: gameRecord?.themeTitle||"Puzzle Results",
     score: Number.isFinite(gameRecord?.score) ? gameRecord.score : 0,
@@ -3855,7 +3854,6 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
     date: gameRecord?.date||null
   };
   const[copied,setCopied]=useState(false);
-  const[animKey,setAnimKey]=useState(0);
   const[communityStats,setCommunityStats]=useState(null);
   const[showAdvanced,setShowAdvanced]=useState(false);
   const{play}=sound;
@@ -3864,12 +3862,6 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
 
   useEffect(()=>{
     if(isPerfect){play("perfect");shoot("perfect");}
-  },[]);
-
-  // Replay the dot animation every 3s while idle
-  useEffect(()=>{
-    const id=setInterval(()=>setAnimKey(k=>k+1), 3000);
-    return()=>clearInterval(id);
   },[]);
 
   useEffect(()=>{
@@ -3885,12 +3877,35 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
   const txt=buildShare(safeRecord);
   const share=()=>{try{navigator.clipboard.writeText(txt);}catch{}setCopied(true);setTimeout(()=>setCopied(false),2000);};
 
-  return(
-    <div>
-      <canvas ref={canvasRef} id="confetti-canvas-score" style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:9999}}/>
-      <div className="score-card">
-        {isReplay&&<div style={{background:"linear-gradient(160deg,#5EEAD4,#2DD4BF 55%,#0F9488)",color:"var(--black)",fontFamily:"'Fredoka One',cursive",fontSize:13,padding:"8px 16px",borderRadius:16,marginBottom:12,border:"2.5px solid var(--teal-dark)",boxShadow:"0 4px 0 var(--teal-dark)",position:"relative"}}>📼 Replay — not saved to your stats</div>}
-        <div className="score-theme-tag">🍬 {safeRecord.themeTitle}</div>
+  // The on-screen preview shows the copied text line by line. Only the pip
+  // line is shrunk to fit its box (never wrapped); the text on the
+  // clipboard is untouched.
+  const shareLines=txt.split("\n");
+  const pipCount=safeRecord.answers.length;
+  const pipLineEms=(`${safeRecord.score}/${safeRecord.totalQuestions} `.length*0.62)+pipCount*1.3+0.4;
+
+  // Nerd Mode: the two categories exactly as gameplay shows them (A left,
+  // B right, same colours), and this player's own pick per question, matched
+  // by its saved questionIndex. No saved index or pick means no YOU marker.
+  const nerdCategories={
+    A:{name:game?.categoryA||"Category A",color:PALETTE.find(p=>p.id===(game?.categoryAColor||"teal"))||PALETTE[0]},
+    B:{name:game?.categoryB||"Category B",color:PALETTE.find(p=>p.id===(game?.categoryBColor||"pink"))||PALETTE[1]}
+  };
+  const playerPicks=new Map(
+    safeRecord.answers
+      .filter(a=>Number.isInteger(a?.questionIndex)&&(a.chosenCategory==="A"||a.chosenCategory==="B"))
+      .map(a=>[a.questionIndex,a.chosenCategory])
+  );
+
+  const content=(
+    <div className="rs-page">
+      <canvas ref={canvasRef} id="confetti-canvas-score" className="rs-confetti"/>
+      <div className="score-card rs-card">
+        {isReplay&&<div className="rs-replay" role="status"><span aria-hidden="true">📼</span> Replay — not saved to your stats</div>}
+        <div className="rs-title-block">
+          <div className="rs-kicker">{isReplay&&safeRecord.date?`🍬 Puzzle from ${archiveDateLabel(safeRecord.date)}`:"🍬 Today's puzzle"}</div>
+          <h1 className="rs-title">{safeRecord.themeTitle}</h1>
+        </div>
 
         {isPerfect&&(
           <div className="perfect-banner">
@@ -3899,22 +3914,35 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
           </div>
         )}
 
-        <div className="score-big">
-          {safeRecord.score}<span className="score-denom">/{safeRecord.totalQuestions}</span>
-        </div>
-        <div className="score-sublbl">questions correct</div>
-        <div className="score-msg">{scoreMsg(safeRecord.score,safeRecord.totalQuestions||1)}</div>
+        <div className={`rs-hero${isReplay?"":" rs-hero-split"}`}>
+          <div className="rs-hero-score">
+            <div className="score-big">
+              {safeRecord.score}<span className="score-denom">/{safeRecord.totalQuestions}</span>
+            </div>
+            <div className="score-sublbl">questions correct</div>
+            <div className="score-msg">{scoreMsg(safeRecord.score,safeRecord.totalQuestions||1)}</div>
 
-        <div className="emoji-grid" key={animKey}>
-          {safeRecord.answers.map((a,i)=>(
-            <div key={i} className={`emoji-cell ${a.correct?'correct-dot':'wrong-dot'}`} style={{animationDelay:`${i*65}ms`}}/>
-          ))}
-        </div>
+            <div className="emoji-grid rs-pips"
+                 style={{"--pips-narrow":balancedPipColumns(pipCount,8),"--pips-wide":balancedPipColumns(pipCount,13)}}>
+              {safeRecord.answers.map((a,i)=>(
+                <div key={i} className={`emoji-cell ${a.correct?'correct-dot':'wrong-dot'}`} style={{"--i":i}}/>
+              ))}
+            </div>
+          </div>
 
-        {!isReplay&&<><div className="share-box">{txt}</div>
-        <button className="btn btn-pink" onClick={share} style={{marginBottom:10}}>
-          {copied?"✓ Copied to clipboard!!":"Copy & Share 📋"}
-        </button></>}
+          {!isReplay&&(
+            <div className="rs-share">
+              <div className="share-box rs-share-preview" style={{"--pip-line-ems":pipLineEms}}>
+                {shareLines.map((line,i)=>(
+                  <div key={i} className={i===shareLines.length-2?"rs-share-pips":undefined}>{line}</div>
+                ))}
+              </div>
+              <button className="btn btn-pink rs-share-btn" onClick={share}>
+                {copied?"✓ Copied to clipboard!!":"Copy & Share 📋"}
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="results-jazz">
           <div className="results-marquee">
@@ -3951,29 +3979,93 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false}){
               </div>
             </div>
             <div className="crowd-foot">Only finished first attempts count. Replays do not mess with the scoreboard.</div>
-            <button className="btn-sm advanced-toggle" onClick={()=>setShowAdvanced(v=>!v)}>
+            <button className="btn-sm advanced-toggle" onClick={()=>setShowAdvanced(v=>!v)} aria-expanded={showAdvanced}>
               {showAdvanced?"Hide Nerd Mode":"Show Nerd Mode"}
             </button>
             {showAdvanced&&(
               <div className="advanced-panel">
-                {(Array.isArray(communityStats.questionAccuracies)?communityStats.questionAccuracies:[]).map((q,idx)=>(
-                  <div key={q.index} className="advanced-card">
-                    <div className="advanced-card-top">Question {idx+1}</div>
-                    <div className="advanced-card-title">{game?.questions?.[idx]?.itemText||"Accuracy"}</div>
-                    <div className="advanced-card-sub">{q.correctRate}% of players got it right</div>
-                  </div>
-                ))}
+                {(Array.isArray(communityStats.questionAccuracies)?communityStats.questionAccuracies:[]).map(q=>{
+                  const question=game?.questions?.[q.index];
+                  const correctCat=question?.correctCategory;
+                  const split=categorySplit(correctCat,q.correct,q.answered);
+                  const pick=playerPicks.get(q.index);
+                  const summary=split&&[
+                    ...["A","B"].map(cat=>`${split[cat]}% chose ${nerdCategories[cat].name}${cat===correctCat?", the correct answer":""}.`),
+                    pick?`You chose ${nerdCategories[pick].name}.`:""
+                  ].join(" ").trim();
+                  return(
+                    <div key={q.index} className="advanced-card">
+                      <div className="advanced-card-top">Question {q.index+1}</div>
+                      <div className="advanced-card-title">{question?.itemText||"Accuracy"}</div>
+                      {!(q.answered>0)?(
+                        <div className="advanced-card-sub">No community answers for this one yet.</div>
+                      ):(
+                        <div className="advanced-card-sub">{q.correctRate}% of players got it right</div>
+                      )}
+                      {split&&(
+                        <>
+                          <div className="rs-split" aria-hidden="true">
+                            <div className="rs-split-bar">
+                              {["A","B"].map(cat=>{
+                                const c=nerdCategories[cat].color;
+                                return <span key={cat} style={{flexBasis:`${split[cat]}%`,background:`linear-gradient(180deg,${c.light} 0%,${c.mid} 100%)`}}/>;
+                              })}
+                            </div>
+                            <div className="rs-split-sides">
+                              {["A","B"].map(cat=>{
+                                const c=nerdCategories[cat].color;
+                                return(
+                                  <div key={cat} className={`rs-side rs-side-${cat.toLowerCase()}`}>
+                                    <div className="rs-side-label">
+                                      <span className="rs-side-pct" style={{color:c.isDark?c.dark:"var(--black)"}}>
+                                        <span className="rs-swatch" style={{background:c.mid,borderColor:c.dark}}/>{split[cat]}%
+                                      </span>
+                                      <span className="rs-side-name">{nerdCategories[cat].name}</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {/* One shared marker row: A's markers hug the left
+                                edge, B's the right, so two pills on one side
+                                never have to squeeze into a half-width column. */}
+                            <div className="rs-split-marks">
+                              {["A","B"].map(cat=>(
+                                <div key={cat} className={`rs-marks rs-marks-${cat.toLowerCase()}`}>
+                                  {pick===cat&&<span className="rs-you">YOU</span>}
+                                  {correctCat===cat&&<span className="rs-correct">✓ Correct</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <span className="rs-sr">{summary}</span>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
         )}
 
-        <button className="btn btn-yellow" onClick={()=>onNav(isReplay?"archive":"home")}>
-          {isReplay?"← Back to archive":"← Back to home"}
-        </button>
+        <div className={`rs-foot${isReplay?"":" rs-foot-split"}`}>
+          <button className="btn btn-yellow" onClick={()=>onNav(isReplay?"archive":"home")}>
+            {isReplay?"← Back to archive":"← Back to home"}
+          </button>
 
-        {!isReplay&&<Countdown/>}
+          {!isReplay&&<Countdown/>}
+        </div>
       </div>
+    </div>
+  );
+
+  if(!withChrome) return content;
+  return(
+    <div className="rs-wrap">
+      <LandingBackdrop/>
+      <PageHeader sound={sound} onBack={()=>onNav("home")} player={player} onAccount={onAccount} onAdmin={onAdmin}/>
+      {content}
     </div>
   );
 }
@@ -4003,8 +4095,7 @@ function StatsScreen({stats,onNav}){
 // ---- REUSABLE INTERNAL-PAGE HEADER ----
 // Logo centred between two button clusters, same proven grid approach as the
 // gameplay header (equal side tracks so neither can crowd the logo out of
-// legibility at 360px). Archive uses it now; Results can adopt it later
-// without any changes here. Admin only ever appears behind the existing
+// legibility at 360px). Used by Archive and Results. Admin only ever appears behind the existing
 // SHOW_ADMIN_LINK flag -- this header never shows it unconditionally.
 function PageHeader({sound,onBack,onHelp,player,onAccount,onAdmin}){
   const signedIn = player && !player.isGuest;
@@ -4868,6 +4959,8 @@ export default function WhatTheFudgeTrivia(){
 
   const todayGame = games.find(g=>g.date===today&&g.status==="published") || null;
   const isGameplay = view==="game"||view==="replay";
+  // Results carries its own warm backdrop and PageHeader, like Archive.
+  const isResults = view==="score"||view==="replay-score";
 
   // Home-idle preload: once the player is looking at Home with an unfinished
   // puzzle in front of them, quietly warm just the single image they'd see
@@ -5098,13 +5191,13 @@ export default function WhatTheFudgeTrivia(){
   return(
     <>
       <style>{styles}</style>
-      <div className={`app${view!=="home"&&view!=="archive"&&!isGameplay?" legacy-dots":""}${isGameplay?" gp-fullscreen":""}`}>
+      <div className={`app${view!=="home"&&view!=="archive"&&!isGameplay&&!isResults?" legacy-dots":""}${isGameplay?" gp-fullscreen":""}`}>
         {view==="home"&&<LandingBackdrop/>}
         {isGameplay&&<GameBackdrop/>}
-        {/* Gameplay and Archive each carry their own public header (logo,
+        {/* Gameplay, Archive and Results each carry their own public header (logo,
             sound, help, account) and backdrop. Every other screen keeps the
             existing shared header unchanged. */}
-        {view!=="home"&&view!=="archive"&&!isGameplay&&<div className="hdr">
+        {view!=="home"&&view!=="archive"&&!isGameplay&&!isResults&&<div className="hdr">
           <div className="logo">
             <div className="logo-line1"><span className="logo-what">What The</span></div>
             <div className="logo-line2"><span className="logo-fudge">Fudge</span><span className="logo-emoji">🍬</span></div>
@@ -5168,7 +5261,9 @@ export default function WhatTheFudgeTrivia(){
           )}
 
           {view==="score"&&gameRecord&&(
-            <ScoreScreen gameRecord={gameRecord} game={todayGame} onNav={setView} sound={sound}/>
+            <ScoreScreen gameRecord={gameRecord} game={todayGame} onNav={setView} sound={sound}
+              withChrome player={player} onAccount={()=>setView("account")}
+              onAdmin={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}/>
           )}
 
           {view==="replay-score"&&replayRecord&&(
@@ -5178,6 +5273,8 @@ export default function WhatTheFudgeTrivia(){
                 onNav={v=>{if(v==="archive")setView("archive");else setView(v);}}
                 sound={sound}
                 isReplay={true}
+                withChrome player={player} onAccount={()=>setView("account")}
+                onAdmin={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}
             />
           )}
 
