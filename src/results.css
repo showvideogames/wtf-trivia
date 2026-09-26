@@ -126,21 +126,26 @@
 }
 
 /* The staggered pop-in entrance, then -- once every pip has landed -- a
-   scale-only wave across them every 5s, in DOM order (so on a 7 + 6 phone
-   layout it runs straight on into the second row). Transform only: pips
-   never fade, remount or change colour, and nothing around them moves.
-   --i is each pip's index. */
+   pop-and-bounce wave across them every 4.8s, 80ms apart in DOM order (so on
+   a 7 + 6 phone layout it runs straight on into the second row). Each pip
+   swells to 1.35x as it hops 6px, squashes on landing, rebounds once, then
+   settles exactly back to rest. Transform only: pips never fade, remount or
+   change colour, and nothing around them moves. --i is each pip's index.
+   Timings below are percentages of the 4.8s cycle (1% = 48ms). */
 .rs-page .rs-pips .emoji-cell {
   animation:
     popIn .4s cubic-bezier(.34,1.56,.64,1) backwards,
-    rsPipWave 5s ease-in-out infinite;
+    rsPipBounce 4.8s linear infinite;
   animation-delay:
     calc(var(--i) * 65ms),
-    calc(2s + var(--i) * 62ms);
+    calc(2s + var(--i) * 80ms);
 }
-@keyframes rsPipWave {
-  0%, 13%, 100% { transform: scale(1); }
-  6.5%          { transform: scale(1.17); }
+@keyframes rsPipBounce {
+  0%    { transform: translateY(0) scale(1);            animation-timing-function: cubic-bezier(.2,.7,.35,1); }
+  5%    { transform: translateY(-6px) scale(1.35);      animation-timing-function: cubic-bezier(.55,0,.8,.4); }
+  9%    { transform: translateY(1px) scale(1.14, .86);  animation-timing-function: ease-out; }
+  11.5% { transform: translateY(-1.5px) scale(.95, 1.06); animation-timing-function: ease-in-out; }
+  14%, 100% { transform: translateY(0) scale(1); }
 }
 
 .rs-page .rs-share { margin-top: 8px; }
