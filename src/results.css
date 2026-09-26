@@ -1,0 +1,214 @@
+/* ================= RESULTS (layout + integration pass) =================
+   The Results content keeps its existing components and styles (score,
+   perfect banner, pips, share box, Game Show Recap, crowd cards, Nerd Mode,
+   countdown). This file only places them inside the shared warm backdrop and
+   PageHeader, and makes the layout respond to the space it's given.
+
+   Layout follows the width of .rs-page (a size container), not the viewport,
+   so Admin preview -- which renders the same content inside a 500px shell --
+   keeps the phone layout on a desktop screen.
+
+   Selectors are prefixed with .rs-page because App.jsx's inline <style>
+   block is injected after this file and would otherwise win every tie. */
+
+.main:has(> .rs-wrap) {
+  max-width: none;
+  padding: 0;
+}
+
+.rs-wrap {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 16px 40px;
+}
+
+/* Same reasoning as Archive: Results is a long page, so on phones the candy
+   layer stays pinned to the viewport instead of stretching down the page. */
+@media (max-width: 599px) {
+  .rs-wrap .candy-bg {
+    position: fixed;
+    inset: 0;
+    height: auto;
+  }
+}
+
+/* The header sits above the confetti layer; everything else stays beneath. */
+.rs-wrap .pgh-hdr {
+  position: relative;
+  z-index: 50;
+}
+.rs-confetti {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+}
+
+.rs-page {
+  container: rs / inline-size;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+}
+@media (min-width: 960px) {
+  .rs-page { max-width: none; }
+}
+
+.rs-page .rs-card {
+  padding: 22px 18px 24px;
+}
+@container rs (min-width: 860px) {
+  .rs-page .rs-card { padding: 30px 34px 32px; }
+}
+
+/* ===== REPLAY STATUS =====
+   Status, not identity: a flat strip rather than a second teal pill. */
+.rs-page .rs-replay {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 14px;
+  margin-bottom: 12px;
+  background: linear-gradient(180deg, #E4FBF7 0%, #CDF5EE 100%);
+  border: 1.5px solid rgba(15, 148, 136, 0.55);
+  border-radius: 999px;
+  font-family: 'Fredoka One', cursive;
+  font-size: 13px;
+  color: var(--teal-dark);
+  position: relative;
+}
+
+/* ===== PUZZLE TITLE =====
+   A heading, not a button-shaped pill, so long titles wrap as titles. */
+.rs-page .rs-title-block {
+  margin: 0 auto 14px;
+  max-width: 42em;
+  position: relative;
+}
+.rs-page .rs-kicker {
+  font-family: 'Fredoka One', cursive;
+  font-size: 12px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--teal-dark);
+  margin-bottom: 4px;
+}
+.rs-page .rs-title {
+  font-family: 'Fredoka One', cursive;
+  font-weight: 400;
+  font-size: clamp(19px, 4.6cqi, 26px);
+  line-height: 1.15;
+  color: var(--black);
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+/* The trophy and "PERFECT SCORE!!" break as a balanced pair on phones. */
+.rs-page .perfect-title {
+  font-size: clamp(22px, 7cqi, 28px);
+  text-wrap: balance;
+}
+
+/* ===== SCORE + SHARE ===== */
+.rs-page .score-msg { margin-bottom: 6px; }
+
+/* Pips pop in once and then stay put. Rows are balanced by
+   balancedPipColumns(): the width cap below holds exactly that many. */
+.rs-page .rs-pips {
+  max-width: calc(var(--pips-narrow) * 36px - 8px);
+  margin: 6px auto 2px;
+  padding: 6px 0 10px;
+}
+@container rs (min-width: 560px) {
+  .rs-page .rs-pips { max-width: calc(var(--pips-wide) * 36px - 8px); }
+}
+
+.rs-page .rs-share { margin-top: 8px; }
+.rs-page .rs-share-preview {
+  container-type: inline-size;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+/* The pip line never wraps: it shrinks to fit the preview instead. */
+.rs-page .rs-share-pips {
+  white-space: nowrap;
+  font-size: min(1em, calc(100cqi / var(--pip-line-ems)));
+}
+.rs-page .rs-share-btn { margin: 0; }
+
+/* Phones: the preview keeps only the lines unique to this game (title, and
+   score with pips). The brand line and URL are still in the copied text --
+   they're just not repeated on a narrow screen, so the crowd arrives sooner. */
+@container rs (max-width: 559px) {
+  .rs-page .rs-share-preview > div:first-child,
+  .rs-page .rs-share-preview > div:last-child { display: none; }
+}
+
+/* Desktop: score on the left, sharing on the right -- the same order,
+   side by side. Replay has no share block and stays a single column. */
+@container rs (min-width: 860px) {
+  .rs-page .rs-hero-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: 28px;
+    align-items: center;
+  }
+  .rs-page .rs-hero-split .rs-share { margin-top: 0; }
+}
+
+.rs-page .results-jazz { margin: 12px 0; }
+/* Sized to stay on one line down to 360px instead of wrapping to two; on
+   anything narrower it still wraps rather than clipping. */
+.rs-page .results-marquee-main {
+  font-size: clamp(16px, calc((100cqi - 76px) / 14.6), 22px);
+  text-wrap: balance;
+}
+
+/* ===== HOW THE CROWD SURVIVED ===== */
+.rs-page .crowd-wrap {
+  container: crowd / inline-size;
+}
+@container crowd (min-width: 700px) {
+  .rs-page .crowd-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rs-page .advanced-panel { grid-template-columns: 1fr 1fr; }
+}
+
+/* Nerd Mode: a simple bar under each question for quick scanning. The text
+   percentage below it stays the accessible value. */
+.rs-page .advanced-card { padding: 9px 12px 10px; }
+.rs-page .rs-bar {
+  height: 10px;
+  margin-top: 7px;
+  border-radius: 999px;
+  background: rgba(26, 26, 26, 0.08);
+  border: 1.5px solid rgba(26, 26, 26, 0.16);
+  overflow: hidden;
+}
+.rs-page .rs-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5EEAD4 0%, #2DD4BF 55%, #0F9488 100%);
+}
+
+/* ===== FOOTER: back + countdown ===== */
+.rs-page .rs-foot {
+  margin-top: 16px;
+  display: grid;
+  gap: 14px;
+}
+.rs-page .rs-foot .cdown-box { margin-top: 0; }
+@container rs (min-width: 860px) {
+  .rs-page .rs-foot-split {
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rs-page .emoji-cell { animation: none; }
+}
