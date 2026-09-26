@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 /* A minimal, controllable stand-in for the DOM Image constructor. Each
    instance is recorded so a test can find it and manually fire onload /
@@ -154,5 +154,135 @@ describe("mediaPreloader: active-window selection", () => {
     expect(requestCountFor("q0")).toBe(1);
     expect(requestCountFor("q1")).toBe(1);
     expect(requestCountFor("q2")).toBe(1);
+  });
+});
+
+describe("mediaPreloader: missing and invalid URLs", () => {
+  it("treats missing, null, blank and malformed values as no usable image", async () => {
+    const { usableMediaUrl } = await import("./mediaPreloader.js");
+    for (const bad of [undefined, null, "", "   ", "null", "undefined", 42, {}, [], "javascript:alert(1)", "data:text/html,hi", String.raw`C:\art\cat.png`, "mailto:a@b.c"]) {
+      expect(usableMediaUrl(bad)).toBe(null);
+    }
+    expect(usableMediaUrl(" https://example.com/a.webp ")).toBe("https://example.com/a.webp");
+    expect(usableMediaUrl("/mystery-question.webp")).toBe("/mystery-question.webp");
+    expect(usableMediaUrl("//cdn.example.com/a.png")).toBe("//cdn.example.com/a.png");
+    expect(usableMediaUrl("blob:http://localhost:5173/abc")).toBe("blob:http://localhost:5173/abc");
+    expect(usableMediaUrl("data:image/png;base64,iVBOR")).toBe("data:image/png;base64,iVBOR");
+    expect(usableMediaUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    // Legacy formats already referenced by existing puzzles keep rendering.
+    expect(usableMediaUrl("https://x.supabase.co/storage/v1/object/public/wtf-images/questions/1.gif")).toBe("https://x.supabase.co/storage/v1/object/public/wtf-images/questions/1.gif");
+    expect(usableMediaUrl("https://example.com/art.svg")).toBe("https://example.com/art.svg");
+    expect(usableMediaUrl("data:image/svg+xml;charset=utf-8,%3Csvg%3E")).toBe("data:image/svg+xml;charset=utf-8,%3Csvg%3E");
+    expect(usableMediaUrl("data:image/gif;base64,R0lGOD")).toBe("data:image/gif;base64,R0lGOD");
+  });
+
+  it("never requests anything for missing or invalid values", async () => {
+    const { preloadImage, getImageStatus } = await import("./mediaPreloader.js");
+    for (const bad of [undefined, null, "", "  ", "javascript:void(0)", 7]) {
+      expect(await preloadImage(bad)).toBe("none");
+      expect(getImageStatus(bad)).toBe("none");
+    }
+    expect(FakeImage.instances.length).toBe(0);
+  });
+
+  it("skips missing and invalid entries in the active window and survives a non-array", async () => {
+    const { primeActiveWindow } = await import("./mediaPreloader.js");
+    const urls = [undefined, "", "https://example.com/c.jpg", null];
+    expect(primeActiveWindow(urls, 0, "puzzle-missing")).toEqual(["https://example.com/c.jpg"]);
+    expect(FakeImage.instances.length).toBe(1);
+    expect(primeActiveWindow(undefined, 0, "puzzle-none")).toEqual([]);
+  });
+});
+
+describe("mediaPreloader: bounded decode wait", () => {
+  // An Image whose decode() the test controls: "resolve", "reject" or "hang".
+  function imageWithDecode(mode) {
+    return class extends FakeImage {
+      decode() {
+        this.decodeCalls = (this.decodeCalls || 0) + 1;
+        if (mode === "resolve") return Promise.resolve();
+        if (mode === "reject") return Promise.reject(new Error("EncodingError"));
+        return new Promise(() => {}); // never settles
+      }
+    };
+  }
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("1. decode resolves normally: loaded, and the timeout is cleared", async () => {
+    vi.stubGlobal("Image", imageWithDecode("resolve"));
+    const { preloadImage, getImageStatus } = await import("./mediaPreloader.js");
+    const url = "https://example.com/ok.webp";
+    const p = preloadImage(url);
+    FakeImage.instances.at(-1).onload();
+    expect(await p).toBe("loaded");
+    expect(getImageStatus(url)).toBe("loaded");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("2. decode rejects: still loaded, and the timeout is cleared", async () => {
+    vi.stubGlobal("Image", imageWithDecode("reject"));
+    const { preloadImage } = await import("./mediaPreloader.js");
+    const p = preloadImage("https://example.com/decode-rejects.webp");
+    FakeImage.instances.at(-1).onload();
+    expect(await p).toBe("loaded");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("3. decode never settles after a successful load: loaded after ~3 s, never 'error'", async () => {
+    vi.stubGlobal("Image", imageWithDecode("hang"));
+    const { preloadImage, getImageStatus, DECODE_TIMEOUT_MS } = await import("./mediaPreloader.js");
+    expect(DECODE_TIMEOUT_MS).toBe(3000);
+    const url = "https://example.com/big-animated.gif";
+    const p = preloadImage(url);
+    const img = FakeImage.instances.at(-1);
+    img.onload();
+    expect(img.decodeCalls).toBe(1);
+    await vi.advanceTimersByTimeAsync(DECODE_TIMEOUT_MS - 1);
+    expect(getImageStatus(url)).toBe("pending");
+    // A second caller while decode is still hanging reuses the same request.
+    const again = preloadImage(url);
+    expect(requestCountFor(url)).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await p).toBe("loaded");
+    expect(await again).toBe("loaded");
+    expect(getImageStatus(url)).toBe("loaded");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("4. a genuine load failure is 'error' at once and starts no decode timer", async () => {
+    vi.stubGlobal("Image", imageWithDecode("hang"));
+    const { preloadImage, getImageStatus } = await import("./mediaPreloader.js");
+    const url = "https://example.com/404.webp";
+    const p = preloadImage(url);
+    const img = FakeImage.instances.at(-1);
+    img.onerror();
+    expect(await p).toBe("error");
+    expect(getImageStatus(url)).toBe("error");
+    expect(img.decodeCalls).toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("5. a missing or blank URL makes no request and starts no timer", async () => {
+    vi.stubGlobal("Image", imageWithDecode("hang"));
+    const { preloadImage, getImageStatus } = await import("./mediaPreloader.js");
+    for (const url of [undefined, null, "", "   "]) {
+      expect(await preloadImage(url)).toBe("none");
+      expect(getImageStatus(url)).toBe("none");
+    }
+    expect(FakeImage.instances.length).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("keeps the active window at current + next two while decodes hang", async () => {
+    vi.stubGlobal("Image", imageWithDecode("hang"));
+    const { primeActiveWindow } = await import("./mediaPreloader.js");
+    const urls = ["h0", "h1", "h2", "h3", "h4"];
+    expect(primeActiveWindow(urls, 0, "puzzle-hang")).toEqual(["h0", "h1", "h2"]);
+    FakeImage.instances.forEach((img) => img.onload());
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(primeActiveWindow(urls, 1, "puzzle-hang")).toEqual(["h1", "h2", "h3"]);
+    for (const u of ["h0", "h1", "h2", "h3"]) expect(requestCountFor(u)).toBe(1);
+    expect(requestCountFor("h4")).toBe(0);
   });
 });

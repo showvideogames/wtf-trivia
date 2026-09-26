@@ -27,6 +27,10 @@
 
 const cache = new Map(); // url -> {status:'pending'|'loaded'|'error', promise}
 
+// How long to wait for decode() after an image has loaded before treating
+// it as ready anyway.
+export const DECODE_TIMEOUT_MS = 3000;
+
 // Concurrency control here is the window itself: it is capped at 3 questions
 // (current + next two) by primeActiveWindow below, so at most 3 requests are
 // ever in flight for gameplay purposes at any one time -- a hard ceiling by
@@ -50,7 +54,10 @@ function startLoad(url) {
   entry.promise = new Promise((resolve) => {
     const img = new Image();
     img.decoding = "async";
+    let settled = false;
     const settle = (status) => {
+      if (settled) return;
+      settled = true;
       entry.status = status;
       resolve(status);
     };
@@ -61,7 +68,16 @@ function startLoad(url) {
       // counts as "ready" -- decode is a paint-smoothness optimization, not
       // a correctness gate.
       if (typeof img.decode === "function") {
-        img.decode().then(() => settle("loaded")).catch(() => settle("loaded"));
+        // Some engines leave decode() pending indefinitely (seen with a page
+        // that isn't being drawn). Only this wait is bounded -- the download
+        // already finished -- and running out of time still means "loaded",
+        // never "error": the <img> will simply decode as it paints.
+        const timer = setTimeout(() => settle("loaded"), DECODE_TIMEOUT_MS);
+        const done = () => {
+          clearTimeout(timer);
+          settle("loaded");
+        };
+        img.decode().then(done, done);
       } else {
         settle("loaded");
       }
@@ -95,14 +111,39 @@ function rememberPuzzle(key, urls) {
   }
 }
 
+/**
+ * The media URL worth requesting, or null for "no usable image": missing,
+ * null, blank or non-string values, the strings "null"/"undefined" left by
+ * hand-edited JSON, and anything that doesn't resolve to an http(s), blob:
+ * or data:image URL (javascript:, file paths like C:\..., other schemes).
+ * Relative paths are fine. Everything that reads a question's imageUrl goes
+ * through this, so a malformed value can never reach the preloader or the
+ * reveal's ratio logic. A well-formed URL that 404s is not caught here; the
+ * preloader reports it as "error" and the reveal shows "Image unavailable".
+ */
+export function usableMediaUrl(value) {
+  if (typeof value !== "string") return null;
+  const url = value.trim();
+  if (!url || url === "null" || url === "undefined") return null;
+  if (/^data:/i.test(url)) return /^data:image\//i.test(url) ? url : null;
+  try {
+    const { protocol } = new URL(url, "https://relative.invalid/");
+    return protocol === "https:" || protocol === "http:" || protocol === "blob:" ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Start (or reuse) a preload for one URL. Never rejects. */
-export function preloadImage(url) {
+export function preloadImage(value) {
+  const url = usableMediaUrl(value);
   if (!url) return Promise.resolve("none");
   return startLoad(url).promise;
 }
 
 /** Synchronous read of a URL's current cache status, if any. */
-export function getImageStatus(url) {
+export function getImageStatus(value) {
+  const url = usableMediaUrl(value);
   if (!url) return "none";
   const entry = cache.get(url);
   return entry ? entry.status : "unknown";
@@ -126,8 +167,9 @@ export function getImageStatus(url) {
  *   tests and callers that want to know exactly what was requested.
  */
 export function primeActiveWindow(urls, currentIndex, puzzleKey) {
+  const list = Array.isArray(urls) ? urls : [];
   const windowUrls = [...new Set(
-    [urls[currentIndex], urls[currentIndex + 1], urls[currentIndex + 2]].filter(Boolean)
+    [list[currentIndex], list[currentIndex + 1], list[currentIndex + 2]].map(usableMediaUrl).filter(Boolean)
   )];
   if (puzzleKey) rememberPuzzle(puzzleKey, windowUrls);
   windowUrls.forEach((url) => startLoad(url));
