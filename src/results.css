@@ -222,6 +222,8 @@
 }
 @container crowd (min-width: 700px) {
   .rs-page .crowd-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* Crowd Showdown left out (no honest comparison): two cards, no gap. */
+  .rs-page .crowd-grid.crowd-grid-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rs-page .advanced-panel { grid-template-columns: 1fr 1fr; }
 }
 

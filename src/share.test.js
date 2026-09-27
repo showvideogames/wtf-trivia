@@ -27,7 +27,7 @@ describe("buildResultsShareText", () => {
         "OR\n" +
         "Pro Hockey Player? 🏒\n" +
         "🔴🔴🔴🟢🟢🟢🟢🟢🔴🔴\n" +
-        "5/10 ➜ Better than 20%\n" +
+        "5/10 ➜ Beat 20% of players\n" +
         "whatthefudgetrivia.com"
     );
   });
@@ -92,9 +92,9 @@ describe("buildResultsShareText", () => {
     }
   });
 
-  it("says 'Better than 0%' when several finished and nobody scored lower", () => {
+  it("says 'Beat 0% of players' when several finished and nobody scored lower", () => {
     const lines = buildResultsShareText({ game: HOCKEY, record: recordFrom("0000000000"), histogram: { 0: 1, 4: 2, 7: 5 } }).split("\n");
-    expect(lines[4]).toBe("0/10 ➜ Better than 0%");
+    expect(lines[4]).toBe("0/10 ➜ Beat 0% of players");
   });
 });
 
@@ -104,11 +104,8 @@ describe("strictlyBetterPercent", () => {
     expect(strictlyBetterPercent({ 2: 1, 5: 3, 6: 8, 9: 8 }, 6)).toBe(20);
   });
 
-  it("differs from the tied-or-better Crowd Showdown number", () => {
-    const histogram = { 4: 2, 5: 3, 7: 5 };
-    const tiedOrBetter = Math.round(((2 + 3) / 10) * 100); // Crowd Showdown's formula
-    expect(tiedOrBetter).toBe(50);
-    expect(strictlyBetterPercent(histogram, 5)).toBe(20);
+  it("Mario Kart: 51 finishers, three at 8/8, 48 lower: 94", () => {
+    expect(strictlyBetterPercent({ 3: 10, 5: 18, 7: 20, 8: 3 }, 8)).toBe(94);
   });
 
   it("returns null for the only finisher", () => {
@@ -133,7 +130,7 @@ describe("strictlyBetterPercent", () => {
     expect(strictlyBetterPercent({ 0: 99999, 10: 1 }, 10)).toBe(99);
   });
 
-  it("refuses a histogram that doesn't include you (never 'Better than 100%')", () => {
+  it("refuses a histogram that doesn't include you (never 'Beat 100% of players')", () => {
     // Stats read before your game was counted: everyone in it scored lower.
     expect(strictlyBetterPercent({ 3: 40, 6: 101 }, 10)).toBeNull();
   });
@@ -161,5 +158,29 @@ describe("strictlyBetterPercent", () => {
         expect(strictlyBetterPercent({ 0: lower, 10: atScore }, 10)).toBeLessThanOrEqual(99);
       }
     }
+  });
+});
+
+describe("strictlyBetterPercent for unsaved scores (includesPlayer: false)", () => {
+  const unsaved = (histogram, score) => strictlyBetterPercent(histogram, score, { includesPlayer: false });
+
+  it("needs no one at your score", () => {
+    expect(unsaved({ 2: 5, 4: 6, 7: 9, 13: 1 }, 6)).toBe(52);
+    expect(strictlyBetterPercent({ 2: 5, 4: 6, 7: 9, 13: 1 }, 6)).toBeNull();
+  });
+
+  it("works with a single historical finisher, capped at 99", () => {
+    expect(unsaved({ 4: 1 }, 10)).toBe(99);
+    expect(unsaved({ 4: 1 }, 2)).toBe(0);
+  });
+
+  it("returns null with no historical finishers or no data", () => {
+    expect(unsaved({}, 5)).toBeNull();
+    expect(unsaved(null, 5)).toBeNull();
+    expect(unsaved({ 3: 2 }, NaN)).toBeNull();
+  });
+
+  it("is never above 99", () => {
+    for (let total = 1; total <= 300; total++) expect(unsaved({ 0: total }, 10)).toBe(99);
   });
 });

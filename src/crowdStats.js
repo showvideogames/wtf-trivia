@@ -20,7 +20,7 @@
    counted twice.
    ============================================================ */
 
-import { buildResultsShareText } from "./share.js";
+import { buildResultsShareText, strictlyBetterPercent } from "./share.js";
 
 // Waits before the 2nd and 3rd read after the save. Three reads at most,
 // ~1.3s of waiting.
@@ -90,6 +90,20 @@ export async function saveThenLoadCrowdStats({ save, fetchStats, score, onSaved,
 // date and score. Anything else means "not available".
 export function crowdStatsFor(crowd, record) {
   return crowd?.status === "ready" && crowd.date === record?.date && crowd.score === record?.score ? crowd.stats : null;
+}
+
+// Crowd Showdown's "You beat N% of players": the share text's number
+// (strictlyBetterPercent), from stats whose histogram accounts for every
+// finisher. Null (no comparison shown) for missing or inconsistent stats.
+// saved: true (today's saved result) keeps the check that the player is in
+// the stats, so it is also null for the only finisher or a histogram without
+// anyone at this score. saved: false (Replay, Admin Preview: never saved)
+// compares against all historical finishers, with no exact-score bucket
+// needed.
+export function crowdBeatPercent(stats, score, { saved = true } = {}) {
+  return isConsistent(stats)
+    ? strictlyBetterPercent(stats.scoreHistogram, score, { includesPlayer: saved })
+    : null;
 }
 
 // The histogram to share for this record, or null.

@@ -7,7 +7,7 @@
      OR
      Pro Hockey Player? 🏒
      🔴🔴🔴🟢🟢🟢🟢🟢🔴🔴
-     5/10 ➜ Better than 20%
+     5/10 ➜ Beat 20% of players
      whatthefudgetrivia.com
    ============================================================ */
 
@@ -22,8 +22,9 @@ export function shareCategoryName(shareName, categoryName, fallback) {
   return normal || fallback;
 }
 
-// Share of finishers who scored strictly lower than `score`, from the
-// puzzle's score histogram ({ "<score>": <players> }), which must already
+// Share of finishers who scored strictly lower than `score`: the "Beat N% of
+// players" in the share text and in Crowd Showdown. Read from the puzzle's
+// score histogram ({ "<score>": <players> }), which must already
 // include this player's own finished game (see crowdStats.js). Players tied
 // with you are not beaten, so they never count toward the number; everyone,
 // you included exactly once, counts toward the total. Rounded down, so the
@@ -31,7 +32,12 @@ export function shareCategoryName(shareName, categoryName, fallback) {
 // never beat yourself, the result is at most 99. Returns null when there is
 // no honest comparison: no data, a histogram without anyone at your score
 // (so you aren't counted), or you as the only finisher. Nobody lower is 0.
-export function strictlyBetterPercent(histogram, score) {
+//
+// includesPlayer: false is for scores that are never saved (Replay, Admin
+// Preview): the histogram is just the historical finishers, so no one needs
+// to be at your score, and one historical finisher is enough. The same
+// strictly-lower count over all of them, still rounded down and capped at 99.
+export function strictlyBetterPercent(histogram, score, { includesPlayer = true } = {}) {
   if (!histogram || typeof histogram !== "object" || !Number.isFinite(score)) return null;
   let total = 0;
   let lower = 0;
@@ -44,8 +50,8 @@ export function strictlyBetterPercent(histogram, score) {
     if (bucketScore < score) lower += players;
     if (bucketScore === score) atScore += players;
   }
-  if (atScore < 1 || total < 2) return null;
-  return Math.floor((lower / total) * 100);
+  if (includesPlayer ? atScore < 1 || total < 2 : total < 1) return null;
+  return Math.min(99, Math.floor((lower / total) * 100));
 }
 
 // The full copied text. `record` is the finished game record (score,
@@ -62,7 +68,7 @@ export function buildResultsShareText({ game, record, histogram }) {
     "OR",
     shareCategoryName(game?.categoryBShareName, game?.categoryB, "Category B"),
     dots,
-    percent === null ? `${score}/${total}` : `${score}/${total} ➜ Better than ${percent}%`,
+    percent === null ? `${score}/${total}` : `${score}/${total} ➜ Beat ${percent}% of players`,
     SHARE_DOMAIN,
   ].join("\n");
 }
