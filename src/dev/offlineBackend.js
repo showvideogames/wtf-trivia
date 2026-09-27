@@ -444,3 +444,24 @@ export function devReset() {
     /* ignore */
   }
 }
+
+/* ---- Admin saves (offline preview only) ----
+   Puzzles saved or published in the admin editor are kept in memory for this
+   page session, so the save flow and the saved puzzle can be exercised
+   without a database. Set localStorage "wtf-dev-db" to "fail" to rehearse a
+   database write that fails. */
+const savedGameRows = new Map();
+
+export function devSaveGameRow(row) {
+  let mode = null;
+  try { mode = localStorage.getItem("wtf-dev-db"); } catch { /* ignore */ }
+  if (mode === "fail") throw new Error("Simulated database failure (wtf-dev-db=fail)");
+  savedGameRows.set(row.id, JSON.parse(JSON.stringify(row)));
+}
+
+export function devMergeSavedGames(games, rowToGame) {
+  const saved = [...savedGameRows.values()].map(rowToGame);
+  const ids = new Set(saved.map((g) => g.id));
+  return [...saved, ...games.filter((g) => !ids.has(g.id))].sort((a, b) => b.date.localeCompare(a.date));
+}
+
