@@ -5,6 +5,7 @@ import "./game.css";
 import "./archive.css";
 import "./results.css";
 import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from "./mediaPreloader.js";
+import { archivePuzzleImages, describeImageWarning, failureReason, imageName, isWarningResolved } from "./admin/publishImages.js";
 import {
   demoGames as devDemoGames,
   devPlayer,
@@ -14,6 +15,8 @@ import {
   devCompleteGame,
   devGetStats,
   devCommunityStats,
+  devSaveGameRow,
+  devMergeSavedGames,
 } from "./dev/offlineBackend.js";
 
 // ============================================================
@@ -1890,6 +1893,54 @@ const styles = `
     background: rgba(255,255,255,.08); color: #fff; font: 800 11px 'Nunito', sans-serif; cursor: pointer;
   }
   .img-error-actions button.primary { background: var(--yellow); border-color: var(--yellow); color: #1a1a1a; }
+  .img-drop-zone:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+  .img-field-flash .img-uploader { animation: img-field-flash 1.6s ease-out; }
+  @keyframes img-field-flash { 0%,40% { box-shadow: 0 0 0 3px var(--yellow); } 100% { box-shadow: 0 0 0 0 transparent; } }
+  @media (prefers-reduced-motion: reduce) { .img-field-flash .img-uploader { animation: none; outline: 2px solid var(--yellow); } }
+
+  /* ===== ADMIN NOTICES (inline, beside Save/Publish) ===== */
+  .adm-notice {
+    display: flex; align-items: flex-start; gap: 8px;
+    margin-top: 10px; padding: 8px 10px;
+    border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06);
+    font-size: 13px; font-weight: 700; line-height: 1.4; color: rgba(255,255,255,.9);
+  }
+  .adm-notice .img-spinner { margin-top: 3px; }
+  .adm-notice-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .adm-notice.success { background: rgba(34,197,94,.12); border-color: rgba(34,197,94,.35); }
+  .adm-notice.info { background: rgba(56,189,248,.1); border-color: rgba(56,189,248,.32); }
+  .adm-notice.error { background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.45); }
+  .adm-notice-x {
+    flex: none; width: 26px; height: 26px; margin: -3px -4px -3px 0;
+    border: 0; border-radius: 6px; background: transparent;
+    color: rgba(255,255,255,.75); font-size: 18px; line-height: 1; cursor: pointer;
+  }
+  .adm-notice-x:hover, .adm-notice-x:focus-visible { background: rgba(255,255,255,.12); color: #fff; outline: none; }
+  .adm-warn {
+    margin-top: 10px; padding: 10px 12px;
+    border-radius: 10px; border: 1px solid rgba(250,204,21,.5); background: rgba(250,204,21,.1);
+    font-size: 13px; line-height: 1.45; color: rgba(255,255,255,.9);
+  }
+  .adm-warn-head { display: flex; align-items: flex-start; gap: 8px; }
+  .adm-warn-head h4 { flex: 1; margin: 0; font: 900 14px/1.3 'Nunito', sans-serif; color: var(--yellow); }
+  .adm-warn-body { margin: 6px 0 0; font-weight: 700; }
+  .adm-warn-one { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; }
+  .adm-warn-why { font-size: 12px; font-weight: 700; color: rgba(255,255,255,.62); }
+  .adm-warn-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+  .adm-warn-list li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; padding-top: 8px; border-top: 1px solid rgba(250,204,21,.2); }
+  .adm-warn-name { font-weight: 900; overflow-wrap: anywhere; }
+  .adm-warn-list .adm-warn-why { grid-column: 1; }
+  .adm-warn-list .adm-warn-btn { grid-column: 2; grid-row: 1 / span 2; }
+  .adm-warn-btn {
+    padding: 5px 10px; border-radius: 7px; border: 0; background: var(--yellow); color: #1a1a1a;
+    font: 800 12px 'Nunito', sans-serif; cursor: pointer; white-space: nowrap;
+  }
+  .adm-warn-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .adm-warn-done { margin: 8px 0 0; font-size: 12px; font-weight: 800; color: rgb(74,222,128); }
+  @media (max-width: 420px) {
+    .adm-warn-list li { grid-template-columns: 1fr; }
+    .adm-warn-list .adm-warn-btn { grid-column: 1; grid-row: auto; justify-self: start; }
+  }
   .img-preview-label {
     position: absolute;
     top: 6px; left: 6px;
@@ -2338,45 +2389,70 @@ async function uploadBytesToStorage(body, mime, folder="images"){
   if(!res.ok) throw new Error(`Image upload failed: ${await res.text()}`);
   return `${STORAGE_PUBLIC_PREFIX}${filename}`;
 }
+// An error from copying one image, tagged so the Admin can say why in plain
+// words (see failureReason in admin/publishImages.js).
+function imageCopyError(code, extra={}){
+  return Object.assign(new Error(extra.reason || code), {code, ...extra});
+}
+// Uploads an image still held inline as a data: URI (from a draft saved before
+// uploads happened on pick). Handles both base64 and URL-encoded data URIs.
 async function uploadImage(dataUri, folder="images"){
   if(!dataUri || !dataUri.startsWith("data:")) return dataUri; // already a URL
-  const [meta, b64] = dataUri.split(",");
-  const mime = meta.match(/:(.*?);/)[1];
-  const bytes = Uint8Array.from(atob(b64), c=>c.charCodeAt(0));
-  return uploadBytesToStorage(bytes, mime, folder);
+  const comma = dataUri.indexOf(",");
+  const meta = dataUri.slice(5, comma);
+  const payload = dataUri.slice(comma+1);
+  const mime = meta.split(";")[0] || "image/png";
+  let bytes;
+  try{
+    bytes = /;base64/i.test(meta)
+      ? Uint8Array.from(atob(payload), c=>c.charCodeAt(0))
+      : new TextEncoder().encode(decodeURIComponent(payload));
+  }catch{
+    throw imageCopyError("optimize", {reason:"The image data saved in this draft is damaged."});
+  }
+  return uploadCopy(bytes, mime, folder);
+}
+async function uploadCopy(body, mime, folder){
+  try{ return await uploadBytesToStorage(body, mime, folder); }
+  catch(e){ console.error(e); throw imageCopyError("upload"); }
 }
 // The admin-only optimizer, fetched the first time an image is processed so
 // it never ships in the player bundle.
 const loadImageOptimizer = ()=>import("./admin/imageOptimizer.js");
 
-async function importExternalImageUrl(value, {folder="images", preset="question", label="image"}={}){
+// Copies a pasted external image into storage. Throws a tagged error (never
+// a bare one) so the caller can keep the existing link and explain why.
+async function importExternalImageUrl(value, {folder="images", preset="question"}={}){
   if(!isImportableExternalImageUrl(value)) return value;
   let response;
   try{
     response = await withTimeout(
       fetch(value, {mode:"cors", redirect:"follow"}),
       IMPORT_IMAGE_TIMEOUT_MS,
-      `Import timed out for ${label}.`
+      "timeout"
     );
-  }catch{
-    throw new Error(`Couldn't import ${label}. Try uploading the image file instead.`);
+  }catch(e){
+    // A host that sends no CORS headers, or can't be reached, lands here:
+    // the browser won't hand over the bytes, even though <img> can show them.
+    throw imageCopyError(e?.message==="timeout" ? "timeout" : "blocked");
   }
-  if(!response.ok) throw new Error(`Couldn't import ${label}. The image URL returned ${response.status}.`);
+  if(!response.ok) throw imageCopyError("http", {status:response.status});
   const type = response.headers.get("content-type") || "";
-  const blob = await response.blob();
+  let blob;
+  try{ blob = await response.blob(); }catch{ throw imageCopyError("blocked"); }
   const mime = blob.type || type;
-  if(!mime.startsWith("image/")) throw new Error(`Couldn't import ${label}. That URL did not return an image.`);
+  if(!mime.startsWith("image/")) throw imageCopyError("not-image");
   let optimized;
   try{
     const { optimizeImage } = await loadImageOptimizer();
     optimized = await optimizeImage(blob, preset, {acceptAvif:true});
   }catch(e){
     // A pasted GIF/SVG/etc. was always archived exactly as fetched; keep
-    // doing that rather than failing the publish over a format we don't convert.
-    if(e?.name==="ImageOptimizeError" && (e.code==="unsupported" || e.code==="animated")) return uploadBytesToStorage(blob, mime, folder);
-    throw new Error(`Couldn't import ${label}. ${e?.name==="ImageOptimizeError" ? e.message : "Try uploading the image file instead."}`);
+    // doing that rather than failing over a format we don't convert.
+    if(e?.name==="ImageOptimizeError" && (e.code==="unsupported" || e.code==="animated")) return uploadCopy(blob, mime, folder);
+    throw imageCopyError("optimize", {reason: e?.name==="ImageOptimizeError" ? e.message : "The image couldn't be processed."});
   }
-  return uploadBytesToStorage(optimized.blob, optimized.mime, folder);
+  return uploadCopy(optimized.blob, optimized.mime, folder);
 }
 async function prepareImageForSave(value, options, archiveExternal=false){
   if(!value) return value;
@@ -2421,7 +2497,7 @@ function rowToGame(r){
 
 // ===== DB FUNCTIONS — GAMES =====
 async function dbLoadGames(){
-  if(OFFLINE_PREVIEW) return devDemoGames();
+  if(OFFLINE_PREVIEW) return devMergeSavedGames(devDemoGames(), rowToGame);
   const rows = await sbFetch("/rest/v1/games?select=*&order=date.desc");
   return (rows||[]).map(rowToGame);
 }
@@ -2429,35 +2505,46 @@ async function dbLoadPublishedGames(){
   const rows = await sbFetch("/rest/v1/games?select=*&status=eq.published&order=date.desc");
   return (rows||[]).map(rowToGame);
 }
+const IMAGE_SAVE_OPTIONS = {
+  header:{folder:"headers", preset:"header"},
+  category:{folder:"categories", preset:"category"},
+  question:{folder:"questions", preset:"question"}
+};
+// Saves a puzzle. Copying its images into storage is best effort and never
+// blocks the save: each image is tried on its own (inline data: images are
+// uploaded; on publish, pasted external links are copied too), a failure
+// keeps that image's existing value, and all failures come back together as
+// imageFailures. The save itself only succeeds when the database confirms
+// the row; anything else throws, and nothing is reported as saved.
 async function dbSaveGame(game){
-  // Upload pasted files immediately; archive external image URLs only once the puzzle is published.
   const archiveExternal = game.status==="published";
-  const toUpload = [
-    ["categoryAImage", {folder:"categories", preset:"category", label:"Category A image"}],
-    ["categoryBImage", {folder:"categories", preset:"category", label:"Category B image"}],
-    ["headerImage", {folder:"headers", preset:"header", label:"header image"}]
-  ];
-  const uploaded = {...game};
-  for(const [field, options] of toUpload){
-    uploaded[field] = await prepareImageForSave(uploaded[field], options, archiveExternal);
-  }
-  // Also upload question images
-  if(uploaded.questions){
-    uploaded.questions = await Promise.all(uploaded.questions.map(async q=>{
-      const original = q.imageUrl;
-      const imageUrl = await prepareImageForSave(original, {folder:"questions", preset:"question", label:`question image${q.itemText?` for "${q.itemText}"`:""}`}, archiveExternal);
-      if(imageUrl!==original && isImportableExternalImageUrl(original)) return {...q, imageUrl, originalImageUrl:q.originalImageUrl||original};
-      if(imageUrl!==original) return {...q, imageUrl};
-      return q;
-    }));
-  }
-  const row = gameToRow(uploaded);
-  await sbFetch("/rest/v1/games", {
-    method:"POST",
-    headers:{"Prefer":"resolution=merge-duplicates"},
-    body: JSON.stringify(row)
+  const { game: uploaded, failures } = await archivePuzzleImages(game, {
+    archive: (url, target)=>prepareImageForSave(url, IMAGE_SAVE_OPTIONS[target.kind], archiveExternal),
+    isExternal: isImportableExternalImageUrl
   });
-  return uploaded;
+  const row = gameToRow(uploaded);
+  if(OFFLINE_PREVIEW){
+    devSaveGameRow(row);
+  }else{
+    const saved = await sbFetch("/rest/v1/games", {
+      method:"POST",
+      headers:{"Prefer":"resolution=merge-duplicates,return=representation"},
+      body: JSON.stringify(row)
+    });
+    const confirmed = Array.isArray(saved) && saved.some(r=>r.id===row.id && r.date===row.date && r.status===row.status);
+    if(!confirmed) throw new Error("The database didn't confirm the save.");
+  }
+  return { game: uploaded, imageFailures: failures };
+}
+// A short, plain reason for a failed database write.
+function describeSaveError(e){
+  const msg = String(e?.message||"");
+  if(/Failed to fetch|NetworkError|Load failed/i.test(msg)) return "the database couldn't be reached. Check your connection.";
+  const status = msg.match(/Supabase error (\d{3})/)?.[1];
+  if(status==="401"||status==="403") return "the database refused the change (permission denied).";
+  if(status) return `the database returned an error (${status}).`;
+  if(msg.includes("didn't confirm")) return "the database didn't confirm the save.";
+  return "something went wrong while saving.";
 }
 async function dbDeleteGame(id){
   await sbFetch(`/rest/v1/games?id=eq.${encodeURIComponent(id)}`, {method:"DELETE"});
@@ -3135,7 +3222,7 @@ function isUploadedImageValue(v){
 }
 function roughBytes(n){return n<1024*1024?`${Math.max(1,Math.round(n/1024))} KB`:`${(n/1024/1024).toFixed(1)} MB`;}
 
-function ImageUploader({value:rawValue, onChange, label="Image", compact=false, preset="question", allowYouTube=false, onBusyChange}){
+function ImageUploader({value:rawValue, onChange, label="Image", compact=false, preset="question", allowYouTube=false, onBusyChange, fieldId}){
   const value = typeof rawValue==="string" ? rawValue : "";
   const[tab,setTab]=useState(value&&!isUploadedImageValue(value)?"url":"upload");
   const[urlDraft,setUrlDraft]=useState(value&&!isUploadedImageValue(value)?value:"");
@@ -3251,7 +3338,7 @@ function ImageUploader({value:rawValue, onChange, label="Image", compact=false, 
   const shownReport = !busy && !error && report && report.url===value ? report : null;
 
   return(
-    <div className={`adm-field img-uploader-wrap preset-${preset}${compact?" compact":""}`}>
+    <div id={fieldId} className={`adm-field img-uploader-wrap preset-${preset}${compact?" compact":""}`}>
       {label&&<label>{label}</label>}
       <div className="img-uploader">
         <div className="img-tab-row">
@@ -3260,7 +3347,8 @@ function ImageUploader({value:rawValue, onChange, label="Image", compact=false, 
         </div>
 
         {tab==="upload"&&(
-          <label className={`img-drop-zone${busy?" busy":""}`} aria-busy={busy}>
+          <label className={`img-drop-zone${busy?" busy":""}`} aria-busy={busy} tabIndex={busy?-1:0}
+                 onKeyDown={e=>{if((e.key==="Enter"||e.key===" ")&&!busy){e.preventDefault();fileRef.current?.click();}}}>
             <input ref={fileRef} type="file" accept={UPLOAD_ACCEPT} onChange={handleFile} disabled={busy} style={{display:"none"}}/>
             <div style={{fontSize:compact?18:24}}>📸</div>
             <div className="img-drop-lbl" role="status" aria-live="polite">
@@ -4774,7 +4862,10 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
   const[editQ,setEditQ]=useState(null);
   const[dragQId,setDragQId]=useState(null);
   const[dragOverQId,setDragOverQId]=useState(null);
-  const[toast,setToast]=useState(null);
+  const[notice,setNotice]=useState(null); // {kind:"success"|"info"|"progress"|"error", text}
+  const[imageWarning,setImageWarning]=useState(null); // {items, action} after a save with image failures
+  const[saving,setSaving]=useState(false);
+  const[focusImage,setFocusImage]=useState(null); // field id to scroll to once it renders
   const[preview,setPreview]=useState(false);
   const[autoSaveState,setAutoSaveState]=useState("idle");
   const[lastAutoSavedAt,setLastAutoSavedAt]=useState(()=>safeRead(getEditorDraftKey(ig.id))?.savedAt||null);
@@ -4783,7 +4874,17 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
   const[busyImages,setBusyImages]=useState({});
   const trackImage=key=>busy=>setBusyImages(m=>Boolean(m[key])===busy?m:{...m,[key]:busy});
   const imagesBusy=Object.values(busyImages).some(Boolean);
-  const st=(m,ms=2100)=>{setToast(m);setTimeout(()=>setToast(null),ms);};
+  // Success notes clear after ~4 s and information after ~8 s; errors and
+  // warnings stay until dismissed or resolved. All render inline next to the
+  // Save/Publish buttons, so nothing floats over the controls on a phone.
+  const say=(kind,text)=>setNotice({kind,text,at:Date.now()});
+  useEffect(()=>{
+    if(!notice) return;
+    const ms = notice.kind==="success" ? 4000 : notice.kind==="info" ? 8000 : 0;
+    if(!ms) return;
+    const id = setTimeout(()=>setNotice(n=>n===notice?null:n), ms);
+    return ()=>clearTimeout(id);
+  },[notice]);
   const set=(f,v)=>setGame(g=>({...g,[f]:v}));
   const qc=game.questions?.length??0;
   const ok=qc>=4&&qc<=15;
@@ -4791,8 +4892,8 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
   const dateOk = Boolean(localDateFromISO(game.date)) && !dateConflict;
   const canPublish = ok && dateOk;
   const validateDate = () => {
-    if(!localDateFromISO(game.date)){st("Pick a puzzle date first.");return false;}
-    if(dateConflict){st(`That day already has "${dateConflict.themeTitle||"another puzzle"}".`);return false;}
+    if(!localDateFromISO(game.date)){say("error","Pick a puzzle date first.");return false;}
+    if(dateConflict){say("error",`That day already has "${dateConflict.themeTitle||"another puzzle"}". Pick another date.`);return false;}
     return true;
   };
 
@@ -4823,9 +4924,70 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
     return ()=>clearTimeout(timer);
   },[game]);
 
-  const pub=async()=>{if(!validateDate())return;if(!ok){st(`Need 4–15 questions (have ${qc})`);return;}const s={...game,status:"published"};st("Publishing + archiving images... ⏳",8000);try{const saved=await onSave(s);clearEditorDraft((saved||s).id);setGame(saved||s);setLastAutoSavedAt(null);setAutoSaveState("idle");}catch(e){st(e?.message||"Save failed 😬",6000);}};
-  const dft=async()=>{if(!validateDate())return;const s={...game,status:game.status==="published"?"published":"draft"};if(!s.id)s.id=`g-${Date.now()}`;if(!s.questions)s.questions=[];st("Saving... ⏳");try{const saved=await onSave(s);clearEditorDraft((saved||s).id);setGame(saved||s);setLastAutoSavedAt(null);setAutoSaveState("idle");}catch(e){st(e?.message||"Save failed 😬",6000);}};
-  const waitForImages=()=>{if(imagesBusy){st("Hang on, an image is still uploading…");return true;}return false;};
+  // One save path for Publish and Save Draft. "Published"/"Saved" is only
+  // ever shown after onSave resolves, i.e. after the database confirmed it.
+  const save=async publish=>{
+    if(saving) return;
+    const s={...game,status:publish||game.status==="published"?"published":"draft"};
+    if(!s.id)s.id=`g-${Date.now()}`;
+    if(!s.questions)s.questions=[];
+    const action = publish ? "Published" : "Saved";
+    setSaving(true);
+    say("progress", publish ? "Publishing… copying images into permanent storage." : "Saving…");
+    try{
+      const {game:saved, imageFailures, listRefreshed} = await onSave(s);
+      clearEditorDraft(saved.id);
+      setGame(saved);
+      setLastAutoSavedAt(null);
+      setAutoSaveState("idle");
+      setImageWarning(imageFailures.length ? {items:imageFailures, action} : null);
+      if(!listRefreshed) say("info", `${action}. The puzzle list couldn't refresh, so reload the admin to see it there.`);
+      else if(imageFailures.length) setNotice(null);
+      else say("success", `${action} ✓`);
+    }catch(e){
+      say("error", e?.message || "The puzzle wasn't saved. Your changes are still here, so you can try again.");
+    }
+    // Not in a finally block: the React Compiler lint can't analyse those
+    // and would silently skip this whole component.
+    setSaving(false);
+  };
+  const pub=async()=>{if(!ok){say("error",`A puzzle needs 4–15 questions to publish (this one has ${qc}).`);return;}await save(true);};
+  const dft=()=>save(false);
+  const waitForImages=()=>{if(imagesBusy){say("info","Hang on, an image is still uploading…");return true;}return false;};
+  const removeGame=async()=>{
+    try{ await onDelete(game.id); }
+    catch(e){ say("error", e?.message || "The puzzle wasn't deleted."); }
+  };
+  // "Upload replacement": open the field that failed and bring it into view.
+  const goToImage=f=>{
+    if(f.kind==="question"){
+      const qs=game.questions||[];
+      const q=f.questionId!=null?qs.find(x=>x.id===f.questionId):qs[f.questionIndex];
+      if(!q) return;
+      setShowQF(false);
+      setEditQ(q);
+      setFocusImage(`img-field-q-${q.id}`);
+    }else{
+      setFocusImage(`img-field-${f.field}`);
+    }
+  };
+  useEffect(()=>{
+    if(!focusImage) return;
+    const id=requestAnimationFrame(()=>{
+      const el=document.getElementById(focusImage);
+      setFocusImage(null);
+      if(!el) return;
+      el.scrollIntoView({block:"center",behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+      el.querySelector(".img-tab")?.click(); // the Upload tab
+      setTimeout(()=>el.querySelector(".img-drop-zone")?.focus({preventScroll:true}),60);
+      // Restart the highlight even if it was shown for this field a moment ago.
+      el.classList.remove("img-field-flash");
+      requestAnimationFrame(()=>el.classList.add("img-field-flash"));
+    });
+    return ()=>cancelAnimationFrame(id);
+  },[focusImage,editQ]);
+  const openWarnings = imageWarning ? imageWarning.items.filter(f=>!isWarningResolved(game,f)) : [];
+  const resolvedWarnings = imageWarning ? imageWarning.items.filter(f=>isWarningResolved(game,f)) : [];
   const pubSafe=async()=>{if(waitForImages()||!validateDate())return;await pub();};
   const dftSafe=async()=>{if(waitForImages()||!validateDate())return;await dft();};
   const addQ=q=>{setGame(g=>({...g,questions:[...(g.questions??[]),{...q,id:`q-${Date.now()}`,orderIndex:(g.questions?.length??0)+1}]}));setShowQF(false);setEditQ(null);};
@@ -4875,10 +5037,10 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
           </div>
           <div style={{display:"flex",gap:9}}>
             <div style={{flex:1}}>
-              <ImageUploader label={`Category A Image${game.categoryA?" ("+game.categoryA+")":""}`} value={game.categoryAImage||""} onChange={v=>set("categoryAImage",v)} preset="category" compact={true} onBusyChange={trackImage("categoryAImage")}/>
+              <ImageUploader label={`Category A Image${game.categoryA?" ("+game.categoryA+")":""}`} value={game.categoryAImage||""} onChange={v=>set("categoryAImage",v)} preset="category" compact={true} onBusyChange={trackImage("categoryAImage")} fieldId="img-field-categoryAImage"/>
             </div>
             <div style={{flex:1}}>
-              <ImageUploader label={`Category B Image${game.categoryB?" ("+game.categoryB+")":""}`} value={game.categoryBImage||""} onChange={v=>set("categoryBImage",v)} preset="category" compact={true} onBusyChange={trackImage("categoryBImage")}/>
+              <ImageUploader label={`Category B Image${game.categoryB?" ("+game.categoryB+")":""}`} value={game.categoryBImage||""} onChange={v=>set("categoryBImage",v)} preset="category" compact={true} onBusyChange={trackImage("categoryBImage")} fieldId="img-field-categoryBImage"/>
             </div>
           </div>
           <div style={{display:"flex",gap:9}}>
@@ -4889,11 +5051,22 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
               <ColorPicker label={`Category B Color${game.categoryB?" ("+game.categoryB+")":""}`} value={game.categoryBColor||"pink"} onChange={v=>set("categoryBColor",v)}/>
             </div>
           </div>
-          <ImageUploader label="Header Image (shown on home screen & archive)" value={game.headerImage||""} onChange={v=>set("headerImage",v)} preset="header" compact={true} onBusyChange={trackImage("headerImage")}/>
+          <ImageUploader label="Header Image (shown on home screen & archive)" value={game.headerImage||""} onChange={v=>set("headerImage",v)} preset="header" compact={true} onBusyChange={trackImage("headerImage")} fieldId="img-field-headerImage"/>
           <div style={{display:"flex",gap:7,marginTop:2}}>
-            <button className="btn-adm btn-adm-g" onClick={dftSafe} disabled={imagesBusy} style={imagesBusy?{opacity:.5,cursor:"progress"}:undefined}>{imagesBusy?"Uploading image…":"Save Draft"}</button>
-            <button className={`btn-adm ${canPublish&&!imagesBusy?"btn-adm-green":""}`} style={!canPublish||imagesBusy?{opacity:.5,cursor:imagesBusy?"progress":"not-allowed"}:{}} disabled={imagesBusy} onClick={pubSafe}>{game.status==="published"?"✓ Published":"Publish"}</button>
+            <button className="btn-adm btn-adm-g" onClick={dftSafe} disabled={imagesBusy||saving} style={imagesBusy||saving?{opacity:.5,cursor:"progress"}:undefined}>{imagesBusy?"Uploading image…":"Save Draft"}</button>
+            <button className={`btn-adm ${canPublish&&!imagesBusy&&!saving?"btn-adm-green":""}`} style={!canPublish||imagesBusy||saving?{opacity:.5,cursor:imagesBusy||saving?"progress":"not-allowed"}:{}} disabled={imagesBusy||saving} onClick={pubSafe}>{saving?"Saving…":game.status==="published"?"Publish changes":"Publish"}</button>
           </div>
+          {notice&&(
+            <div className={`adm-notice ${notice.kind}`} role={notice.kind==="error"?"alert":"status"}>
+              {notice.kind==="progress"&&<span className="img-spinner" aria-hidden="true"/>}
+              <span className="adm-notice-text">{notice.text}</span>
+              {notice.kind!=="progress"&&<button type="button" className="adm-notice-x" aria-label="Dismiss message" onClick={()=>setNotice(null)}>×</button>}
+            </div>
+          )}
+          {imageWarning&&(openWarnings.length>0||resolvedWarnings.length>0)&&(
+            <ImageWarningPanel game={game} action={imageWarning.action} open={openWarnings} resolved={resolvedWarnings}
+                               onReplace={goToImage} onDismiss={()=>setImageWarning(null)}/>
+          )}
         </div>
         <div className="adm-card">
           <h3>Questions</h3>
@@ -4926,10 +5099,45 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
           {!showQF&&!editQ&&<button className="btn-adm btn-adm-y" style={{marginTop:9,width:"100%"}} onClick={()=>setShowQF(true)}>+ Add Question</button>}
           {showQF&&!editQ&&<QForm catA={game.categoryA} catB={game.categoryB} onSave={addQ} onCancel={()=>setShowQF(false)}/>}
         </div>
-        {!isNew&&game.status!=="published"&&<div style={{textAlign:"center"}}><button className="btn-adm btn-adm-red" onClick={()=>onDelete(game.id)}>Delete game</button></div>}
+        {!isNew&&game.status!=="published"&&<div style={{textAlign:"center"}}><button className="btn-adm btn-adm-red" onClick={removeGame}>Delete game</button></div>}
       </div>
-      {toast&&<Toast message={toast} onDone={()=>setToast(null)}/>}
     </div>
+  );
+}
+
+// Shown after a save that succeeded but couldn't copy every image. Stays
+// until dismissed; each item drops out as soon as its field holds a new
+// image, and a replaced one reminds you to save again to make it live.
+function ImageWarningPanel({game,action,open,resolved,onReplace,onDismiss}){
+  const again = game.status==="published" ? "Publish changes" : "Save Draft";
+  const {title, body} = open.length ? describeImageWarning(open, game, action) : {title:"Image warnings resolved", body:null};
+  return(
+    <section className="adm-warn" role="status" aria-labelledby="adm-warn-title">
+      <div className="adm-warn-head">
+        <h4 id="adm-warn-title"><span aria-hidden="true">{open.length?"⚠️":"✓"}</span> {title}</h4>
+        <button type="button" className="adm-notice-x" aria-label="Dismiss image warnings" onClick={onDismiss}>×</button>
+      </div>
+      {body&&<p className="adm-warn-body">{body}</p>}
+      {open.length===1?(
+        <div className="adm-warn-one">
+          <span className="adm-warn-why">{failureReason(open[0])}</span>
+          <button type="button" className="adm-warn-btn" onClick={()=>onReplace(open[0])}>Upload replacement</button>
+        </div>
+      ):open.length>1&&(
+        <ul className="adm-warn-list">
+          {open.map(f=>(
+            <li key={f.key}>
+              <span className="adm-warn-name">{imageName(f, game)}</span>
+              <span className="adm-warn-why">{failureReason(f)}</span>
+              <button type="button" className="adm-warn-btn" onClick={()=>onReplace(f)}>Upload replacement</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {resolved.length>0&&(
+        <p className="adm-warn-done">✓ {resolved.length===1?`${imageName(resolved[0], game)} has a new image`:`${resolved.length} images have new images`}. Press {again} to make {resolved.length===1?"it":"them"} live.</p>
+      )}
+    </section>
   );
 }
 
@@ -4951,7 +5159,7 @@ function QForm({initial,catA,catB,onSave,onCancel}){
         </div>
         <div className="adm-field"><label>Flavor Copy</label><textarea className="adm-input adm-ta" value={q.flavorCopy} placeholder="Funny reaction line..." onChange={e=>up("flavorCopy",e.target.value)}/></div>
         <div className="adm-field"><label>Explanation Copy</label><textarea className="adm-input adm-ta" value={q.explanationCopy} placeholder="One factual sentence..." onChange={e=>up("explanationCopy",e.target.value)}/></div>
-        <div className="q-form-wide"><ImageUploader label="Reveal Media (image or YouTube link)" value={q.imageUrl||""} onChange={v=>up("imageUrl",v)} preset="question" allowYouTube={true} compact={true} onBusyChange={setImageBusy}/></div>
+        <div className="q-form-wide"><ImageUploader label="Reveal Media (image or YouTube link)" value={q.imageUrl||""} onChange={v=>up("imageUrl",v)} preset="question" allowYouTube={true} compact={true} onBusyChange={setImageBusy} fieldId={`img-field-q-${initial?.id??"new"}`}/></div>
         {q.imageUrl&&!isYouTubeUrl(q.imageUrl)&&<div className="adm-field"><label>Alt Text *</label><input className="adm-input" value={q.imageAlt} placeholder="Screen reader description..." onChange={e=>up("imageAlt",e.target.value)}/></div>}
         {q.imageUrl&&<div className="adm-field"><label>Media Source</label><input className="adm-input" value={q.imageSource} placeholder={isYouTubeUrl(q.imageUrl)?"Official music video, lyric video, etc.":"Via Wikimedia Commons"} onChange={e=>up("imageSource",e.target.value)}/></div>}
       </div>
@@ -5195,38 +5403,41 @@ export default function WhatTheFudgeTrivia(){
   };
 
   // Admin save
+  // Throws (with a message fit to show) only when the puzzle was NOT saved:
+  // an invalid or occupied date, or a database write that didn't go through.
+  // Image-copy problems never throw; they come back as imageFailures.
   const handleSave = async(sg) => {
-    try {
-      if(!localDateFromISO(sg.date)){
-        showToast("Pick a valid puzzle date.");
-        throw new Error("Pick a valid puzzle date.");
-      }
-      const conflict = games.find(g=>g.date===sg.date&&g.id!==sg.id);
-      if(conflict){
-        showToast(`That day already has "${conflict.themeTitle||"another puzzle"}".`);
-        throw new Error("That day already has a puzzle.");
-      }
-      const saved = await dbSaveGame(sg);
-      await refreshGames();
-      setEditGame(saved);
-      showToast("Saved ✓");
-      return saved;
-    } catch(e){
-      const friendly = ["Couldn't import","Pick a valid","That day"].some(prefix=>e?.message?.startsWith(prefix));
-      showToast(friendly ? e.message : "Save failed 😬");
+    if(!localDateFromISO(sg.date)) throw new Error("Pick a valid puzzle date first.");
+    // Check the date against the latest list, not the one loaded when the
+    // editor opened: nothing in the database stops two puzzles sharing a day.
+    let latest = games;
+    try{ latest = await dbLoadGames(); }catch(e){ console.error(e); }
+    const conflict = latest.find(g=>g.date===sg.date&&g.id!==sg.id);
+    if(conflict) throw new Error(`That day already has "${conflict.themeTitle||"another puzzle"}". Pick another date.`);
+    let result;
+    try{
+      result = await dbSaveGame(sg);
+    }catch(e){
       console.error(e);
-      throw e;
+      throw new Error(`The puzzle wasn't saved: ${describeSaveError(e)} Your changes are still here, so you can try again.`);
     }
+    let listRefreshed = true;
+    try{ await refreshGames(); }catch(e){ console.error(e); listRefreshed = false; }
+    setEditGame(result.game);
+    return {...result, listRefreshed};
   };
 
   // Admin delete
   const handleDel = async(id) => {
-    try {
+    try{
       await dbDeleteGame(id);
-      await refreshGames();
-      setAdminView("dashboard");
-      setEditGame(null);
-    } catch(e){ showToast("Delete failed 😬"); }
+    }catch(e){
+      console.error(e);
+      throw new Error(`The puzzle wasn't deleted: ${describeSaveError(e)}`);
+    }
+    try{ await refreshGames(); }catch(e){ console.error(e); }
+    setAdminView("dashboard");
+    setEditGame(null);
   };
 
   // Start game
