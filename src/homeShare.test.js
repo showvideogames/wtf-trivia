@@ -41,7 +41,7 @@ describe("isPhoneOrTablet", () => {
 });
 
 describe("shareOrCopy", () => {
-  const TEXT = "Harry Potter Character 🧙‍♂️\nOR\nPro Hockey Player? 🏒\n🔴🟢\n1/2 ➜ Better than 50%\nwhatthefudgetrivia.com";
+  const TEXT = "Harry Potter Character 🧙‍♂️\nOR\nPro Hockey Player? 🏒\n🔴🟢\n1/2 ➜ Beat 50% of players\nwhatthefudgetrivia.com";
 
   it("copies on desktop without opening the share panel, even when one exists", async () => {
     const nav = fakeNav({ userAgent: UA.windowsChrome, mobile: false, share: vi.fn().mockResolvedValue(undefined) });
@@ -90,7 +90,7 @@ describe("shareOrCopy", () => {
     const crowd = { date: "2026-09-27", score: 5, status: "ready", stats: { scoreHistogram: { 4: 2, 5: 3, 7: 5 } } };
     const text = shareTextFor(game, record, crowd);
     expect(text).toBe(
-      "Harry Potter Character 🧙‍♂️\nOR\nPro Hockey Player? 🏒\n🔴🔴🔴🟢🟢🟢🟢🟢🔴🔴\n5/10 ➜ Better than 20%\nwhatthefudgetrivia.com"
+      "Harry Potter Character 🧙‍♂️\nOR\nPro Hockey Player? 🏒\n🔴🔴🔴🟢🟢🟢🟢🟢🔴🔴\n5/10 ➜ Beat 20% of players\nwhatthefudgetrivia.com"
     );
     const phone = fakeNav({ userAgent: UA.iPhone, maxTouchPoints: 5, share: vi.fn().mockResolvedValue(undefined) });
     const desktop = fakeNav({ userAgent: UA.windowsChrome });

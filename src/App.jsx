@@ -6,7 +6,7 @@ import "./archive.css";
 import "./results.css";
 import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from "./mediaPreloader.js";
 import { archivePuzzleImages, describeImageWarning, failureReason, imageName, isWarningResolved } from "./admin/publishImages.js";
-import { crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor } from "./crowdStats.js";
+import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor } from "./crowdStats.js";
 import { gameToRow, rowToGame } from "./gameRow.js";
 import { shareOrCopy } from "./homeShare.js";
 import {
@@ -2825,12 +2825,10 @@ function scoreMsg(s,t){const p=s/t;if(p===1)return"🏆 PERFECT!! Absolutely fla
 function averageScoreCopy(score,total){
   return `Average chaos level: ${score}/${total}`;
 }
-// beatRate counts every finisher who scored the same as you or lower (you
-// and anyone tied included), so the copy says exactly that at every level.
-// The share text's "Better than N%" is a different, strictly-lower number
-// (strictlyBetterPercent in share.js).
-function beatRateCopy(rate){
-  return `You scored as well as or better than ${rate}% of players.`;
+// The same strictly-lower number as the share text's "Beat N% of players"
+// (crowdBeatPercent in crowdStats.js).
+function beatPercentCopy(percent){
+  return `You beat ${percent}% of players.`;
 }
 function perfectRateCopy(rate){
   if(rate===0) return "Nobody else nailed a perfect score yet";
@@ -4127,6 +4125,10 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
   const communityStats = usesAppCrowd
     ? crowdStatsFor(crowd, safeRecord)
     : replayStats;
+  // No honest comparison (only finisher, inconsistent stats, ...) means no
+  // Crowd Showdown card at all. Replays and Admin Preview aren't saved, so
+  // they compare against all historical finishers instead.
+  const beatPercent = communityStats ? crowdBeatPercent(communityStats, safeRecord.score, {saved:!isReplay}) : null;
 
   // Until crowd stats arrive (or if they never do) the score line has no
   // percentage; preview and clipboard always use the same text.
@@ -4223,15 +4225,17 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
                 You are one of the first players, so these stats may change. Come back later for more accurate results!
               </div>
             )}
-            <div className="crowd-grid">
+            <div className={`crowd-grid${beatPercent===null?" crowd-grid-two":""}`}>
               <div className="crowd-stat crowd-stat-avg">
                 <div className="crowd-stat-kicker">Average Chaos</div>
                 <div className="crowd-stat-main">{averageScoreCopy(communityStats.averageScore, safeRecord.totalQuestions)}</div>
               </div>
-              <div className="crowd-stat crowd-stat-beat">
-                <div className="crowd-stat-kicker">Crowd Showdown</div>
-                <div className="crowd-stat-main">{beatRateCopy(communityStats.beatRate)}</div>
-              </div>
+              {beatPercent!==null&&(
+                <div className="crowd-stat crowd-stat-beat">
+                  <div className="crowd-stat-kicker">Crowd Showdown</div>
+                  <div className="crowd-stat-main">{beatPercentCopy(beatPercent)}</div>
+                </div>
+              )}
               <div className="crowd-stat crowd-stat-perfect">
                 <div className="crowd-stat-kicker">Perfect Goblins</div>
                 <div className="crowd-stat-main">{perfectRateCopy(communityStats.perfectRate)}</div>
