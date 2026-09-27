@@ -321,7 +321,19 @@ export function demoGames() {
     categoryBImage: null,
     questions: longLabelQuestions(),
   };
-  return [demoGame(), older, longLabels];
+  return [{ ...demoGame(), ...todayOverrides() }, older, longLabels];
+}
+
+// Set localStorage "wtf-dev-today" to a JSON object to override fields of
+// today's demo puzzle, e.g. {"categoryA":"…","categoryAShareName":"…"}, so
+// Results can be reviewed with other names after a reload.
+function todayOverrides() {
+  try {
+    const value = JSON.parse(localStorage.getItem("wtf-dev-today") || "null");
+    return value && typeof value === "object" ? value : {};
+  } catch {
+    return {};
+  }
 }
 
 /* ---------- localStorage-backed persistence (so refresh/resume works) ---------- */
@@ -381,7 +393,14 @@ export function devRecordAnswer(date, answers, score) {
   writeJSON(RECORD_KEY, all);
 }
 
-export function devCompleteGame(date, answers, score, totalQuestions) {
+// Set localStorage "wtf-dev-complete" to "fail" (the save is rejected) or
+// "slow" (the save takes 1.5s) to rehearse the finish-game save.
+export async function devCompleteGame(date, answers, score, totalQuestions) {
+  let mode = null;
+  try { mode = localStorage.getItem("wtf-dev-complete"); } catch { /* ignore */ }
+  if (mode === "slow") await new Promise((r) => setTimeout(r, 1500));
+  if (mode === "fail") { devLog("save:failed"); throw new Error("Simulated save failure (wtf-dev-complete=fail)"); }
+  devLog("save:confirmed");
   const all = readJSON(RECORD_KEY, {});
   all[date] = {
     ...(all[date] || { date, themeTitle: "Demo", startedAt: new Date().toISOString() }),
@@ -425,14 +444,58 @@ export function devGetStats() {
   });
 }
 
+// 142 other demo finishers on an 8-question puzzle, as { score: players }.
+const DEMO_SCORE_HISTOGRAM = { 0: 2, 1: 4, 2: 9, 3: 17, 4: 24, 5: 30, 6: 26, 7: 18, 8: 12 };
+
+// A running log of finish-game saves and stats reads (localStorage
+// "wtf-dev-log"), so their order can be checked in the browser.
+function devLog(entry) {
+  const log = readJSON("wtf-dev-log", []);
+  log.push(entry);
+  writeJSON("wtf-dev-log", log);
+}
+
+// Behaves like the live puzzle_stats: the other finishers plus this player's
+// own game once it is saved as completed, counted once.
+//   "wtf-dev-crowd": the other finishers. "none" makes every read fail,
+//     "empty" means nobody else, a JSON histogram such as {"4":2,"5":2,"7":5}
+//     sets them; anything else uses the demo crowd above.
+//   "wtf-dev-crowd-lag": leave the player's saved game out of the next N
+//     reads (a number), or out of every read ("never").
 export function devCommunityStats(date, userScore) {
-  // Fixed demo figures so the "How everyone did" panel can be reviewed.
+  let mode = null;
+  let lag = null;
+  try {
+    mode = localStorage.getItem("wtf-dev-crowd");
+    lag = localStorage.getItem("wtf-dev-crowd-lag");
+  } catch { /* ignore */ }
+  if (mode === "none") { devLog("stats:failed"); return null; }
+  let others = mode === "empty" ? {} : DEMO_SCORE_HISTOGRAM;
+  if (mode && mode !== "empty") {
+    try { others = JSON.parse(mode); } catch { /* keep the demo crowd */ }
+  }
+  const histogram = { ...others };
+  const own = devGetRecord(date);
+  let includeOwn = Boolean(own?.completed);
+  if (includeOwn && lag === "never") includeOwn = false;
+  else if (includeOwn && Number(lag) > 0) {
+    includeOwn = false;
+    writeJSON("wtf-dev-crowd-lag", Number(lag) - 1);
+  }
+  if (includeOwn) histogram[own.score] = (Number(histogram[own.score]) || 0) + 1;
+  devLog(includeOwn ? "stats:read-with-own" : own?.completed ? "stats:read-without-own" : "stats:read");
+  const entries = Object.entries(histogram).map(([s, n]) => [Number(s), Number(n) || 0]);
+  const finishedPlayers = entries.reduce((sum, [, n]) => sum + n, 0);
+  const totalScore = entries.reduce((sum, [s, n]) => sum + s * n, 0);
+  // beatRate uses the live formula (tied-or-better, you included).
+  const atOrBelow = entries.reduce((sum, [s, n]) => (s <= userScore ? sum + n : sum), 0);
   return {
-    finishedPlayers: 142,
-    averageScore: 5,
-    beatRate: Math.min(99, Math.max(3, Math.round((userScore / 8) * 92))),
-    perfectRate: 11,
+    finishedPlayers,
+    averageScore: finishedPlayers ? Math.round(totalScore / finishedPlayers) : 0,
+    beatRate: finishedPlayers ? Math.round((atOrBelow / finishedPlayers) * 100) : 0,
+    perfectRate: finishedPlayers ? 11 : 0,
     questionAccuracies: [],
+    scoreHistogram: histogram,
   };
 }
 
@@ -456,6 +519,11 @@ export function devSaveGameRow(row) {
   let mode = null;
   try { mode = localStorage.getItem("wtf-dev-db"); } catch { /* ignore */ }
   if (mode === "fail") throw new Error("Simulated database failure (wtf-dev-db=fail)");
+  // "no-share-columns" rehearses a database that hasn't run share_names.sql,
+  // with the error PostgREST returns for an unknown column.
+  if (mode === "no-share-columns" && ("category_a_share_name" in row || "category_b_share_name" in row)) {
+    throw new Error(`Supabase error 400: {"code":"PGRST204","message":"Could not find the 'category_a_share_name' column of 'games' in the schema cache"}`);
+  }
   savedGameRows.set(row.id, JSON.parse(JSON.stringify(row)));
 }
 
