@@ -11,6 +11,8 @@ create table if not exists public.games (
   category_a_image text,
   category_b_image text,
   header_image text,
+  category_a_share_name text,
+  category_b_share_name text,
   status text not null default 'draft',
   questions jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
@@ -61,6 +63,10 @@ create table if not exists public.puzzle_stats (
   score_histogram jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
+
+alter table public.games
+  add column if not exists category_a_share_name text,
+  add column if not exists category_b_share_name text;
 
 alter table public.players
   add column if not exists email text,

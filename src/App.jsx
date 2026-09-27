@@ -6,6 +6,8 @@ import "./archive.css";
 import "./results.css";
 import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from "./mediaPreloader.js";
 import { archivePuzzleImages, describeImageWarning, failureReason, imageName, isWarningResolved } from "./admin/publishImages.js";
+import { crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor } from "./crowdStats.js";
+import { gameToRow, rowToGame } from "./gameRow.js";
 import {
   demoGames as devDemoGames,
   devPlayer,
@@ -1523,6 +1525,9 @@ const styles = `
 
   .adm-field { margin-bottom: 9px; }
   .adm-field label { display: block; font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: rgba(45,212,191,.5); margin-bottom: 3px; }
+  .adm-share-names { margin-bottom: 12px; }
+  .adm-share-names .adm-field { margin-bottom: 4px; }
+  .adm-hint { font-size: 11px; font-weight: 700; line-height: 1.45; color: rgba(255,255,255,.45); }
 
   .adm-input {
     width: 100%;
@@ -2461,40 +2466,6 @@ async function prepareImageForSave(value, options, archiveExternal=false){
   return value;
 }
 
-// ===== GAME → DB row conversion =====
-function gameToRow(g){
-  return {
-    id: g.id,
-    date: g.date,
-    theme_title: g.themeTitle,
-    category_a: g.categoryA,
-    category_b: g.categoryB,
-    category_a_color: g.categoryAColor||null,
-    category_b_color: g.categoryBColor||null,
-    category_a_image: g.categoryAImage||null,
-    category_b_image: g.categoryBImage||null,
-    header_image: g.headerImage||null,
-    status: g.status,
-    questions: g.questions||[]
-  };
-}
-function rowToGame(r){
-  return {
-    id: r.id,
-    date: r.date,
-    themeTitle: r.theme_title,
-    categoryA: r.category_a,
-    categoryB: r.category_b,
-    categoryAColor: r.category_a_color,
-    categoryBColor: r.category_b_color,
-    categoryAImage: r.category_a_image,
-    categoryBImage: r.category_b_image,
-    headerImage: r.header_image,
-    status: r.status,
-    questions: r.questions||[]
-  };
-}
-
 // ===== DB FUNCTIONS — GAMES =====
 async function dbLoadGames(){
   if(OFFLINE_PREVIEW) return devMergeSavedGames(devDemoGames(), rowToGame);
@@ -2534,7 +2505,10 @@ async function dbSaveGame(game){
     const confirmed = Array.isArray(saved) && saved.some(r=>r.id===row.id && r.date===row.date && r.status===row.status);
     if(!confirmed) throw new Error("The database didn't confirm the save.");
   }
-  return { game: uploaded, imageFailures: failures };
+  // A save that carried share names proves the columns exist, so later saves
+  // from this editor always send them (clearing a name then saves null).
+  const saved = "category_a_share_name" in row ? {...uploaded, shareNameColumns:true} : uploaded;
+  return { game: saved, imageFailures: failures };
 }
 // A short, plain reason for a failed database write.
 function describeSaveError(e){
@@ -2542,6 +2516,7 @@ function describeSaveError(e){
   if(/Failed to fetch|NetworkError|Load failed/i.test(msg)) return "the database couldn't be reached. Check your connection.";
   const status = msg.match(/Supabase error (\d{3})/)?.[1];
   if(status==="401"||status==="403") return "the database refused the change (permission denied).";
+  if(msg.includes("_share_name")) return "the database doesn't have the share-name columns yet (supabase/share_names.sql). Clear both share names to save without them.";
   if(status) return `the database returned an error (${status}).`;
   if(msg.includes("didn't confirm")) return "the database didn't confirm the save.";
   return "something went wrong while saving.";
@@ -2619,13 +2594,22 @@ async function dbRecordAnswer(playerId, date, answers, score){
     body: JSON.stringify({answers, score})
   });
 }
+// Marks today's game finished. Resolves only once the database returns the
+// updated row as completed; throws otherwise. The puzzle_stats trigger on
+// game_records runs inside this same UPDATE's transaction, so crowd stats
+// read after this resolves already count the game (see crowdStats.js).
 async function dbCompleteGame(playerId, date, answers, score, totalQuestions){
   if(OFFLINE_PREVIEW) return devCompleteGame(date, answers, score, totalQuestions);
-  await sbFetch(`/rest/v1/game_records?player_id=eq.${playerId}&game_date=eq.${date}`, {
+  const rows = await sbFetch(`/rest/v1/game_records?player_id=eq.${playerId}&game_date=eq.${date}`, {
     method:"PATCH",
     body: JSON.stringify({answers, score, completed:true, completed_at:new Date().toISOString()})
   });
-  // Update stats
+  const confirmed = Array.isArray(rows) && rows.some(r=>r.completed===true && r.score===score);
+  if(!confirmed) throw new Error("The database didn't confirm the finished game.");
+}
+// The player's own streak/totals, updated after the finished game is saved.
+async function dbUpdatePlayerStatsForFinish(playerId, date, score, totalQuestions, answers){
+  if(OFFLINE_PREVIEW) return; // devCompleteGame already updated them
   await dbUpdateStats(playerId, date, score, totalQuestions, answers);
 }
 async function dbGetPuzzleCommunityStats(date, userScore){
@@ -2639,7 +2623,8 @@ async function dbGetPuzzleCommunityStats(date, userScore){
         averageScore: 0,
         beatRate: 0,
         perfectRate: 0,
-        questionAccuracies: []
+        questionAccuracies: [],
+        scoreHistogram: {}
       };
     }
     const totalQuestions = stats.total_questions||0;
@@ -2664,7 +2649,9 @@ async function dbGetPuzzleCommunityStats(date, userScore){
       averageScore: stats.total_finished ? Math.round((stats.total_score||0)/stats.total_finished) : 0,
       beatRate: stats.total_finished ? Math.round(beatenCount/stats.total_finished*100) : 0,
       perfectRate: stats.total_finished ? Math.round((stats.perfect_count||0)/stats.total_finished*100) : 0,
-      questionAccuracies
+      questionAccuracies,
+      // Raw scores for the share text's strictly-better percentage (see share.js).
+      scoreHistogram: histogram
     };
   } catch(e){
     return null;
@@ -2818,7 +2805,9 @@ function normalizeEditorDraft(game){
 function loadEditorDraft(game){
   if(!game?.id) return game;
   const saved = safeRead(getEditorDraftKey(game.id));
-  return saved?.game ? {...game, ...saved.game, id: game.id} : game;
+  // shareNameColumns describes the database, not the draft, so the loaded
+  // puzzle's value always wins over whatever an older draft recorded.
+  return saved?.game ? {...game, ...saved.game, id: game.id, shareNameColumns: game.shareNameColumns} : game;
 }
 function saveEditorDraft(game){
   if(!game?.id) return false;
@@ -2832,16 +2821,13 @@ function clearEditorDraft(id){
   return safeRemove(getEditorDraftKey(id));
 }
 function scoreMsg(s,t){const p=s/t;if(p===1)return"🏆 PERFECT!! Absolutely flawless. You are the champion.";if(p>=.875)return"Almost perfect!! Just one little slip.";if(p>=.75)return"Really solid! The theme tried hard. It mostly failed.";if(p>=.5)return"Decent showing! Some of those were genuinely sneaky.";if(p>=.25)return"The theme had you. It happens to everyone.";return"Wow okay. The theme absolutely won today. Tomorrow!";}
-function buildShare(gr){
-  const answers = Array.isArray(gr?.answers) ? gr.answers : [];
-  const g=answers.map(a=>a.correct?"🟢":"🔴").join("");
-  return`What The Fudge Trivia 🍬\n${gr?.themeTitle||"Puzzle Results"}\n${gr?.score||0}/${gr?.totalQuestions||0} ${g}\nwhatthefudgetrivia.com`;
-}
 function averageScoreCopy(score,total){
   return `Average chaos level: ${score}/${total}`;
 }
 // beatRate counts every finisher who scored the same as you or lower (you
 // and anyone tied included), so the copy says exactly that at every level.
+// The share text's "Better than N%" is a different, strictly-lower number
+// (strictlyBetterPercent in share.js).
 function beatRateCopy(rate){
   return `You scored as well as or better than ${rate}% of players.`;
 }
@@ -4074,7 +4060,11 @@ function balancedPipColumns(count,maxPerRow){
 
 // withChrome: the real Results page, with the shared warm backdrop and page
 // header. Admin preview renders the bare content inside its own shell.
-function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false,withChrome=false,player,onAccount,onAdmin}){
+// crowd: today's live Results gets the app's crowd stats (loaded only after
+// the finished game is saved; see crowdStats.js), so Crowd Showdown and the
+// share text use the same up-to-date numbers. Replays and Admin Preview pass
+// no crowd and read the day's stats themselves, as before.
+function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrome=false,player,onAccount,onAdmin}){
   const safeRecord = {
     themeTitle: gameRecord?.themeTitle||"Puzzle Results",
     score: Number.isFinite(gameRecord?.score) ? gameRecord.score : 0,
@@ -4082,8 +4072,9 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false,withChrome=fals
     answers: Array.isArray(gameRecord?.answers) ? gameRecord.answers : [],
     date: gameRecord?.date||null
   };
+  const usesAppCrowd = crowd!==undefined;
   const[copied,setCopied]=useState(false);
-  const[communityStats,setCommunityStats]=useState(null);
+  const[replayStats,setReplayStats]=useState(null);
   const[showAdvanced,setShowAdvanced]=useState(false);
   const{play}=sound;
   const{canvasRef,shoot}=useConfetti();
@@ -4094,24 +4085,34 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false,withChrome=fals
   },[]);
 
   useEffect(()=>{
+    if(usesAppCrowd) return;
     let cancelled = false;
     (async()=>{
       if(!safeRecord.date) return;
       const stats = await dbGetPuzzleCommunityStats(safeRecord.date, safeRecord.score);
-      if(!cancelled) setCommunityStats(stats);
+      if(!cancelled) setReplayStats(stats);
     })();
     return ()=>{cancelled = true;};
-  },[safeRecord.date, safeRecord.score]);
+  },[usesAppCrowd, safeRecord.date, safeRecord.score]);
 
-  const txt=buildShare(safeRecord);
+  const communityStats = usesAppCrowd
+    ? crowdStatsFor(crowd, safeRecord)
+    : replayStats;
+
+  // Until crowd stats arrive (or if they never do) the score line has no
+  // percentage; preview and clipboard always use the same text.
+  const txt=shareTextFor(game, safeRecord, crowd);
   const share=()=>{try{navigator.clipboard.writeText(txt);}catch{}setCopied(true);setTimeout(()=>setCopied(false),2000);};
 
-  // The on-screen preview shows the copied text line by line. Only the pip
-  // line is shrunk to fit its box (never wrapped); the text on the
-  // clipboard is untouched.
+  // The on-screen preview shows the copied text line by line, all six lines
+  // at every width. Names wrap; only the pip line is shrunk to fit its box
+  // (never wrapped). The text on the clipboard is untouched.
   const shareLines=txt.split("\n");
+  const shareLineClass=["rs-share-name","rs-share-or","rs-share-name","rs-share-pips","rs-share-score","rs-share-url"];
   const pipCount=safeRecord.answers.length;
-  const pipLineEms=(`${safeRecord.score}/${safeRecord.totalQuestions} `.length*0.62)+pipCount*1.3+0.4;
+  // ~1.42em per dot covers the widest common emoji font (Segoe UI Emoji is
+  // ~1.37em), so the row fits on every platform.
+  const pipLineEms=pipCount*1.42+0.2;
 
   // Nerd Mode: the two categories exactly as gameplay shows them (A left,
   // B right, same colours), and this player's own pick per question, matched
@@ -4163,7 +4164,7 @@ function ScoreScreen({gameRecord,game,onNav,sound,isReplay=false,withChrome=fals
             <div className="rs-share">
               <div className="share-box rs-share-preview" style={{"--pip-line-ems":pipLineEms}}>
                 {shareLines.map((line,i)=>(
-                  <div key={i} className={i===shareLines.length-2?"rs-share-pips":undefined}>{line}</div>
+                  <div key={i} className={shareLineClass[i]}>{line}</div>
                 ))}
               </div>
               <button className="btn btn-pink rs-share-btn" onClick={share}>
@@ -5035,6 +5036,14 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
             <div className="adm-field" style={{flex:1}}><label>Category A</label><input className="adm-input" value={game.categoryA||""} placeholder="Board Game" onChange={e=>set("categoryA",e.target.value)}/></div>
             <div className="adm-field" style={{flex:1}}><label>Category B</label><input className="adm-input" value={game.categoryB||""} placeholder="Nicolas Cage Movie" onChange={e=>set("categoryB",e.target.value)}/></div>
           </div>
+          {/* Placeholders show the fallback a blank share name uses. */}
+          <div className="adm-share-names">
+            <div style={{display:"flex",gap:9}}>
+              <div className="adm-field" style={{flex:1}}><label htmlFor="share-name-a">Share name for Category A</label><input id="share-name-a" className="adm-input" value={game.categoryAShareName||""} placeholder={game.categoryA||"Same as Category A"} onChange={e=>set("categoryAShareName",e.target.value)}/></div>
+              <div className="adm-field" style={{flex:1}}><label htmlFor="share-name-b">Share name for Category B</label><input id="share-name-b" className="adm-input" value={game.categoryBShareName||""} placeholder={game.categoryB||"Same as Category B"} onChange={e=>set("categoryBShareName",e.target.value)}/></div>
+            </div>
+            <div className="adm-hint">Optional. Only changes the copied Results text, so type the full label with any emoji, like “Pro Hockey Player? 🏒”. Leave blank to use the category name.</div>
+          </div>
           <div style={{display:"flex",gap:9}}>
             <div style={{flex:1}}>
               <ImageUploader label={`Category A Image${game.categoryA?" ("+game.categoryA+")":""}`} value={game.categoryAImage||""} onChange={v=>set("categoryAImage",v)} preset="category" compact={true} onBusyChange={trackImage("categoryAImage")} fieldId="img-field-categoryAImage"/>
@@ -5337,6 +5346,24 @@ export default function WhatTheFudgeTrivia(){
     return ()=>cancel(handle);
   },[view, todayGame, gameRecord]);
 
+  // Crowd stats for today's finished game, shared by Results (Crowd Showdown
+  // and the share text) and the homepage Share button so they always agree.
+  // { date, score, status: "ready" | "unavailable", stats? }; null or a
+  // different date/score means still loading. A game finished this session
+  // loads them in handleComplete, after its save. A game already finished
+  // before this page load (it's in the database) loads them here, once.
+  const[crowd,setCrowd]=useState(null);
+  const crowdRequestRef=useRef(null);
+  useEffect(()=>{
+    if(!gameRecord?.completed || !gameRecord.date) return;
+    const {date, score} = gameRecord;
+    const key = `${date}:${score}`;
+    if(crowdRequestRef.current===key) return;
+    crowdRequestRef.current = key;
+    loadCrowdStats({fetchStats:()=>dbGetPuzzleCommunityStats(date, score), score})
+      .then(result=>setCrowd({date, score, ...result}));
+  },[gameRecord]);
+
   const showToast = m => { setToast(m); setTimeout(()=>setToast(null),2100); };
 
   const handleCreateAccount = async(email,password) => {
@@ -5478,22 +5505,33 @@ export default function WhatTheFudgeTrivia(){
   };
 
   // Complete game
+  // Results shows straight away; the crowd stats behind Crowd Showdown and
+  // the share text wait for the save (see crowdStats.js). Claiming the crowd
+  // request first stops the revisit loader from reading ahead of the save.
   const handleComplete = async(finalRec) => {
     if(!player) return;
+    crowdRequestRef.current = `${finalRec.date}:${finalRec.score}`;
     setGameRecord(finalRec);
     setView("score");
-    try {
-      await dbCompleteGame(player.id, finalRec.date, finalRec.answers, finalRec.score, finalRec.totalQuestions);
-      const newStats = await dbGetStats(player.id);
-      setStats(newStats);
-    } catch(e){ console.error("Complete game error:", e); }
+    const result = await saveThenLoadCrowdStats({
+      save: ()=>dbCompleteGame(player.id, finalRec.date, finalRec.answers, finalRec.score, finalRec.totalQuestions),
+      fetchStats: ()=>dbGetPuzzleCommunityStats(finalRec.date, finalRec.score),
+      score: finalRec.score,
+      onSaved: async()=>{
+        try{
+          await dbUpdatePlayerStatsForFinish(player.id, finalRec.date, finalRec.score, finalRec.totalQuestions, finalRec.answers);
+          setStats(await dbGetStats(player.id));
+        }catch(e){ console.error("Complete game error:", e); }
+      }
+    });
+    if(result.reason==="save-failed") console.error("Complete game error:", result.error);
+    setCrowd({date:finalRec.date, score:finalRec.score, ...result});
   };
 
-  // Share today's result from the homepage (same spoiler-free text as the
-  // results screen).
+  // Share today's result from the homepage: the same text Results copies.
   const handleShareToday = async() => {
     if(!gameRecord?.completed) return;
-    const text = buildShare(gameRecord);
+    const text = shareTextFor(todayGame, gameRecord, crowd);
     try{
       if(navigator.share){ await navigator.share({text}); return; }
     }catch{ /* share sheet dismissed */ }
@@ -5620,7 +5658,7 @@ export default function WhatTheFudgeTrivia(){
           )}
 
           {view==="score"&&gameRecord&&(
-            <ScoreScreen gameRecord={gameRecord} game={todayGame} onNav={setView} sound={sound}
+            <ScoreScreen gameRecord={gameRecord} game={todayGame} crowd={crowd} onNav={setView} sound={sound}
               withChrome player={player} onAccount={()=>setView("account")}
               onAdmin={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}/>
           )}
