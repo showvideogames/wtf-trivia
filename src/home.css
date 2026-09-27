@@ -252,10 +252,9 @@
   margin: 4px 0 12px;
 }
 .hp-share {
-  display: inline-flex;
+  display: inline-grid;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
+  justify-items: center;
   margin: 10px auto 0;
   padding: 9px 20px;
   min-height: 42px;
@@ -271,6 +270,34 @@
 .hp-share:active {
   transform: translateY(2px);
   box-shadow: 0 2px 0 var(--black);
+}
+/* "Share" and "Copied!" overlap in one cell; the hidden one keeps its size. */
+.hp-share-face {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.hp-share-face[data-shown="false"] {
+  visibility: hidden;
+}
+.hp-share-error {
+  margin: 10px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--red-dark);
+  text-align: center;
+}
+.hp-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* --- secondary navigation tiles --- */

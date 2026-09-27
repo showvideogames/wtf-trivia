@@ -8,6 +8,7 @@ import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from 
 import { archivePuzzleImages, describeImageWarning, failureReason, imageName, isWarningResolved } from "./admin/publishImages.js";
 import { crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor } from "./crowdStats.js";
 import { gameToRow, rowToGame } from "./gameRow.js";
+import { shareOrCopy } from "./homeShare.js";
 import {
   demoGames as devDemoGames,
   devPlayer,
@@ -3516,6 +3517,25 @@ function HomeHeader({player,sound,onHelp,onAccount}){
 
 function HomeScreen({game,gameRecord,stats,player,sound,onPlay,onNav,onAdmin,onShare}){
   const[showHelp,setShowHelp]=useState(false);
+  // Share feedback: "copied" flips the button label for a moment; "failed"
+  // stays until the next press. Presses while a share sheet is open are ignored.
+  const[shareStatus,setShareStatus]=useState(null);
+  const shareBusy=useRef(false);
+  const copiedTimer=useRef(null);
+  useEffect(()=>()=>clearTimeout(copiedTimer.current),[]);
+  const share=async()=>{
+    if(shareBusy.current) return;
+    shareBusy.current=true;
+    clearTimeout(copiedTimer.current);
+    setShareStatus(null);
+    try{
+      const outcome=await onShare();
+      if(outcome==="copied"){
+        setShareStatus("copied");
+        copiedTimer.current=setTimeout(()=>setShareStatus(null),2000);
+      }else if(outcome==="failed") setShareStatus("failed");
+    }finally{ shareBusy.current=false; }
+  };
   const answered = gameRecord?.answers?.length||0;
   const total = gameRecord?.totalQuestions||game.questions.length;
   const done = Boolean(gameRecord?.completed);
@@ -3553,9 +3573,18 @@ function HomeScreen({game,gameRecord,stats,player,sound,onPlay,onNav,onAdmin,onS
                   <span className="hp-spark" aria-hidden="true">{"✦"}</span>
                 </div>
                 <button className="btn btn-pink" onClick={()=>onNav("score")}>See my results 🎉</button>
-                <button className="hp-share" onClick={onShare}>
-                  <ShareGlyph/> Share
+                {/* Both labels sit in one grid cell, so the button is always
+                    sized for the wider one and "Copied!" moves nothing. */}
+                <button className="hp-share" onClick={share}>
+                  <span className="hp-share-face" data-shown={shareStatus!=="copied"}><ShareGlyph/> Share</span>
+                  <span className="hp-share-face" data-shown={shareStatus==="copied"}>Copied!</span>
                 </button>
+                <span className="hp-sr-only" role="status">{shareStatus==="copied"?"Result copied to clipboard":""}</span>
+                {shareStatus==="failed"&&(
+                  <p className="hp-share-error" role="alert">
+                    Couldn&rsquo;t copy your result. Open &ldquo;See my results&rdquo; and copy the text shown there.
+                  </p>
+                )}
               </div>
             ):inProgress?(
               <>
@@ -5529,14 +5558,10 @@ export default function WhatTheFudgeTrivia(){
   };
 
   // Share today's result from the homepage: the same text Results copies.
+  // Resolves to shareOrCopy's outcome; HomeScreen shows the feedback.
   const handleShareToday = async() => {
-    if(!gameRecord?.completed) return;
-    const text = shareTextFor(todayGame, gameRecord, crowd);
-    try{
-      if(navigator.share){ await navigator.share({text}); return; }
-    }catch{ /* share sheet dismissed */ }
-    try{ await navigator.clipboard.writeText(text); showToast("Copied to clipboard!"); }
-    catch{ showToast("Couldn't copy 😬"); }
+    if(!gameRecord?.completed) return null;
+    return shareOrCopy(shareTextFor(todayGame, gameRecord, crowd), navigator);
   };
 
   // Replay
