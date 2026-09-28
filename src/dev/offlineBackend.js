@@ -338,7 +338,9 @@ function todayOverrides() {
 
 /* ---------- localStorage-backed persistence (so refresh/resume works) ---------- */
 
-const RECORD_KEY = "wtf-dev-records";
+// Records are keyed by puzzle id, like the live game_records.puzzle_id (a
+// new key name, so records saved by date in older previews are ignored).
+const RECORD_KEY = "wtf-dev-records-by-puzzle";
 const STATS_KEY = "wtf-dev-stats";
 
 function readJSON(key, fallback) {
@@ -364,18 +366,23 @@ export const devPlayer = {
   createdAt: new Date().toISOString(),
 };
 
-export function devGetRecord(date) {
-  return readJSON(RECORD_KEY, {})[date] || null;
+export function devGetRecord(puzzleId) {
+  return readJSON(RECORD_KEY, {})[puzzleId] || null;
 }
 
-export function devInitRecord(date, themeTitle, total) {
+export function devGetAllRecords() {
+  return readJSON(RECORD_KEY, {});
+}
+
+export function devInitRecord(game) {
   const all = readJSON(RECORD_KEY, {});
-  if (all[date]) return all[date];
-  all[date] = {
-    date,
-    themeTitle,
+  if (all[game.id]) return all[game.id];
+  all[game.id] = {
+    puzzleId: game.id,
+    date: game.date,
+    themeTitle: game.themeTitle,
     score: 0,
-    totalQuestions: total,
+    totalQuestions: game.questions.length,
     currentIndex: 0,
     answers: [],
     completed: false,
@@ -383,27 +390,28 @@ export function devInitRecord(date, themeTitle, total) {
     completedAt: null,
   };
   writeJSON(RECORD_KEY, all);
-  return all[date];
+  return all[game.id];
 }
 
-export function devRecordAnswer(date, answers, score) {
+export function devRecordAnswer(puzzleId, answers, score) {
   const all = readJSON(RECORD_KEY, {});
-  if (!all[date]) return;
-  all[date] = { ...all[date], answers, score, currentIndex: answers.length };
+  if (!all[puzzleId]) return;
+  all[puzzleId] = { ...all[puzzleId], answers, score, currentIndex: answers.length };
   writeJSON(RECORD_KEY, all);
 }
 
 // Set localStorage "wtf-dev-complete" to "fail" (the save is rejected) or
 // "slow" (the save takes 1.5s) to rehearse the finish-game save.
-export async function devCompleteGame(date, answers, score, totalQuestions) {
+export async function devCompleteGame(puzzleId, answers, score, totalQuestions) {
   let mode = null;
   try { mode = localStorage.getItem("wtf-dev-complete"); } catch { /* ignore */ }
   if (mode === "slow") await new Promise((r) => setTimeout(r, 1500));
   if (mode === "fail") { devLog("save:failed"); throw new Error("Simulated save failure (wtf-dev-complete=fail)"); }
   devLog("save:confirmed");
   const all = readJSON(RECORD_KEY, {});
-  all[date] = {
-    ...(all[date] || { date, themeTitle: "Demo", startedAt: new Date().toISOString() }),
+  const date = all[puzzleId]?.date || null;
+  all[puzzleId] = {
+    ...(all[puzzleId] || { puzzleId, date, themeTitle: "Demo", startedAt: new Date().toISOString() }),
     answers,
     score,
     totalQuestions,
@@ -412,6 +420,7 @@ export async function devCompleteGame(date, answers, score, totalQuestions) {
     completedAt: new Date().toISOString(),
   };
   writeJSON(RECORD_KEY, all);
+  // Streaks count calendar days, so they use the day the puzzle ran.
   const stats = readJSON(STATS_KEY, {
     currentStreak: 0,
     longestStreak: 0,
@@ -462,7 +471,7 @@ function devLog(entry) {
 //     sets them; anything else uses the demo crowd above.
 //   "wtf-dev-crowd-lag": leave the player's saved game out of the next N
 //     reads (a number), or out of every read ("never").
-export function devCommunityStats(date, userScore) {
+export function devCommunityStats(puzzleId, userScore) {
   let mode = null;
   let lag = null;
   try {
@@ -475,7 +484,7 @@ export function devCommunityStats(date, userScore) {
     try { others = JSON.parse(mode); } catch { /* keep the demo crowd */ }
   }
   const histogram = { ...others };
-  const own = devGetRecord(date);
+  const own = devGetRecord(puzzleId);
   let includeOwn = Boolean(own?.completed);
   if (includeOwn && lag === "never") includeOwn = false;
   else if (includeOwn && Number(lag) > 0) {
@@ -527,9 +536,23 @@ export function devSaveGameRow(row) {
   savedGameRows.set(row.id, JSON.parse(JSON.stringify(row)));
 }
 
+const deletedGameIds = new Set();
+
+// Like the live database: a puzzle with any play (here, a record saved in
+// this browser) can't be deleted, with the same error PostgREST returns.
+export function devDeleteGameRow(id) {
+  if (devGetRecord(id)) {
+    throw new Error(`Supabase error 409: {"code":"23503","message":"update or delete on table \\"games\\" violates foreign key constraint \\"game_records_puzzle_id_fkey\\" on table \\"game_records\\""}`);
+  }
+  savedGameRows.delete(id);
+  deletedGameIds.add(id);
+}
+
 export function devMergeSavedGames(games, rowToGame) {
   const saved = [...savedGameRows.values()].map(rowToGame);
   const ids = new Set(saved.map((g) => g.id));
-  return [...saved, ...games.filter((g) => !ids.has(g.id))].sort((a, b) => b.date.localeCompare(a.date));
+  return [...saved, ...games.filter((g) => !ids.has(g.id))]
+    .filter((g) => !deletedGameIds.has(g.id))
+    .sort((a, b) => b.date.localeCompare(a.date));
 }
 

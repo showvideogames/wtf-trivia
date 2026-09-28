@@ -87,9 +87,11 @@ export async function saveThenLoadCrowdStats({ save, fetchStats, score, onSaved,
 }
 
 // Crowd stats that belong to this record: ready, and loaded for this exact
-// date and score. Anything else means "not available".
+// puzzle and score. Anything else means "not available".
 export function crowdStatsFor(crowd, record) {
-  return crowd?.status === "ready" && crowd.date === record?.date && crowd.score === record?.score ? crowd.stats : null;
+  return crowd?.status === "ready" && Boolean(crowd.puzzleId) && crowd.puzzleId === record?.puzzleId && crowd.score === record?.score
+    ? crowd.stats
+    : null;
 }
 
 // Crowd Showdown's "You beat N% of players": the share text's number

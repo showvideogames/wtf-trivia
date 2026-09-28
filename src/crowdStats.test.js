@@ -38,16 +38,16 @@ const HP = {
   categoryAShareName: "Harry Potter Character 🧙‍♂️", categoryBShareName: "Pro Hockey Player? 🏒",
 };
 const answers = (pattern) => [...pattern].map((c, i) => ({ questionIndex: i, correct: c === "1" }));
-const record = (pattern, date = "2026-09-27") => ({
-  date, score: [...pattern].filter((c) => c === "1").length, totalQuestions: pattern.length, answers: answers(pattern), completed: true,
+const record = (pattern, puzzleId = "g-mario-kart") => ({
+  puzzleId, date: "2026-09-27", score: [...pattern].filter((c) => c === "1").length, totalQuestions: pattern.length, answers: answers(pattern), completed: true,
 });
 const scoreLine = (game, rec, crowd) => shareTextFor(game, rec, crowd).split("\n")[7];
 
 // What handleComplete does: baseline, save, then read; stored with the
-// record's date and score.
+// record's puzzle and score.
 async function finish(rec, be) {
   const result = await saveThenLoadCrowdStats({ save: be.save, fetchStats: be.fetchStats, score: rec.score, sleep: be.sleep });
-  return { date: rec.date, score: rec.score, ...result };
+  return { puzzleId: rec.puzzleId, score: rec.score, ...result };
 }
 
 // In every `reads` list below, the first entry is the baseline taken before
@@ -232,23 +232,32 @@ describe("9. Results and Home share the same text", () => {
     );
   });
 
-  it("ignores crowd stats loaded for a different day or score", () => {
+  it("ignores crowd stats loaded for a different puzzle or score", () => {
     const rec = record("0001111100");
-    const ready = { status: "ready", date: rec.date, score: rec.score, stats: stats({ 4: 2, 5: 3, 7: 5 }, 5) };
+    const ready = { status: "ready", puzzleId: rec.puzzleId, score: rec.score, stats: stats({ 4: 2, 5: 3, 7: 5 }, 5) };
     expect(crowdStatsFor(ready, rec)).toBe(ready.stats);
-    expect(crowdStatsFor({ ...ready, date: "2026-09-26" }, rec)).toBeNull();
+    expect(crowdStatsFor({ ...ready, puzzleId: "g-other" }, rec)).toBeNull();
     expect(crowdStatsFor({ ...ready, score: 6 }, rec)).toBeNull();
     expect(crowdStatsFor(null, rec)).toBeNull();
     expect(scoreLine(HP, rec, ready)).toBe("5/10 • Beat 20% of players");
-    expect(scoreLine(HP, rec, { ...ready, date: "2026-09-26" })).toBe("5/10");
+    expect(scoreLine(HP, rec, { ...ready, puzzleId: "g-other" })).toBe("5/10");
     expect(scoreLine(HP, rec, { ...ready, score: 6 })).toBe("5/10");
+  });
+
+  it("never uses another puzzle's stats just because it ran on the same day", () => {
+    // Two puzzles scheduled for the same date (e.g. one swapped for another).
+    const rec = record("0001111100", "g-new-puzzle");
+    const other = { status: "ready", puzzleId: "g-old-puzzle", date: rec.date, score: rec.score, stats: stats({ 4: 2, 5: 3, 7: 5 }, 5) };
+    expect(crowdStatsFor(other, rec)).toBeNull();
+    // Stats keyed only by date (the old shape) are never matched.
+    expect(crowdStatsFor({ status: "ready", date: rec.date, score: rec.score, stats: other.stats }, { ...rec, puzzleId: undefined })).toBeNull();
   });
 });
 
 // Crowd Showdown ("You beat N% of players.") and the share line ("Beat N% of
 // players") must always show the same number.
 describe("10. Crowd Showdown and the share line use one strictly-lower percentage", () => {
-  const ready = (rec, histogram) => ({ status: "ready", date: rec.date, score: rec.score, stats: stats(histogram) });
+  const ready = (rec, histogram) => ({ status: "ready", puzzleId: rec.puzzleId, score: rec.score, stats: stats(histogram) });
   const both = (rec, crowd) => ({
     share: scoreLine(HP, rec, crowd),
     showdown: crowdBeatPercent(crowdStatsFor(crowd, rec), rec.score),
@@ -309,7 +318,7 @@ describe("10. Crowd Showdown and the share line use one strictly-lower percentag
     expect(crowdBeatPercent({ finishedPlayers: 12 }, 4)).toBeNull();
     // The share line refuses the same stats Crowd Showdown refuses.
     const rec = record("11110000");
-    const readyWith = (s) => ({ status: "ready", date: rec.date, score: rec.score, stats: s });
+    const readyWith = (s) => ({ status: "ready", puzzleId: rec.puzzleId, score: rec.score, stats: s });
     expect(both(rec, readyWith({ finishedPlayers: 12, scoreHistogram: { 2: 5, 4: 6 } }))).toEqual({ share: "4/8", showdown: null });
     expect(both(rec, readyWith({ finishedPlayers: 12 }))).toEqual({ share: "4/8", showdown: null });
   });

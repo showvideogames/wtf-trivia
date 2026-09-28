@@ -10,9 +10,10 @@ export default function DatePicker({value,onChange,games,currentGameId}){
   const[month,setMonth]=useState(()=>new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
   const[draft,setDraft]=useState(()=>formatAdminDate(value));
   const[open,setOpen]=useState(()=>!value);
+  // Retired puzzles hold no date (see findDateConflict).
   const occupied = new Map();
   (games||[]).forEach(g=>{
-    if(g?.date) occupied.set(g.date,g);
+    if(g?.date && g.status!=="retired") occupied.set(g.date,g);
   });
   const conflict = value ? occupied.get(value) : null;
   const hasConflict = Boolean(conflict && conflict.id!==currentGameId);
