@@ -4,6 +4,7 @@ import "./home.css";
 import "./game.css";
 import "./archive.css";
 import "./results.css";
+import "./backdrop.css";
 import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from "./mediaPreloader.js";
 import { archivePuzzleImages, describeImageWarning, failureReason, imageName, isWarningResolved } from "./admin/publishImages.js";
 import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor } from "./crowdStats.js";
@@ -79,8 +80,9 @@ const styles = `
 
   /* The document canvas itself: this is what shows beneath Safari's
      translucent status bar/toolbar and in the overscroll/bounce areas, so
-     it must match the redesigned pages' warm base rather than the old
-     bright dotted yellow (which now lives only on .app.legacy-dots below). */
+     it must match the candy backdrops' warm base. Every full-page screen
+     draws its backdrop over this (CandyBackdrop), so no page paints an
+     opaque background of its own. */
   html, body, #root {
     background: var(--warm-base);
   }
@@ -101,15 +103,13 @@ const styles = `
     cursor: default;
   }
 
-  /* ===== WARM SPOTLIGHT BACKDROP (landing page, Archive, Results) =====
+  /* ===== WARM SPOTLIGHT BACKDROP (CandyBackdrop "landing" preset) =====
      Two fixed layers behind all content, so no existing element needed
-     restyling. Both are inert decoration. Shared by the homepage, Archive
-     and Results so they feel like the same visual family; every other
-     screen keeps the legacy yellow dots (or, for gameplay, its own
-     quieter GameBackdrop cousin below). */
+     restyling. Both are inert decoration. Used by the homepage, Archive,
+     Results and the loading screen; the other presets swap in the quieter
+     gameplay glow and edge shapes from game.css. */
 
-  /* Layer 1: the graded background itself. Covers the body dot pattern on
-     the screens that use it; every other screen keeps the yellow dots.
+  /* Layer 1: the graded background itself.
      Many closely spaced stops keep the falloff smooth and band-free. */
   .landing-bg {
     position: fixed;
@@ -184,21 +184,12 @@ const styles = `
 
   /* ===== APP SHELL ===== */
   .app {
-    /* Home and gameplay paint their own full-bleed backdrop
-       (LandingBackdrop/GameBackdrop) behind this, so .app stays transparent
-       there. Every other screen keeps the old bright yellow + dot pattern,
-       applied via .legacy-dots below, scoped to this box rather than the
-       document background so it can't leak past .app's own bounds. */
+    /* Every screen paints its own full-bleed CandyBackdrop behind this, so
+       .app stays transparent. */
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
-  }
-
-  .app.legacy-dots {
-    background: var(--yellow);
-    background-image: radial-gradient(circle, #1A1A1A 1.2px, transparent 1.2px);
-    background-size: 26px 26px;
   }
 
   /* Gameplay is a fixed game screen on phones, never a scrolling page: a hard
@@ -214,9 +205,11 @@ const styles = `
 
   /* ===== LOADING SCREEN =====
      Shown only while the boot fetch is in flight, with no artificial minimum
-     duration -- it unmounts the instant loadAppData settles either way. Uses
-     the same warm base as html/body (no dotted pattern here or beneath it),
-     so nothing flashes when it mounts or unmounts. */
+     duration -- it unmounts the instant loadAppData settles either way. It
+     draws Home's own backdrop (transparent here, so the fixed layers show),
+     so the hand-off to Home doesn't flash. On phones Home anchors its
+     sprinkles to the bottom of the page rather than the screen, so the
+     loader leaves them out there instead of showing them somewhere else. */
   .ld-screen {
     min-height: 100dvh;
     width: 100%;
@@ -225,7 +218,6 @@ const styles = `
     align-items: center;
     justify-content: center;
     gap: 20px;
-    background: var(--warm-base);
     text-align: center;
     padding:
       max(28px, env(safe-area-inset-top))
@@ -266,6 +258,9 @@ const styles = `
   }
   @media (prefers-reduced-motion: reduce) {
     .ld-sprinkle { animation: none; opacity: 0.9; }
+  }
+  @media (max-width: 599px) {
+    .ld-screen .candy-bg { display: none; }
   }
 
   /* ===== HEADER ===== */
@@ -1518,7 +1513,9 @@ const styles = `
   .sec-sub { font-size: 13px; font-weight: 700; color: var(--teal-dark); margin-bottom: 14px; }
 
   /* ===== ADMIN — upgraded header ===== */
-  .adm-shell { background: #0E0E16; min-height: 100vh; font-family: 'Nunito', sans-serif; color: white; }
+  /* Transparent: the Admin CandyBackdrop shows around and between the
+     panels, which stay dark and opaque. */
+  .adm-shell { min-height: 100vh; font-family: 'Nunito', sans-serif; color: white; }
   .adm-hdr { background: linear-gradient(160deg,#FFF176,#FFE347 55%,#F0D020); border-bottom: 3px solid var(--black); padding: 13px 22px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 0 rgba(0,0,0,0.15); }
   .adm-title { font-family: 'Fredoka One', cursive; font-size: 20px; color: var(--black); -webkit-text-stroke: 0.3px var(--black); }
   .adm-body { max-width: 820px; margin: 0 auto; padding: 16px 18px; }
@@ -1712,6 +1709,8 @@ const styles = `
   .btn-adm-g     { background: rgba(255,255,255,.08); color: rgba(255,255,255,.65); border-color: #444; box-shadow: 0 3px 0 #000; }
   .btn-adm-green { background: linear-gradient(180deg, #4ADE80 0%, #22C55E 55%, #15803D 100%); color: white; border-color: #15803D; }
   .btn-adm-red   { background: rgba(239,68,68,.18); color: #FCA5A5; border-color: rgba(239,68,68,.4); box-shadow: none; }
+  /* Sits on the page, not a panel: keep the old dark page under its tint. */
+  .btn-adm-red.adm-on-page { background: linear-gradient(rgba(239,68,68,.18), rgba(239,68,68,.18)) #0E0E16; }
 
   .st-badge { font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 20px; text-transform: capitalize; letter-spacing: .3px; }
   .st-draft { background: rgba(255,255,255,.08); color: rgba(255,255,255,.4); }
@@ -1745,7 +1744,7 @@ const styles = `
   .tog.on { border-color: var(--teal); background: rgba(45,212,191,.12); color: var(--teal); }
 
   /* ===== LOGIN ===== */
-  .login-pg { min-height: 100vh; background: var(--yellow); background-image: radial-gradient(circle,#1A1A1A 1.2px,transparent 1.2px); background-size: 24px 24px; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .login-pg { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
   .login-card { background: linear-gradient(160deg, #FFFEF5 0%, #FFF8E7 100%); border: 3px solid var(--black); border-radius: 28px; padding: 36px 28px; width: 100%; max-width: 340px; text-align: center; box-shadow: 0 10px 0 rgba(0,0,0,0.2), 0 12px 0 rgba(0,0,0,0.08); position: relative; overflow: hidden; }
   .login-card::before { content: ''; position: absolute; top: 6px; left: 14px; right: 14px; height: 18%; border-radius: 20px 20px 50% 50%; background: linear-gradient(180deg, rgba(255,255,255,.65) 0%, rgba(255,255,255,0) 100%); pointer-events: none; }
   .login-logo { font-family: 'Fredoka One', cursive; font-size: 26px; margin-bottom: 4px; line-height: 1.25; }
@@ -2899,24 +2898,6 @@ const DECOR_PS = [
   {src:SP.pink,   cls:"decor-sprinkle", style:{bottom:"54px", right:"9%",  "--cw":"68px", transform:"rotate(14deg)"}}
 ];
 
-function LandingBackdrop(){
-  const render=(list,group)=>list.map((d,i)=>(
-    <img key={group+i} src={d.src} alt="" aria-hidden="true"
-         className={d.cls+" "+group} style={d.style}/>
-  ));
-  return(
-    <>
-      <div className="landing-bg" aria-hidden="true"/>
-      <div className="candy-bg" aria-hidden="true">
-        {render(DECOR_DT,"decor-dt")}
-        {render(DECOR_TB,"decor-tb")}
-        {render(DECOR_PH,"decor-ph")}
-        {render(DECOR_PS,"decor-ps")}
-      </div>
-    </>
-  );
-}
-
 // ---- GAMEPLAY BACKDROP ----
 // A quieter cousin of the landing backdrop: the same warm page and cream
 // spotlight, with noticeably fewer decorations so nothing competes with the
@@ -2954,32 +2935,75 @@ const GAME_DECOR_PH = [
   {src:SP.pink,   cls:"decor-sprinkle", style:{bottom:"18px", right:"4%",  "--cw":"52px", transform:"rotate(15deg)"}}
 ];
 
-function GameBackdrop(){
-  const render=(list,group)=>list.map((d,i)=>(
-    <img key={group+i} src={d.src} alt="" aria-hidden="true"
-         className={d.cls+" "+group} style={d.style}/>
-  ));
-  return(
+// ---- ADMIN BACKDROP DECOR ----
+// Admin gets the same page, glow and edge shapes, but only a few sprinkles,
+// parked well outside the 820px work column; no wrapped candies, and nothing
+// on phones, where the panels fill the width.
+const ADMIN_DECOR_DT = [
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"22%", left:"4%",  "--cw":"70px", transform:"rotate(-28deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"78%", left:"6%",  "--cw":"64px", transform:"rotate(17deg)"}},
+  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"30%", right:"5%", "--cw":"68px", transform:"rotate(31deg)"}},
+  {src:SP.yellow, cls:"decor-sprinkle", style:{top:"70%", right:"3%", "--cw":"60px", transform:"rotate(-14deg)"}}
+];
+const ADMIN_DECOR_TB = [
+  {src:SP.teal,   cls:"decor-sprinkle", style:{top:"40%", left:"0%",  "--cw":"52px", transform:"rotate(-30deg)"}},
+  {src:SP.pink,   cls:"decor-sprinkle", style:{top:"76%", right:"0%", "--cw":"50px", transform:"rotate(22deg)"}}
+];
+
+// ---- SHARED CANDY BACKDROP ----
+// Every full-page screen draws its background with this one component. A
+// preset picks the layers:
+//   landing: warm spotlight + wrapped candies and sprinkles (Home, Archive,
+//            Results, Loading). Its markup is exactly what Home always had.
+//   game:    the quieter gameplay spotlight, the large rounded edge shapes
+//            and a sparser sprinkle set (Gameplay, Stats, Account, the
+//            connection-error page).
+//   admin:   the game layers with only a few sprinkles (every Admin screen).
+// Each layer is fixed to the viewport, inert and aria-hidden, and sits behind
+// the page on a negative z-index. `contained` instead pins the layers inside
+// the nearest positioned box (Admin Preview's player stage), always in the
+// phone arrangement; see backdrop.css.
+const BACKDROP_PRESETS = {
+  landing:{glow:"landing-bg", shapes:false, decor:[[DECOR_DT,"decor-dt"],[DECOR_TB,"decor-tb"],[DECOR_PH,"decor-ph"],[DECOR_PS,"decor-ps"]]},
+  game:   {glow:"gp-bg", shapes:true, decor:[[GAME_DECOR_DT,"gpd-dt"],[GAME_DECOR_TB,"gpd-tb"],[GAME_DECOR_PH,"gpd-ph"]]},
+  admin:  {glow:"gp-bg", shapes:true, decor:[[ADMIN_DECOR_DT,"gpd-dt"],[ADMIN_DECOR_TB,"gpd-tb"]]},
+};
+
+function CandyBackdrop({preset="game", contained=false}){
+  const {glow, shapes, decor} = BACKDROP_PRESETS[preset];
+  const layers=(
     <>
-      <div className="gp-bg" aria-hidden="true"/>
+      <div className={glow} aria-hidden="true"/>
       {/* A few large, softly cropped brand shapes around the edges and two
           small accent marks, all plain CSS (see .gp-shapes). */}
-      <div className="gp-shapes" aria-hidden="true">
-        <span className="gp-shape gp-shape-teal"/>
-        <span className="gp-shape gp-shape-pink"/>
-        <span className="gp-shape gp-shape-sun"/>
-        <span className="gp-shape gp-shape-rose"/>
-        <span className="gp-mark gp-mark-l"/>
-        <span className="gp-mark gp-mark-r"/>
-      </div>
+      {shapes&&(
+        <div className="gp-shapes" aria-hidden="true">
+          <span className="gp-shape gp-shape-teal"/>
+          <span className="gp-shape gp-shape-pink"/>
+          <span className="gp-shape gp-shape-sun"/>
+          <span className="gp-shape gp-shape-rose"/>
+          <span className="gp-mark gp-mark-l"/>
+          <span className="gp-mark gp-mark-r"/>
+        </div>
+      )}
       <div className="candy-bg" aria-hidden="true">
-        {render(GAME_DECOR_DT,"gpd-dt")}
-        {render(GAME_DECOR_TB,"gpd-tb")}
-        {render(GAME_DECOR_PH,"gpd-ph")}
+        {decor.flatMap(([list,group])=>list.map((d,i)=>(
+          <img key={group+i} src={d.src} alt="" aria-hidden="true"
+               className={d.cls+" "+group} style={d.style}/>
+        )))}
       </div>
     </>
   );
+  if(!contained) return layers;
+  return(
+    <div className="cbd-contained" aria-hidden="true">
+      <div className="cbd-window">{layers}</div>
+    </div>
+  );
 }
+
+function LandingBackdrop(){ return <CandyBackdrop preset="landing"/>; }
+function GameBackdrop(){ return <CandyBackdrop preset="game"/>; }
 
 function Toast({message,onDone}){useEffect(()=>{const id=setTimeout(onDone,2100);return()=>clearTimeout(id);},[onDone]);return <div className="toast">{message}</div>;}
 
@@ -4740,7 +4764,7 @@ function AdminDash({games,onNew,onEdit,onLogout}){
       <div className="adm-body">
         <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
           <span style={{background:"linear-gradient(160deg,#4ADE80,#22C55E 55%,#16A34A)",color:"white",fontFamily:"'Fredoka One',cursive",fontSize:14,padding:"6px 16px",borderRadius:20,border:"2px solid var(--green-dark)",boxShadow:"0 3px 0 var(--green-dark)"}}>✓ {counts.published} published</span>
-          <span style={{background:"linear-gradient(160deg,rgba(45,212,191,.15),rgba(45,212,191,.08))",color:"var(--teal)",fontFamily:"'Fredoka One',cursive",fontSize:14,padding:"6px 16px",borderRadius:20,border:"1px solid rgba(45,212,191,.3)"}}>✏ {counts.draft} drafts</span>
+          <span style={{background:"linear-gradient(160deg,rgba(45,212,191,.15),rgba(45,212,191,.08)) #0E0E16",color:"var(--teal)",fontFamily:"'Fredoka One',cursive",fontSize:14,padding:"6px 16px",borderRadius:20,border:"1px solid rgba(45,212,191,.3)"}}>✏ {counts.draft} drafts</span>
         </div>
         <div className="adm-card">
           <h3>All Games</h3>
@@ -5138,7 +5162,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
           {!showQF&&!editQ&&<button className="btn-adm btn-adm-y" style={{marginTop:9,width:"100%"}} onClick={()=>setShowQF(true)}>+ Add Question</button>}
           {showQF&&!editQ&&<QForm catA={game.categoryA} catB={game.categoryB} onSave={addQ} onCancel={()=>setShowQF(false)}/>}
         </div>
-        {!isNew&&game.status!=="published"&&<div style={{textAlign:"center"}}><button className="btn-adm btn-adm-red" onClick={removeGame}>Delete game</button></div>}
+        {!isNew&&game.status!=="published"&&<div style={{textAlign:"center"}}><button className="btn-adm btn-adm-red adm-on-page" onClick={removeGame}>Delete game</button></div>}
       </div>
     </div>
   );
@@ -5218,10 +5242,13 @@ function AdminPreview({game,onBack}){
   const[view,setView]=useState("home");
   const onComplete=final=>{setPr(final);setView("score");};
   return(
-    <div className="adm-shell">
+    <div className="adm-shell adm-preview">
       <div className="prev-banner">🎭 Preview Mode — scores not saved</div>
       <div className="adm-hdr"><div className="adm-title">Preview</div><button className="btn-adm btn-adm-g" onClick={onBack}>← Exit Preview</button></div>
-      <div style={{maxWidth:500,margin:"0 auto",padding:"14px 18px"}}>
+      {/* The player's own backdrop, drawn inside this stage only, so the
+          Admin page backdrop around it never stands in for it. */}
+      <div className="adm-preview-stage">
+        <CandyBackdrop preset={view==="game"?"game":"landing"} contained/>
         <style>{styles}</style>
         {view==="home"&&(
           <div className="card" style={{marginTop:8,overflow:"hidden",padding:0}}>
@@ -5356,6 +5383,8 @@ export default function WhatTheFudgeTrivia(){
   const isGameplay = view==="game"||view==="replay";
   // Results carries its own warm backdrop and PageHeader, like Archive.
   const isResults = view==="score"||view==="replay-score";
+  // Stats and Account: the older shared header, over the gameplay backdrop.
+  const usesSharedHeader = view!=="home"&&view!=="archive"&&!isGameplay&&!isResults;
 
   // Home-idle preload: once the player is looking at Home with an unfinished
   // puzzle in front of them, quietly warm just the single image they'd see
@@ -5578,6 +5607,7 @@ export default function WhatTheFudgeTrivia(){
     <>
       <style>{styles}</style>
       <div className="ld-screen" role="status" aria-live="polite">
+        <LandingBackdrop/>
         <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="ld-logo"/>
         <div className="ld-sprinkles" aria-hidden="true">
           <img src="/sprinkle-pink.png" className="ld-sprinkle ld-sprinkle-1" alt=""/>
@@ -5592,7 +5622,8 @@ export default function WhatTheFudgeTrivia(){
   if(error) return(
     <>
       <style>{styles}</style>
-      <div style={{minHeight:"100vh",background:"var(--yellow)",backgroundImage:"radial-gradient(circle,#1A1A1A 1.2px,transparent 1.2px)",backgroundSize:"26px 26px",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+      <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+        <GameBackdrop/>
         <div className="card" style={{textAlign:"center",maxWidth:340}}>
           <div style={{fontSize:48,marginBottom:12}}>😬</div>
           <div style={{fontFamily:"'Fredoka One',cursive",fontSize:22,marginBottom:8}}>Connection Error</div>
@@ -5605,22 +5636,22 @@ export default function WhatTheFudgeTrivia(){
 
   // Admin branch
   if(view==="admin"){
-    if(!adminIn)return <><style>{styles}</style><AdminLogin onLogin={()=>{setAdminIn(true);setAdminView("dashboard");}}/></>;
-    if(adminView==="dashboard")return <><style>{styles}</style><AdminDash games={games} onNew={()=>{setEditGame({id:`g-${Date.now()}`,date:"",themeTitle:"",categoryA:"",categoryB:"",status:"draft",questions:[]});setAdminView("editor");}} onEdit={g=>{setEditGame(g);setAdminView("editor");}} onLogout={()=>{setAdminIn(false);setAdminView("login");setView("home");}}/></>;
-    if(adminView==="editor")return <><style>{styles}</style><AdminEditor game={editGame} games={games} onSave={handleSave} onDelete={handleDel} onBack={()=>setAdminView("dashboard")}/></>;
+    if(!adminIn)return <><style>{styles}</style><CandyBackdrop preset="admin"/><AdminLogin onLogin={()=>{setAdminIn(true);setAdminView("dashboard");}}/></>;
+    if(adminView==="dashboard")return <><style>{styles}</style><CandyBackdrop preset="admin"/><AdminDash games={games} onNew={()=>{setEditGame({id:`g-${Date.now()}`,date:"",themeTitle:"",categoryA:"",categoryB:"",status:"draft",questions:[]});setAdminView("editor");}} onEdit={g=>{setEditGame(g);setAdminView("editor");}} onLogout={()=>{setAdminIn(false);setAdminView("login");setView("home");}}/></>;
+    if(adminView==="editor")return <><style>{styles}</style><CandyBackdrop preset="admin"/><AdminEditor game={editGame} games={games} onSave={handleSave} onDelete={handleDel} onBack={()=>setAdminView("dashboard")}/></>;
   }
 
   // Player app
   return(
     <>
       <style>{styles}</style>
-      <div className={`app${view!=="home"&&view!=="archive"&&!isGameplay&&!isResults?" legacy-dots":""}${isGameplay?" gp-fullscreen":""}`}>
+      <div className={`app${usesSharedHeader?" cbd-page":""}${isGameplay?" gp-fullscreen":""}`}>
         {view==="home"&&<LandingBackdrop/>}
-        {isGameplay&&<GameBackdrop/>}
+        {(isGameplay||usesSharedHeader)&&<GameBackdrop/>}
         {/* Gameplay, Archive and Results each carry their own public header (logo,
             sound, help, account) and backdrop. Every other screen keeps the
             existing shared header unchanged. */}
-        {view!=="home"&&view!=="archive"&&!isGameplay&&!isResults&&<div className="hdr">
+        {usesSharedHeader&&<div className="hdr">
           <div className="logo">
             <div className="logo-line1"><span className="logo-what">What The</span></div>
             <div className="logo-line2"><span className="logo-fudge">Fudge</span><span className="logo-emoji">🍬</span></div>
