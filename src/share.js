@@ -1,25 +1,40 @@
 /* ============================================================
-   Results share text. Pure functions, no DOM or network, so the
-   copied text can be tested exactly. The Results preview renders
-   this same string line by line, so preview and clipboard agree.
+   Share text: the one formatter behind every share route (the
+   Results preview and copy button, Home's copy on desktop and
+   native share sheet on phones, and the clipboard fallback).
+   Pure functions, no DOM or network, so the text can be tested
+   exactly. Plain text, one newline between lines, no blank lines,
+   no trailing spaces, nothing centred or sized to fit:
 
-     Harry Potter Character 🧙‍♂️
-     OR
-     Pro Hockey Player? 🏒
-     🔴🔴🔴🟢🟢🟢🟢🟢🔴🔴
-     5/10 ➜ Beat 20% of players
-     whatthefudgetrivia.com
+     What The Fudge Trivia 🍬
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Nicolas Cage Movie 🤩🎬
+          OR
+     Board Game 🎲♟️
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━
+     🟢🟢🔴🔴🟢🟢🔴🔴🟢🟢🟢🟢
+     8/12 • Beat 77% of players
+     whatthefudge.gg
    ============================================================ */
 
-export const SHARE_DOMAIN = "whatthefudgetrivia.com";
+export const SHARE_HEADER = "What The Fudge Trivia 🍬";
+// Always 26 heavy horizontal lines (U+2501), whatever the labels' length.
+export const SHARE_DIVIDER = "━".repeat(26);
+// Always five ASCII spaces, then OR; never positioned from the labels.
+export const SHARE_OR = "     OR";
+export const SHARE_DOMAIN = "whatthefudge.gg";
 
-// A puzzle's optional share name for one category, or that category's normal
-// name when the share name is blank. Whitespace-only counts as blank.
+// One label on one line: pasted newlines, tabs and runs of whitespace become
+// one ASCII space, and the ends are trimmed. Emoji and punctuation are kept
+// as entered; nothing is truncated or padded.
+export function normalizeShareLabel(label) {
+  return typeof label === "string" ? label.replace(/\s+/g, " ").trim() : "";
+}
+
+// A puzzle's optional share name for one category (emoji included), or that
+// category's normal gameplay name when the share name is blank.
 export function shareCategoryName(shareName, categoryName, fallback) {
-  const custom = typeof shareName === "string" ? shareName.trim() : "";
-  if (custom) return custom;
-  const normal = typeof categoryName === "string" ? categoryName.trim() : "";
-  return normal || fallback;
+  return normalizeShareLabel(shareName) || normalizeShareLabel(categoryName) || fallback;
 }
 
 // Share of finishers who scored strictly lower than `score`: the "Beat N% of
@@ -54,21 +69,29 @@ export function strictlyBetterPercent(histogram, score, { includesPlayer = true 
   return Math.min(99, Math.floor((lower / total) * 100));
 }
 
-// The full copied text. `record` is the finished game record (score,
-// totalQuestions, answers in question order); `game` supplies the category
-// names; `histogram` is the crowd score histogram, or null when unavailable.
-export function buildResultsShareText({ game, record, histogram }) {
+// A "Beat N%" as crowdBeatPercent (crowdStats.js) produces it: a whole
+// number from 0 to 99. Anything else means no percentage is shown.
+const isBeatPercent = (value) => Number.isInteger(value) && value >= 0 && value <= 99;
+
+// The full share text. `record` is the finished game record (score,
+// totalQuestions, answers in question order: one circle per saved answer);
+// `game` supplies the share names and category names; `beatPercent` is
+// Crowd Showdown's already-validated "Beat N%" (crowdBeatPercent), or null
+// when there is no honest comparison, which leaves the score line bare.
+export function buildResultsShareText({ game, record, beatPercent = null }) {
   const score = Number.isFinite(record?.score) ? record.score : 0;
   const total = Number.isFinite(record?.totalQuestions) ? record.totalQuestions : 0;
   const answers = Array.isArray(record?.answers) ? record.answers : [];
-  const dots = answers.map((a) => (a?.correct ? "🟢" : "🔴")).join("");
-  const percent = strictlyBetterPercent(histogram, score);
+  const circles = answers.map((a) => (a?.correct ? "🟢" : "🔴")).join("");
   return [
+    SHARE_HEADER,
+    SHARE_DIVIDER,
     shareCategoryName(game?.categoryAShareName, game?.categoryA, "Category A"),
-    "OR",
+    SHARE_OR,
     shareCategoryName(game?.categoryBShareName, game?.categoryB, "Category B"),
-    dots,
-    percent === null ? `${score}/${total}` : `${score}/${total} ➜ Beat ${percent}% of players`,
+    SHARE_DIVIDER,
+    circles,
+    isBeatPercent(beatPercent) ? `${score}/${total} • Beat ${beatPercent}% of players` : `${score}/${total}`,
     SHARE_DOMAIN,
   ].join("\n");
 }

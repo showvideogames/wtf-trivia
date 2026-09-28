@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import {
-  CROWD_RETRY_DELAYS_MS, crowdBeatPercent, crowdHistogramFor, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor, statsIncludeScore,
+  CROWD_RETRY_DELAYS_MS, crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor, statsIncludeScore,
 } from "./crowdStats.js";
 
 // Stats shaped like dbGetPuzzleCommunityStats returns them (the fields these
@@ -41,7 +41,7 @@ const answers = (pattern) => [...pattern].map((c, i) => ({ questionIndex: i, cor
 const record = (pattern, date = "2026-09-27") => ({
   date, score: [...pattern].filter((c) => c === "1").length, totalQuestions: pattern.length, answers: answers(pattern), completed: true,
 });
-const scoreLine = (game, rec, crowd) => shareTextFor(game, rec, crowd).split("\n")[4];
+const scoreLine = (game, rec, crowd) => shareTextFor(game, rec, crowd).split("\n")[7];
 
 // What handleComplete does: baseline, save, then read; stored with the
 // record's date and score.
@@ -65,7 +65,7 @@ describe("baseline, save, then read crowd stats", () => {
     expect(crowd.status).toBe("ready");
     expect(crowd.stats.finishedPlayers).toBe(8);
     // 2 of 8 scored lower: 25%, in the share line and Crowd Showdown alike.
-    expect(scoreLine(HP, rec, crowd)).toBe("5/10 ➜ Beat 25% of players");
+    expect(scoreLine(HP, rec, crowd)).toBe("5/10 • Beat 25% of players");
     expect(crowdBeatPercent(crowdStatsFor(crowd, rec), rec.score)).toBe(25);
   });
 
@@ -79,7 +79,7 @@ describe("baseline, save, then read crowd stats", () => {
     const crowd = await finish(rec, be);
     expect(be.fetchStats).toHaveBeenCalledTimes(3);
     expect(crowd.stats.finishedPlayers).toBe(10);
-    expect(scoreLine(HP, rec, crowd)).toBe("5/10 ➜ Beat 20% of players");
+    expect(scoreLine(HP, rec, crowd)).toBe("5/10 • Beat 20% of players");
   });
 
   it("uses only stats read after the save is confirmed", async () => {
@@ -100,7 +100,7 @@ describe("baseline, save, then read crowd stats", () => {
     expect(be.fetchStats).toHaveBeenCalledTimes(2);
     expect(crowd.stats.finishedPlayers).toBe(10); // not 11
     expect(crowd.stats.scoreHistogram).toEqual({ 4: 2, 5: 3, 7: 5 });
-    expect(scoreLine(HP, rec, crowd)).toBe("5/10 ➜ Beat 20% of players");
+    expect(scoreLine(HP, rec, crowd)).toBe("5/10 • Beat 20% of players");
   });
 
   it("2b. revisiting: stats that include the completed game are used as-is", async () => {
@@ -120,7 +120,7 @@ describe("baseline, save, then read crowd stats", () => {
   it("4. lowest score with several finishers: Beat 0% of players", async () => {
     const rec = record("0000000000");
     const crowd = await finish(rec, backend({ reads: [stats({ 4: 2, 7: 5 }, 0), stats({ 0: 1, 4: 2, 7: 5 }, 0)] }));
-    expect(scoreLine(HP, rec, crowd)).toBe("0/10 ➜ Beat 0% of players");
+    expect(scoreLine(HP, rec, crowd)).toBe("0/10 • Beat 0% of players");
   });
 
   it("5. several players tied with you are never counted as beaten", async () => {
@@ -129,7 +129,7 @@ describe("baseline, save, then read crowd stats", () => {
       stats({ 2: 1, 5: 3, 6: 7, 9: 8 }, 6),
       stats({ 2: 1, 5: 3, 6: 8, 9: 8 }, 6),
     ] }));
-    expect(scoreLine(HP, rec, crowd)).toBe("6/10 ➜ Beat 20% of players"); // 4 of 20
+    expect(scoreLine(HP, rec, crowd)).toBe("6/10 • Beat 20% of players"); // 4 of 20
     expect(crowdBeatPercent(crowdStatsFor(crowd, rec), rec.score)).toBe(20); // Crowd Showdown too
   });
 
@@ -141,7 +141,7 @@ describe("baseline, save, then read crowd stats", () => {
       stats({ 8: 40, 12: 101, 15: 1 }, 15), // includes you
     ] });
     const crowd = await finish(rec, be);
-    expect(scoreLine(HP, rec, crowd)).toBe("15/15 ➜ Beat 99% of players");
+    expect(scoreLine(HP, rec, crowd)).toBe("15/15 • Beat 99% of players");
   });
 
   it("7. save failure: nothing read after it, score only, Crowd Showdown hidden", async () => {
@@ -185,7 +185,7 @@ describe("baseline, save, then read crowd stats", () => {
     const rec = record("0001111100");
     const crowd = await finish(rec, backend({ reads: [new Error("baseline failed"), stats({ 4: 2, 5: 3, 7: 5 }, 5)] }));
     expect(crowd.status).toBe("ready");
-    expect(scoreLine(HP, rec, crowd)).toBe("5/10 ➜ Beat 20% of players");
+    expect(scoreLine(HP, rec, crowd)).toBe("5/10 • Beat 20% of players");
   });
 
   it("runs onSaved once the save is confirmed, and not after a failed save", async () => {
@@ -227,17 +227,21 @@ describe("9. Results and Home share the same text", () => {
     const home = shareTextFor(HP, { ...rec }, crowd);
     expect(home).toBe(results);
     expect(results).toBe(
-      "Harry Potter Character 🧙‍♂️\nOR\nPro Hockey Player? 🏒\n🔴🔴🔴🟢🟢🟢🟢🟢🔴🔴\n5/10 ➜ Beat 20% of players\nwhatthefudgetrivia.com"
+      "What The Fudge Trivia 🍬\n━━━━━━━━━━━━━━━━━━━━━━━━━━\nHarry Potter Character 🧙‍♂️\n     OR\nPro Hockey Player? 🏒\n" +
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n🔴🔴🔴🟢🟢🟢🟢🟢🔴🔴\n5/10 • Beat 20% of players\nwhatthefudge.gg"
     );
   });
 
   it("ignores crowd stats loaded for a different day or score", () => {
     const rec = record("0001111100");
     const ready = { status: "ready", date: rec.date, score: rec.score, stats: stats({ 4: 2, 5: 3, 7: 5 }, 5) };
-    expect(crowdHistogramFor(ready, rec)).toEqual({ 4: 2, 5: 3, 7: 5 });
-    expect(crowdHistogramFor({ ...ready, date: "2026-09-26" }, rec)).toBeNull();
-    expect(crowdHistogramFor({ ...ready, score: 6 }, rec)).toBeNull();
-    expect(crowdHistogramFor(null, rec)).toBeNull();
+    expect(crowdStatsFor(ready, rec)).toBe(ready.stats);
+    expect(crowdStatsFor({ ...ready, date: "2026-09-26" }, rec)).toBeNull();
+    expect(crowdStatsFor({ ...ready, score: 6 }, rec)).toBeNull();
+    expect(crowdStatsFor(null, rec)).toBeNull();
+    expect(scoreLine(HP, rec, ready)).toBe("5/10 • Beat 20% of players");
+    expect(scoreLine(HP, rec, { ...ready, date: "2026-09-26" })).toBe("5/10");
+    expect(scoreLine(HP, rec, { ...ready, score: 6 })).toBe("5/10");
   });
 });
 
@@ -257,7 +261,7 @@ describe("10. Crowd Showdown and the share line use one strictly-lower percentag
       stats({ 3: 10, 5: 18, 7: 20, 8: 3 }), // you counted: 51
     ] }));
     expect(crowd.stats.finishedPlayers).toBe(51);
-    expect(both(rec, crowd)).toEqual({ share: "8/8 ➜ Beat 94% of players", showdown: 94 }); // floor(48/51)
+    expect(both(rec, crowd)).toEqual({ share: "8/8 • Beat 94% of players", showdown: 94 }); // floor(48/51)
     expect(shareTextFor(HP, { ...rec }, crowd)).toBe(shareTextFor(HP, rec, crowd)); // Results and Home
   });
 
@@ -268,24 +272,24 @@ describe("10. Crowd Showdown and the share line use one strictly-lower percentag
 
   it("several finishers, nobody lower: 0%", () => {
     const rec = record("00000000");
-    expect(both(rec, ready(rec, { 0: 1, 4: 3, 8: 2 }))).toEqual({ share: "0/8 ➜ Beat 0% of players", showdown: 0 });
+    expect(both(rec, ready(rec, { 0: 1, 4: 3, 8: 2 }))).toEqual({ share: "0/8 • Beat 0% of players", showdown: 0 });
   });
 
   it("unique top score: capped at 99%, never 100%", () => {
     const rec = record("11111111");
-    expect(both(rec, ready(rec, { 2: 150, 5: 249, 8: 1 }))).toEqual({ share: "8/8 ➜ Beat 99% of players", showdown: 99 });
+    expect(both(rec, ready(rec, { 2: 150, 5: 249, 8: 1 }))).toEqual({ share: "8/8 • Beat 99% of players", showdown: 99 });
   });
 
   it("tied top score: everyone tied is left out", () => {
     const rec = record("11111111");
     // 10 finishers: 6 lower, 4 tied at 8/8 (you included).
-    expect(both(rec, ready(rec, { 4: 6, 8: 4 }))).toEqual({ share: "8/8 ➜ Beat 60% of players", showdown: 60 });
+    expect(both(rec, ready(rec, { 4: 6, 8: 4 }))).toEqual({ share: "8/8 • Beat 60% of players", showdown: 60 });
   });
 
   it("middle score", () => {
     const rec = record("11110000"); // 4/8
     // 20 finishers: 5 lower, 6 at 4/8, 9 higher.
-    expect(both(rec, ready(rec, { 2: 5, 4: 6, 7: 9 }))).toEqual({ share: "4/8 ➜ Beat 25% of players", showdown: 25 });
+    expect(both(rec, ready(rec, { 2: 5, 4: 6, 7: 9 }))).toEqual({ share: "4/8 • Beat 25% of players", showdown: 25 });
   });
 
   it("missing stats: no comparison", () => {
@@ -303,6 +307,11 @@ describe("10. Crowd Showdown and the share line use one strictly-lower percentag
     expect(crowdBeatPercent(stats({ 2: 5, 7: 9 }), 4)).toBeNull();
     // Missing histogram.
     expect(crowdBeatPercent({ finishedPlayers: 12 }, 4)).toBeNull();
+    // The share line refuses the same stats Crowd Showdown refuses.
+    const rec = record("11110000");
+    const readyWith = (s) => ({ status: "ready", date: rec.date, score: rec.score, stats: s });
+    expect(both(rec, readyWith({ finishedPlayers: 12, scoreHistogram: { 2: 5, 4: 6 } }))).toEqual({ share: "4/8", showdown: null });
+    expect(both(rec, readyWith({ finishedPlayers: 12 }))).toEqual({ share: "4/8", showdown: null });
   });
 });
 

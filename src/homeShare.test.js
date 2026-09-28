@@ -41,7 +41,8 @@ describe("isPhoneOrTablet", () => {
 });
 
 describe("shareOrCopy", () => {
-  const TEXT = "Harry Potter Character 🧙‍♂️\nOR\nPro Hockey Player? 🏒\n🔴🟢\n1/2 ➜ Beat 50% of players\nwhatthefudgetrivia.com";
+  const TEXT = "What The Fudge Trivia 🍬\n━━━━━━━━━━━━━━━━━━━━━━━━━━\nHarry Potter Character 🧙‍♂️\n     OR\nPro Hockey Player? 🏒\n" +
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━\n🔴🟢\n1/2 • Beat 50% of players\nwhatthefudge.gg";
 
   it("copies on desktop without opening the share panel, even when one exists", async () => {
     const nav = fakeNav({ userAgent: UA.windowsChrome, mobile: false, share: vi.fn().mockResolvedValue(undefined) });
@@ -87,10 +88,11 @@ describe("shareOrCopy", () => {
       categoryAShareName: "Harry Potter Character 🧙‍♂️", categoryBShareName: "Pro Hockey Player? 🏒" };
     const answers = [..."0001111100"].map((c, i) => ({ questionIndex: i, correct: c === "1" }));
     const record = { date: "2026-09-27", score: 5, totalQuestions: 10, answers, completed: true };
-    const crowd = { date: "2026-09-27", score: 5, status: "ready", stats: { scoreHistogram: { 4: 2, 5: 3, 7: 5 } } };
+    const crowd = { date: "2026-09-27", score: 5, status: "ready", stats: { finishedPlayers: 10, scoreHistogram: { 4: 2, 5: 3, 7: 5 } } };
     const text = shareTextFor(game, record, crowd);
     expect(text).toBe(
-      "Harry Potter Character 🧙‍♂️\nOR\nPro Hockey Player? 🏒\n🔴🔴🔴🟢🟢🟢🟢🟢🔴🔴\n5/10 ➜ Beat 20% of players\nwhatthefudgetrivia.com"
+      "What The Fudge Trivia 🍬\n━━━━━━━━━━━━━━━━━━━━━━━━━━\nHarry Potter Character 🧙‍♂️\n     OR\nPro Hockey Player? 🏒\n" +
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n🔴🔴🔴🟢🟢🟢🟢🟢🔴🔴\n5/10 • Beat 20% of players\nwhatthefudge.gg"
     );
     const phone = fakeNav({ userAgent: UA.iPhone, maxTouchPoints: 5, share: vi.fn().mockResolvedValue(undefined) });
     const desktop = fakeNav({ userAgent: UA.windowsChrome });

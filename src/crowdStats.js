@@ -106,12 +106,9 @@ export function crowdBeatPercent(stats, score, { saved = true } = {}) {
     : null;
 }
 
-// The histogram to share for this record, or null.
-export function crowdHistogramFor(crowd, record) {
-  return crowdStatsFor(crowd, record)?.scoreHistogram ?? null;
-}
-
 // The one share text for a finished game, used by Results and Home alike.
+// Its "Beat N%" is Crowd Showdown's own number for today's saved result.
 export function shareTextFor(game, record, crowd) {
-  return buildResultsShareText({ game, record, histogram: crowdHistogramFor(crowd, record) });
+  const beatPercent = crowdBeatPercent(crowdStatsFor(crowd, record), record?.score);
+  return buildResultsShareText({ game, record, beatPercent });
 }
