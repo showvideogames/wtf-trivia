@@ -1,10 +1,11 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 import "./home.css";
 import "./game.css";
 import "./archive.css";
 import "./results.css";
 import "./backdrop.css";
+import "./admin/studio.css";
 import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from "./mediaPreloader.js";
 import { archivePuzzleImages, describeImageWarning, failureReason, imageName, isWarningResolved } from "./admin/publishImages.js";
 import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor } from "./crowdStats.js";
@@ -12,6 +13,15 @@ import { gameToRow, rowToGame } from "./gameRow.js";
 import { copyText, shareOrCopy } from "./homeShare.js";
 import SharePreview from "./SharePreview.jsx";
 import ResultsCopyButton from "./ResultsCopyButton.jsx";
+import { StudioContext, paletteColor } from "./admin/StudioContext.js";
+import { localDateFromISO } from "./admin/adminDates.js";
+import { firstBlankItem, followMove, hasText, moveQuestion, questionCountOk, questionKey } from "./admin/questionStatus.js";
+import Dashboard from "./admin/Dashboard.jsx";
+import { EditorActions, EditorHeader, EditorTabs, MobileActionBar, NoticeBar } from "./admin/EditorChrome.jsx";
+import SetupTab from "./admin/SetupTab.jsx";
+import QuestionList from "./admin/QuestionList.jsx";
+import QuestionEditor from "./admin/QuestionEditor.jsx";
+import Icon from "./admin/Icon.jsx";
 import {
   demoGames as devDemoGames,
   devPlayer,
@@ -1512,22 +1522,9 @@ const styles = `
   .sec-head { font-family: 'Fredoka One', cursive; font-size: 26px; color: var(--black); margin-bottom: 3px; }
   .sec-sub { font-size: 13px; font-weight: 700; color: var(--teal-dark); margin-bottom: 14px; }
 
-  /* ===== ADMIN — upgraded header ===== */
-  /* Transparent: the Admin CandyBackdrop shows around and between the
-     panels, which stay dark and opaque. */
-  .adm-shell { min-height: 100vh; font-family: 'Nunito', sans-serif; color: white; }
-  .adm-hdr { background: linear-gradient(160deg,#FFF176,#FFE347 55%,#F0D020); border-bottom: 3px solid var(--black); padding: 13px 22px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 0 rgba(0,0,0,0.15); }
-  .adm-title { font-family: 'Fredoka One', cursive; font-size: 20px; color: var(--black); -webkit-text-stroke: 0.3px var(--black); }
-  .adm-body { max-width: 820px; margin: 0 auto; padding: 16px 18px; }
-
-  .adm-card { background: #1A1A28; border: 1.5px solid rgba(45,212,191,0.15); border-radius: 18px; padding: 16px; margin-bottom: 12px; }
-  .adm-card h3 { font-family: 'Fredoka One', cursive; font-size: 16px; color: var(--teal); margin-bottom: 10px; letter-spacing: .3px; }
-
+  /* ===== FORM FIELDS shared by Admin sign-in and Account ===== */
   .adm-field { margin-bottom: 9px; }
   .adm-field label { display: block; font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: rgba(45,212,191,.5); margin-bottom: 3px; }
-  .adm-share-names { margin-bottom: 12px; }
-  .adm-share-names .adm-field { margin-bottom: 4px; }
-  .adm-hint { font-size: 11px; font-weight: 700; line-height: 1.45; color: rgba(255,255,255,.45); }
 
   .adm-input {
     width: 100%;
@@ -1545,203 +1542,6 @@ const styles = `
   .adm-input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(45,212,191,0.1); }
   .adm-input::placeholder { color: rgba(255,255,255,.18); }
   select.adm-input option { background: #12121E; }
-  .adm-ta { resize: vertical; min-height: 64px; }
-
-  .admin-date-picker { margin-bottom: 14px; }
-  .admin-date-top { display: flex; gap: 8px; align-items: stretch; }
-  .admin-date-input-wrap { flex: 1; }
-  .admin-date-btn {
-    flex-shrink: 0;
-    min-width: 118px;
-    background: linear-gradient(180deg,#5EEAD4,#2DD4BF 60%,#0F9488);
-    color: var(--black);
-    border-color: var(--teal-dark);
-    box-shadow: 0 3px 0 var(--teal-dark);
-  }
-  .admin-date-note {
-    margin-top: 7px;
-    font-size: 12px;
-    font-weight: 800;
-    color: rgba(255,255,255,.45);
-  }
-  .admin-date-note.bad { color: #FCA5A5; }
-  .admin-date-note.good { color: #86EFAC; }
-  .admin-calendar {
-    margin-top: 10px;
-    background: #12121E;
-    border: 1.5px solid rgba(45,212,191,.22);
-    border-radius: 16px;
-    padding: 12px;
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
-  }
-  .admin-cal-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-  }
-  .admin-cal-title {
-    font-family: 'Fredoka One', cursive;
-    font-size: 16px;
-    color: var(--teal);
-  }
-  .admin-cal-nav { display: flex; gap: 6px; }
-  .admin-cal-nav button {
-    min-width: 34px;
-    height: 30px;
-    padding: 0 9px;
-    border-radius: 10px;
-    border: 1.5px solid rgba(45,212,191,.28);
-    background: rgba(45,212,191,.08);
-    color: var(--teal);
-    font-family: 'Fredoka One', cursive;
-    cursor: pointer;
-  }
-  .admin-cal-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 6px;
-  }
-  .admin-cal-dow {
-    text-align: center;
-    color: rgba(45,212,191,.5);
-    font-size: 10px;
-    font-weight: 900;
-    letter-spacing: .7px;
-    text-transform: uppercase;
-    padding: 2px 0;
-  }
-  .admin-cal-day {
-    min-height: 48px;
-    border-radius: 12px;
-    border: 1.5px solid rgba(255,255,255,.08);
-    background: rgba(255,255,255,.035);
-    color: rgba(255,255,255,.75);
-    font-weight: 900;
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    position: relative;
-  }
-  .admin-cal-day:hover:not(.empty):not(.occupied) {
-    border-color: var(--teal);
-    background: rgba(45,212,191,.12);
-  }
-  .admin-cal-day.empty { visibility: hidden; cursor: default; }
-  .admin-cal-day.selected {
-    background: linear-gradient(180deg,#FFF176,#FFE347 60%,#E6C800);
-    color: var(--black);
-    border-color: #B8A000;
-    box-shadow: 0 3px 0 #8A7800;
-  }
-  .admin-cal-day.occupied {
-    background: rgba(239,68,68,.14);
-    border-color: rgba(239,68,68,.42);
-    color: #FCA5A5;
-    cursor: not-allowed;
-  }
-  .admin-cal-day.own {
-    background: rgba(45,212,191,.14);
-    border-color: rgba(45,212,191,.35);
-    color: var(--teal);
-    cursor: pointer;
-  }
-  .admin-cal-day.own.selected {
-    background: linear-gradient(180deg,#5EEAD4,#2DD4BF 60%,#0F9488);
-    color: var(--black);
-    border-color: var(--teal-dark);
-  }
-  .admin-cal-status {
-    font-size: 8px;
-    line-height: 1;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: .4px;
-    opacity: .9;
-  }
-  .admin-cal-legend {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-top: 10px;
-    font-size: 11px;
-    color: rgba(255,255,255,.45);
-    font-weight: 800;
-  }
-  .admin-cal-dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: 5px;
-  }
-  .admin-cal-dot.used { background: #EF4444; }
-  .admin-cal-dot.mine { background: var(--teal); }
-
-  .btn-adm {
-    font-family: 'Fredoka One', cursive;
-    font-size: 14px;
-    padding: 8px 18px;
-    border-radius: var(--r-pill);
-    border: 2px solid var(--black);
-    cursor: pointer;
-    transition: all .12s;
-    letter-spacing: .2px;
-    position: relative;
-    box-shadow: 0 4px 0 rgba(0,0,0,0.3);
-  }
-  .btn-adm::after {
-    content: '';
-    position: absolute;
-    inset: 3px;
-    border-radius: var(--r-pill);
-    background: linear-gradient(180deg, rgba(255,255,255,.35) 0%, transparent 60%);
-    pointer-events: none;
-  }
-  .btn-adm:hover { filter: brightness(1.08); transform: translateY(-2px); box-shadow: 0 6px 0 rgba(0,0,0,0.3); }
-  .btn-adm:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.3); filter: brightness(.95); }
-
-  .btn-adm-y     { background: linear-gradient(180deg, #FFF176 0%, #FFE347 55%, #E6C800 100%); color: var(--black); border-color: #B8A000; }
-  .btn-adm-g     { background: rgba(255,255,255,.08); color: rgba(255,255,255,.65); border-color: #444; box-shadow: 0 3px 0 #000; }
-  .btn-adm-green { background: linear-gradient(180deg, #4ADE80 0%, #22C55E 55%, #15803D 100%); color: white; border-color: #15803D; }
-  .btn-adm-red   { background: rgba(239,68,68,.18); color: #FCA5A5; border-color: rgba(239,68,68,.4); box-shadow: none; }
-  /* Sits on the page, not a panel: keep the old dark page under its tint. */
-  .btn-adm-red.adm-on-page { background: linear-gradient(rgba(239,68,68,.18), rgba(239,68,68,.18)) #0E0E16; }
-
-  .st-badge { font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 20px; text-transform: capitalize; letter-spacing: .3px; }
-  .st-draft { background: rgba(255,255,255,.08); color: rgba(255,255,255,.4); }
-  .st-published { background: rgba(34,197,94,.18); color: #86EFAC; }
-  .st-scheduled { background: rgba(255,227,71,.14); color: var(--yellow); }
-
-  .q-row { background: #12121E; border: 1.5px solid rgba(45,212,191,.12); border-radius: 14px; padding: 9px 11px; margin-bottom: 6px; display: flex; gap: 9px; align-items: center; transition: border-color .12s, background .12s, opacity .12s; }
-  .q-row.dragging { opacity: .45; border-color: var(--yellow); background: rgba(255,227,71,.08); }
-  .q-row.drag-over { border-color: var(--teal); background: rgba(45,212,191,.1); }
-  .q-drag { width: 20px; align-self: stretch; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.25); font-size: 18px; cursor: grab; user-select: none; }
-  .q-drag:active { cursor: grabbing; }
-  .q-num { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(180deg,#5EEAD4,#2DD4BF 60%,#0F9488); border: 2px solid var(--teal-dark); display: flex; align-items: center; justify-content: center; font-family: 'Fredoka One', cursive; font-size: 12px; color: var(--black); flex-shrink: 0; box-shadow: 0 3px 0 var(--teal-dark); }
-  .q-inf { flex: 1; }
-  .q-txt { font-size: 14px; font-weight: 700; color: white; margin-bottom: 2px; }
-  .q-meta { font-size: 11px; color: rgba(45,212,191,.5); font-weight: 600; }
-  .q-correct { display: inline-block; background: rgba(45,212,191,.15); color: var(--teal); font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 10px; margin-top: 3px; border: 1px solid rgba(45,212,191,.3); }
-  .q-form-box { background: rgba(45,212,191,.05); border-radius: 14px; padding: 10px; margin: 6px 0 9px; border: 1.5px solid rgba(45,212,191,.15); }
-  .q-form-title { font-family: 'Fredoka One', cursive; font-size: 14px; color: var(--teal); margin-bottom: 8px; }
-  .q-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
-  .q-form-wide { grid-column: 1 / -1; }
-  .q-form-box .adm-ta { min-height: 50px; }
-  .q-actions { display: flex; gap: 5px; align-items: center; }
-  .q-trash { min-width: 34px; }
-
-  .count-bar { font-size: 13px; font-weight: 700; padding: 7px 11px; border-radius: 10px; margin-bottom: 10px; background: rgba(45,212,191,.06); border: 1px solid rgba(45,212,191,.1); }
-  .count-bar.ok { color: var(--teal); }
-  .count-bar.bad { color: #FCA5A5; }
-
-  .tog-pair { display: flex; gap: 7px; margin-top: 5px; }
-  .tog { flex: 1; padding: 8px; border-radius: 10px; border: 1.5px solid rgba(45,212,191,.2); background: transparent; color: rgba(255,255,255,.35); font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 800; cursor: pointer; transition: all .14s; text-align: center; }
-  .tog.on { border-color: var(--teal); background: rgba(45,212,191,.12); color: var(--teal); }
 
   /* ===== LOGIN ===== */
   .login-pg { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
@@ -1791,187 +1591,6 @@ const styles = `
     object-fit: contain;
     vertical-align: middle;
     filter: drop-shadow(0 2px 0 rgba(0,0,0,.16));
-  }
-
-  /* ===== IMAGE UPLOADER ===== */
-  .img-uploader {
-    background: rgba(255,255,255,.04);
-    border: 1.5px dashed rgba(255,255,255,.2);
-    border-radius: 12px;
-    padding: 8px;
-    margin-top: 4px;
-  }
-  .img-tab-row {
-    display: flex;
-    gap: 0;
-    margin-bottom: 7px;
-    border: 1.5px solid rgba(255,255,255,.15);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .img-tab {
-    flex: 1;
-    padding: 5px 7px;
-    background: transparent;
-    border: none;
-    color: rgba(255,255,255,.35);
-    font-family: 'Nunito', sans-serif;
-    font-size: 11px;
-    font-weight: 800;
-    cursor: pointer;
-    text-align: center;
-    text-transform: uppercase;
-    letter-spacing: .5px;
-    transition: all .15s;
-  }
-  .img-tab.on { background: rgba(255,227,71,.15); color: var(--yellow); }
-  .img-drop-zone {
-    border: 2px dashed rgba(255,255,255,.2);
-    border-radius: 10px;
-    padding: 10px;
-    text-align: center;
-    cursor: pointer;
-    transition: all .15s;
-    position: relative;
-  }
-  .img-drop-zone:hover { border-color: var(--yellow); background: rgba(255,227,71,.04); }
-  .img-drop-zone input[type=file] {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: pointer;
-    width: 100%;
-    height: 100%;
-  }
-  .img-drop-lbl { font-size: 11px; font-weight: 700; color: rgba(255,255,255,.35); margin-top: 3px; }
-  .img-preview {
-    margin-top: 7px;
-    border-radius: 10px;
-    overflow: hidden;
-    border: 1.5px solid rgba(255,255,255,.15);
-    position: relative;
-    background: rgba(0,0,0,.18);
-  }
-  .img-preview img { width: 100%; height: auto; max-height: 150px; object-fit: contain; display: block; background: rgba(0,0,0,.16); }
-  .img-uploader-wrap.compact .img-preview img { max-height: 115px; }
-  .img-uploader-wrap.preset-header .img-preview img { max-height: 180px; }
-  .img-uploader-wrap.compact.preset-header .img-preview img { max-height: 150px; }
-  .img-preview iframe { width: 100%; aspect-ratio: 16/9; min-height: 160px; display: block; border: 0; background: #000; }
-  /* A faint checkerboard behind the preview, so transparent areas read as
-     transparent instead of as the panel colour. */
-  .img-preview img {
-    width: auto;
-    max-width: 100%;
-    margin: 0 auto;
-    background-color: #2a2f38;
-    background-image: linear-gradient(45deg, #353b46 25%, transparent 25%, transparent 75%, #353b46 75%), linear-gradient(45deg, #353b46 25%, transparent 25%, transparent 75%, #353b46 75%);
-    background-size: 16px 16px;
-    background-position: 0 0, 8px 8px;
-  }
-  .img-drop-zone.busy { cursor: progress; border-color: rgba(255,227,71,.45); background: rgba(255,227,71,.04); }
-  .img-drop-zone.busy input[type=file] { cursor: progress; }
-  .img-drop-hint { font-size: 10px; font-weight: 700; color: rgba(255,255,255,.28); margin-top: 3px; }
-  .img-stage { display: inline-flex; align-items: center; gap: 7px; color: var(--yellow); }
-  .img-spinner {
-    width: 12px; height: 12px; flex: none;
-    border: 2px solid rgba(255,227,71,.25); border-top-color: var(--yellow);
-    border-radius: 50%;
-    animation: img-spin .8s linear infinite;
-  }
-  @keyframes img-spin { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { .img-spinner { animation-duration: 2.4s; } }
-  .img-preview-broken { padding: 16px 12px; font-size: 11px; font-weight: 700; color: rgba(255,255,255,.55); text-align: center; }
-  .img-preview.pending img { opacity: .55; }
-  .img-report {
-    margin-top: 6px; padding: 6px 9px;
-    border-radius: 8px; background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.28);
-    font-size: 11px; font-weight: 700; color: rgba(255,255,255,.72); line-height: 1.4;
-  }
-  .img-report b { color: rgb(74,222,128); font-weight: 900; }
-  .img-report-note { margin-top: 3px; color: rgba(255,227,71,.8); }
-  .img-error {
-    margin-top: 6px; padding: 7px 9px;
-    border-radius: 8px; background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.35);
-    font-size: 11px; font-weight: 700; color: rgba(255,255,255,.85); line-height: 1.4;
-  }
-  .img-error-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .img-error-actions button {
-    padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(255,255,255,.25);
-    background: rgba(255,255,255,.08); color: #fff; font: 800 11px 'Nunito', sans-serif; cursor: pointer;
-  }
-  .img-error-actions button.primary { background: var(--yellow); border-color: var(--yellow); color: #1a1a1a; }
-  .img-drop-zone:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
-  .img-field-flash .img-uploader { animation: img-field-flash 1.6s ease-out; }
-  @keyframes img-field-flash { 0%,40% { box-shadow: 0 0 0 3px var(--yellow); } 100% { box-shadow: 0 0 0 0 transparent; } }
-  @media (prefers-reduced-motion: reduce) { .img-field-flash .img-uploader { animation: none; outline: 2px solid var(--yellow); } }
-
-  /* ===== ADMIN NOTICES (inline, beside Save/Publish) ===== */
-  .adm-notice {
-    display: flex; align-items: flex-start; gap: 8px;
-    margin-top: 10px; padding: 8px 10px;
-    border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06);
-    font-size: 13px; font-weight: 700; line-height: 1.4; color: rgba(255,255,255,.9);
-  }
-  .adm-notice .img-spinner { margin-top: 3px; }
-  .adm-notice-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-  .adm-notice.success { background: rgba(34,197,94,.12); border-color: rgba(34,197,94,.35); }
-  .adm-notice.info { background: rgba(56,189,248,.1); border-color: rgba(56,189,248,.32); }
-  .adm-notice.error { background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.45); }
-  .adm-notice-x {
-    flex: none; width: 26px; height: 26px; margin: -3px -4px -3px 0;
-    border: 0; border-radius: 6px; background: transparent;
-    color: rgba(255,255,255,.75); font-size: 18px; line-height: 1; cursor: pointer;
-  }
-  .adm-notice-x:hover, .adm-notice-x:focus-visible { background: rgba(255,255,255,.12); color: #fff; outline: none; }
-  .adm-warn {
-    margin-top: 10px; padding: 10px 12px;
-    border-radius: 10px; border: 1px solid rgba(250,204,21,.5); background: rgba(250,204,21,.1);
-    font-size: 13px; line-height: 1.45; color: rgba(255,255,255,.9);
-  }
-  .adm-warn-head { display: flex; align-items: flex-start; gap: 8px; }
-  .adm-warn-head h4 { flex: 1; margin: 0; font: 900 14px/1.3 'Nunito', sans-serif; color: var(--yellow); }
-  .adm-warn-body { margin: 6px 0 0; font-weight: 700; }
-  .adm-warn-one { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; }
-  .adm-warn-why { font-size: 12px; font-weight: 700; color: rgba(255,255,255,.62); }
-  .adm-warn-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
-  .adm-warn-list li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; padding-top: 8px; border-top: 1px solid rgba(250,204,21,.2); }
-  .adm-warn-name { font-weight: 900; overflow-wrap: anywhere; }
-  .adm-warn-list .adm-warn-why { grid-column: 1; }
-  .adm-warn-list .adm-warn-btn { grid-column: 2; grid-row: 1 / span 2; }
-  .adm-warn-btn {
-    padding: 5px 10px; border-radius: 7px; border: 0; background: var(--yellow); color: #1a1a1a;
-    font: 800 12px 'Nunito', sans-serif; cursor: pointer; white-space: nowrap;
-  }
-  .adm-warn-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-  .adm-warn-done { margin: 8px 0 0; font-size: 12px; font-weight: 800; color: rgb(74,222,128); }
-  @media (max-width: 420px) {
-    .adm-warn-list li { grid-template-columns: 1fr; }
-    .adm-warn-list .adm-warn-btn { grid-column: 1; grid-row: auto; justify-self: start; }
-  }
-  .img-preview-label {
-    position: absolute;
-    top: 6px; left: 6px;
-    background: rgba(0,0,0,.6);
-    color: var(--yellow);
-    font-size: 10px;
-    font-weight: 800;
-    padding: 2px 8px;
-    border-radius: 20px;
-    letter-spacing: .5px;
-    text-transform: uppercase;
-  }
-  .img-clear-btn {
-    position: absolute;
-    top: 6px; right: 6px;
-    background: rgba(239,68,68,.8);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 22px; height: 22px;
-    font-size: 13px;
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    line-height: 1;
   }
 
   /* ===== ANIMATIONS ===== */
@@ -2706,41 +2325,6 @@ function safeWrite(k,v){try{localStorage.setItem(k,JSON.stringify(v));return tru
 function safeRemove(k){try{localStorage.removeItem(k);return true;}catch{return false;}}
 function calcBestCombo(answers){let best=0,cur=0;for(const a of answers){if(a.correct){cur++;best=Math.max(best,cur);}else cur=0;}return best;}
 function getLocalGameDay(){return new Date().toLocaleDateString("en-CA");}
-function isoFromLocalDate(date){
-  if(!(date instanceof Date)||Number.isNaN(date.getTime())) return "";
-  const y = date.getFullYear();
-  const m = String(date.getMonth()+1).padStart(2,"0");
-  const d = String(date.getDate()).padStart(2,"0");
-  return `${y}-${m}-${d}`;
-}
-function localDateFromISO(iso){
-  const match = String(iso||"").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if(!match) return null;
-  const y = Number(match[1]);
-  const m = Number(match[2]);
-  const d = Number(match[3]);
-  const date = new Date(y, m-1, d);
-  if(date.getFullYear()!==y||date.getMonth()!==m-1||date.getDate()!==d) return null;
-  return date;
-}
-function formatAdminDate(iso){
-  const date = localDateFromISO(iso);
-  if(!date) return iso||"";
-  return `${String(date.getMonth()+1).padStart(2,"0")}/${String(date.getDate()).padStart(2,"0")}/${date.getFullYear()}`;
-}
-function parseAdminDate(value){
-  const raw = String(value||"").trim();
-  const us = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-  if(us){
-    const m = Number(us[1]);
-    const d = Number(us[2]);
-    const y = Number(us[3]);
-    const date = new Date(y, m-1, d);
-    if(date.getFullYear()===y&&date.getMonth()===m-1&&date.getDate()===d) return isoFromLocalDate(date);
-  }
-  const iso = localDateFromISO(raw);
-  return iso ? raw : "";
-}
 function getCountdown(){const n=new Date();const t=new Date(n);t.setDate(t.getDate()+1);t.setHours(0,0,0,0);const d=t-n;return`${String(Math.floor(d/3600000)).padStart(2,"0")}:${String(Math.floor((d%3600000)/60000)).padStart(2,"0")}:${String(Math.floor((d%60000)/1000)).padStart(2,"0")}`;}
 function parseYouTubeStart(value){
   const raw = String(value||"").trim();
@@ -3173,256 +2757,6 @@ function FI({name, size=20, style={}}){
     flexShrink:0,
     ...style
   }}/>;
-}
-
-function ColorPicker({value, onChange, label}){
-  const sel = PALETTE.find(p=>p.id===value) || PALETTE[0];
-  return(
-    <div className="adm-field">
-      {label&&<label>{label}</label>}
-      <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}>
-        <div style={{
-          width:26,height:26,borderRadius:"50%",
-          background:`linear-gradient(160deg,${sel.light},${sel.mid} 55%,${sel.dark})`,
-          border:"2px solid rgba(255,255,255,.3)",
-          boxShadow:`0 3px 0 ${sel.dark}`,
-          flexShrink:0
-        }}/>
-        <span style={{fontFamily:"'Fredoka One',cursive",fontSize:13,color:"var(--teal)",letterSpacing:.3}}>{sel.name}</span>
-      </div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-        {PALETTE.map(p=>(
-          <button
-            key={p.id}
-            title={p.name}
-            onClick={()=>onChange(p.id)}
-            style={{
-              width:31,height:31,
-              borderRadius:"50%",
-              background:`linear-gradient(160deg,${p.light},${p.mid} 55%,${p.dark})`,
-              border: p.id===value ? "3px solid white" : "2px solid rgba(255,255,255,.15)",
-              boxShadow: p.id===value ? `0 0 0 2px ${p.mid}, 0 4px 0 ${p.dark}` : `0 3px 0 ${p.dark}`,
-              cursor:"pointer",
-              transform: p.id===value ? "translateY(-2px)" : "none",
-              transition:"all .12s",
-              position:"relative",
-            }}
-          >
-            {p.id===value&&(
-              <span style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"white",textShadow:"0 1px 2px rgba(0,0,0,0.4)"}}>✓</span>
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-// IMAGE UPLOADER — upload file or paste URL, with live preview
-// ============================================================
-// A chosen file is validated, oriented, resized and compressed in the
-// browser (admin/imageOptimizer.js, loaded on first use) and uploaded
-// straight away. The field only changes once the upload has succeeded, so a
-// failure at any step leaves the current image exactly as it was.
-const UPLOAD_FOLDERS = {header:"headers", question:"questions", category:"categories"};
-const UPLOAD_STAGE_COPY = {checking:"Checking image…", optimizing:"Optimizing image…", uploading:"Uploading…"};
-const UPLOAD_ACCEPT = "image/jpeg,image/png,image/webp";
-function isUploadedImageValue(v){
-  return Boolean(v) && (v.startsWith("data:") || v.startsWith("blob:") || isStorageImageUrl(v));
-}
-function roughBytes(n){return n<1024*1024?`${Math.max(1,Math.round(n/1024))} KB`:`${(n/1024/1024).toFixed(1)} MB`;}
-
-function ImageUploader({value:rawValue, onChange, label="Image", compact=false, preset="question", allowYouTube=false, onBusyChange, fieldId}){
-  const value = typeof rawValue==="string" ? rawValue : "";
-  const[tab,setTab]=useState(value&&!isUploadedImageValue(value)?"url":"upload");
-  const[urlDraft,setUrlDraft]=useState(value&&!isUploadedImageValue(value)?value:"");
-  const[stage,setStage]=useState(null); // null | "checking" | "optimizing" | "uploading"
-  const[error,setError]=useState(null); // {message, retry}
-  const[report,setReport]=useState(null); // what the last successful upload did, keyed by its URL
-  const[pending,setPending]=useState(null); // {result, previewUrl} awaiting (re)upload
-  const[brokenPreview,setBrokenPreview]=useState(null);
-  const fileRef=useRef(null);
-  const busyRef=useRef(false);
-  const mountedRef=useRef(true);
-  const pendingRef=useRef(null);
-  const onBusyRef=useRef(onBusyChange);
-  onBusyRef.current=onBusyChange;
-  const busy=Boolean(stage);
-  const youtubePreview = allowYouTube ? getYouTubeEmbedUrl(value) : null;
-
-  useEffect(()=>{ onBusyRef.current?.(busy); },[busy]);
-  useEffect(()=>{
-    mountedRef.current=true;
-    return ()=>{
-      mountedRef.current=false;
-      if(pendingRef.current) URL.revokeObjectURL(pendingRef.current.previewUrl);
-      pendingRef.current=null;
-      onBusyRef.current?.(false);
-    };
-  },[]);
-
-  const replacePending=next=>{
-    if(pendingRef.current && pendingRef.current!==next) URL.revokeObjectURL(pendingRef.current.previewUrl);
-    pendingRef.current=next;
-    setPending(next);
-  };
-
-  const upload=async job=>{
-    busyRef.current=true;
-    setError(null);
-    setStage("uploading");
-    try{
-      const url = await uploadBytesToStorage(job.result.blob, job.result.mime, UPLOAD_FOLDERS[preset]||"images");
-      if(!mountedRef.current) return;
-      const r = job.result;
-      setReport({url, summary:r.summary, note:r.note, reused:r.reused, hasAlpha:r.hasAlpha, orientationCorrected:r.orientationCorrected});
-      replacePending(null);
-      onChange(url);
-    }catch(err){
-      console.error(err);
-      if(!mountedRef.current) return;
-      setError({message:`Upload failed, so ${value?"your current image is unchanged":"nothing was saved"}. Check your connection and try again.`, retry:true});
-    }finally{
-      busyRef.current=false;
-      if(mountedRef.current) setStage(null);
-    }
-  };
-
-  const handleFile=async e=>{
-    const f=e.target.files?.[0];
-    e.target.value=""; // lets the same file be chosen again after an error
-    if(!f||busyRef.current) return;
-    busyRef.current=true;
-    setError(null);
-    setStage("checking");
-    let result;
-    try{
-      const { optimizeImage } = await loadImageOptimizer();
-      result = await optimizeImage(f, preset, {onStage:s=>{ if(mountedRef.current) setStage(s); }});
-    }catch(err){
-      busyRef.current=false;
-      if(err?.name!=="ImageOptimizeError") console.error(err);
-      if(!mountedRef.current) return;
-      setStage(null);
-      replacePending(null);
-      setError({
-        message: err?.name==="ImageOptimizeError"
-          ? err.message
-          : `Something went wrong while preparing that image, so ${value?"your current image is unchanged":"nothing was saved"}. Try again, or try a different file.`,
-        retry:false
-      });
-      return;
-    }
-    if(!mountedRef.current) return;
-    const job={result, previewUrl:URL.createObjectURL(result.blob)};
-    replacePending(job);
-    await upload(job);
-  };
-
-  const retry=()=>{ if(pending&&!busyRef.current) upload(pending); };
-  const dismissError=()=>{ setError(null); replacePending(null); };
-  const chooseAnother=()=>{ setError(null); replacePending(null); fileRef.current?.click(); };
-
-  const applyUrl=()=>{
-    const v=urlDraft.trim();
-    if(v===value) return;
-    setReport(null);
-    onChange(v);
-  };
-
-  const clear=e=>{
-    e.preventDefault();
-    e.stopPropagation();
-    if(busyRef.current) return;
-    setReport(null);
-    setError(null);
-    setUrlDraft("");
-    onChange("");
-  };
-
-  const showingPending = stage==="uploading" && pending;
-  const previewSrc = showingPending ? pending.previewUrl : value;
-  const stageText = stage==="uploading" && pending
-    ? `Uploading ${roughBytes(pending.result.size)} ${pending.result.mime==="image/webp"?"WebP":pending.result.mime.split("/")[1].toUpperCase()}…`
-    : UPLOAD_STAGE_COPY[stage];
-  const shownReport = !busy && !error && report && report.url===value ? report : null;
-
-  return(
-    <div id={fieldId} className={`adm-field img-uploader-wrap preset-${preset}${compact?" compact":""}`}>
-      {label&&<label>{label}</label>}
-      <div className="img-uploader">
-        <div className="img-tab-row">
-          <button type="button" className={`img-tab${tab==="upload"?" on":""}`} onClick={()=>setTab("upload")}>📁 Upload</button>
-          <button type="button" className={`img-tab${tab==="url"?" on":""}`} onClick={()=>setTab("url")} disabled={busy}>🔗 URL</button>
-        </div>
-
-        {tab==="upload"&&(
-          <label className={`img-drop-zone${busy?" busy":""}`} aria-busy={busy} tabIndex={busy?-1:0}
-                 onKeyDown={e=>{if((e.key==="Enter"||e.key===" ")&&!busy){e.preventDefault();fileRef.current?.click();}}}>
-            <input ref={fileRef} type="file" accept={UPLOAD_ACCEPT} onChange={handleFile} disabled={busy} style={{display:"none"}}/>
-            <div style={{fontSize:compact?18:24}}>📸</div>
-            <div className="img-drop-lbl" role="status" aria-live="polite">
-              {busy
-                ? <span className="img-stage"><span className="img-spinner" aria-hidden="true"/>{stageText}</span>
-                : value ? "Tap to replace the image" : "Tap to choose an image"}
-            </div>
-            <div className="img-drop-hint">JPEG, PNG or WebP · resized and compressed automatically</div>
-          </label>
-        )}
-
-        {tab==="url"&&(
-          <div>
-            <input
-              className="adm-input"
-              value={urlDraft}
-              placeholder={allowYouTube?"Paste an image URL or YouTube link":"https://example.com/image.jpg"}
-              onChange={e=>setUrlDraft(e.target.value)}
-              onBlur={applyUrl}
-              onKeyDown={e=>e.key==="Enter"&&applyUrl()}
-              style={{marginBottom:0}}
-            />
-            <div style={{fontSize:11,color:"rgba(255,255,255,.25)",marginTop:4,fontWeight:600}}>{allowYouTube?"Supports youtube.com, youtu.be, Shorts, and timestamp links":"Press Enter or click away to preview"}</div>
-          </div>
-        )}
-
-        {error&&(
-          <div className="img-error" role="alert">
-            {error.message}
-            <div className="img-error-actions">
-              {error.retry&&pending&&<button type="button" className="primary" onClick={retry}>Try again</button>}
-              <button type="button" onClick={chooseAnother}>Choose another file</button>
-              <button type="button" onClick={dismissError}>Dismiss</button>
-            </div>
-          </div>
-        )}
-
-        {previewSrc&&(
-          <div className={`img-preview${showingPending?" pending":""}`}>
-            {youtubePreview&&!showingPending?(
-              <iframe className="reveal-video" src={youtubePreview} title="YouTube preview" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen/>
-            ):brokenPreview===previewSrc?(
-              <div className="img-preview-broken">This image couldn't be loaded. Check the link, or upload the file instead.</div>
-            ):(
-              <img src={previewSrc} alt="preview" onError={()=>setBrokenPreview(previewSrc)}/>
-            )}
-            <div className="img-preview-label">{showingPending?"Uploading…":"Preview ✓"}</div>
-            {!busy&&<button type="button" className="img-clear-btn" onClick={clear} title="Remove image">✕</button>}
-          </div>
-        )}
-
-        {shownReport&&(
-          <div className="img-report">
-            <b>✓ Uploaded</b> · {shownReport.summary}
-            {(shownReport.hasAlpha||shownReport.orientationCorrected)&&(
-              <div>{[shownReport.hasAlpha&&"Transparency kept",shownReport.orientationCorrected&&"Rotated upright from the photo's orientation tag"].filter(Boolean).join(" · ")}</div>
-            )}
-            {shownReport.note&&<div className="img-report-note">{shownReport.note}</div>}
-          </div>
-        )}
-      </div>
-    </div>
-  );
 }
 
 function RevealMedia({question, placeholder}){
@@ -4749,189 +4083,71 @@ function AdminLogin({onLogin}){
   );
 }
 
-function AdminDash({games,onNew,onEdit,onLogout}){
-  const sorted=[...games].sort((a,b)=>b.date.localeCompare(a.date));
-  const counts={published:games.filter(g=>g.status==="published").length,draft:games.filter(g=>g.status==="draft").length};
-  return(
-    <div className="adm-shell">
-      <div className="adm-hdr">
-        <div className="adm-title" style={{display:"flex",alignItems:"center",gap:8}}><FI name="gear" size={36}/>🍬 What The Fudge Admin</div>
-        <div style={{display:"flex",gap:7}}>
-          <button className="btn-adm btn-adm-y" onClick={onNew}>+ New Game</button>
-          <button className="btn-adm btn-adm-g" onClick={onLogout}>Sign Out</button>
-        </div>
-      </div>
-      <div className="adm-body">
-        <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
-          <span style={{background:"linear-gradient(160deg,#4ADE80,#22C55E 55%,#16A34A)",color:"white",fontFamily:"'Fredoka One',cursive",fontSize:14,padding:"6px 16px",borderRadius:20,border:"2px solid var(--green-dark)",boxShadow:"0 3px 0 var(--green-dark)"}}>✓ {counts.published} published</span>
-          <span style={{background:"linear-gradient(160deg,rgba(45,212,191,.15),rgba(45,212,191,.08)) #0E0E16",color:"var(--teal)",fontFamily:"'Fredoka One',cursive",fontSize:14,padding:"6px 16px",borderRadius:20,border:"1px solid rgba(45,212,191,.3)"}}>✏ {counts.draft} drafts</span>
-        </div>
-        <div className="adm-card">
-          <h3>All Games</h3>
-          {sorted.map(g=>(
-            <div key={g.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 0",borderBottom:"1px solid rgba(45,212,191,.08)"}}>
-              <div>
-                <div style={{fontSize:11,color:"var(--teal-dark)",opacity:.7,fontWeight:700,marginBottom:1,letterSpacing:.5,textTransform:"uppercase"}}>{formatAdminDate(g.date)}</div>
-                <div style={{fontSize:15,fontWeight:700,color:"white",marginBottom:1}}>{g.themeTitle}</div>
-                <div style={{fontSize:11,color:"rgba(255,255,255,.3)"}}>{g.questions?.length??0} questions · {g.categoryA} vs {g.categoryB}</div>
-              </div>
-              <div style={{display:"flex",gap:7,alignItems:"center"}}>
-                <span className={`st-badge st-${g.status}`}>{g.status}</span>
-                <button className="btn-adm btn-adm-g" style={{padding:"5px 12px",fontSize:13}} onClick={()=>onEdit(g)}>Edit</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+// Everything the Puzzle Studio components (src/admin/) borrow from here.
+const STUDIO_SERVICES = {
+  palette: PALETTE,
+  uploadBytes: uploadBytesToStorage,
+  isStoredImage: isStorageImageUrl,
+  youtubeEmbedUrl: getYouTubeEmbedUrl,
+  loadOptimizer: loadImageOptimizer,
+  HomeArt: HomePuzzleArt,
+  BrandIcon: FI,
+};
 
-function AdminDatePicker({value,onChange,games,currentGameId}){
-  const selectedDate = localDateFromISO(value) || new Date();
-  const[month,setMonth]=useState(()=>new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
-  const[draft,setDraft]=useState(()=>formatAdminDate(value));
-  const[open,setOpen]=useState(true);
-  const occupied = new Map();
-  (games||[]).forEach(g=>{
-    if(g?.date) occupied.set(g.date,g);
-  });
-  const conflict = value ? occupied.get(value) : null;
-  const hasConflict = Boolean(conflict && conflict.id!==currentGameId);
-  const ownDate = Boolean(conflict && conflict.id===currentGameId);
-  const monthTitle = month.toLocaleDateString("en-US",{month:"long",year:"numeric"});
-  const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
-  const daysInMonth = new Date(month.getFullYear(), month.getMonth()+1, 0).getDate();
-  const blanks = Array.from({length:firstDay.getDay()},(_,i)=>({empty:true,key:`b-${i}`}));
-  const days = Array.from({length:daysInMonth},(_,idx)=>{
-    const day = idx+1;
-    const date = new Date(month.getFullYear(), month.getMonth(), day);
-    const iso = isoFromLocalDate(date);
-    const game = occupied.get(iso);
-    return {day,iso,game};
-  });
-  const cells = [...blanks,...days];
-  const shiftMonth = delta => setMonth(m=>new Date(m.getFullYear(), m.getMonth()+delta, 1));
-  const chooseDate = iso => {
-    const game = occupied.get(iso);
-    if(game && game.id!==currentGameId) return;
-    onChange(iso);
-    setDraft(formatAdminDate(iso));
-  };
-  const applyDraft = () => {
-    const parsed = parseAdminDate(draft);
-    if(parsed){
-      onChange(parsed);
-      setDraft(formatAdminDate(parsed));
-      const parsedDate = localDateFromISO(parsed);
-      if(parsedDate) setMonth(new Date(parsedDate.getFullYear(), parsedDate.getMonth(), 1));
-    }else if(!draft.trim()){
-      onChange("");
-    }else{
-      setDraft(formatAdminDate(value));
+// A stable fingerprint of a puzzle for the "Unsaved changes" check: sorted
+// keys, and null / undefined / "" treated alike, so clearing a field that
+// was never set doesn't count as a change.
+function editorSnapshot(game){
+  const norm = v=>{
+    if(Array.isArray(v)) return v.map(norm);
+    if(v && typeof v==="object"){
+      const out = {};
+      for(const k of Object.keys(v).sort()){
+        if(v[k]===null||v[k]===undefined||v[k]==="") continue;
+        out[k] = norm(v[k]);
+      }
+      return out;
     }
+    return v;
   };
-  useEffect(()=>{
-    setDraft(formatAdminDate(value));
-    const date = localDateFromISO(value);
-    if(date) setMonth(new Date(date.getFullYear(), date.getMonth(), 1));
-  },[value]);
-
-  return(
-    <div className="admin-date-picker">
-      <div className="adm-field" style={{marginBottom:0}}>
-        <label>Puzzle Date (MM/DD/YYYY)</label>
-        <div className="admin-date-top">
-          <div className="admin-date-input-wrap">
-            <input
-              className="adm-input"
-              value={draft}
-              placeholder="04/30/2026"
-              onChange={e=>setDraft(e.target.value)}
-              onBlur={applyDraft}
-              onKeyDown={e=>e.key==="Enter"&&applyDraft()}
-            />
-          </div>
-          <button type="button" className="btn-adm admin-date-btn" onClick={()=>setOpen(v=>!v)}>
-            {open?"Hide":"Calendar"}
-          </button>
-        </div>
-      </div>
-      {hasConflict&&(
-        <div className="admin-date-note bad">
-          {formatAdminDate(value)} already has "{conflict.themeTitle||"another puzzle"}". Pick a different day.
-        </div>
-      )}
-      {!hasConflict&&value&&(
-        <div className={`admin-date-note ${ownDate?"good":""}`}>
-          {ownDate?"This is this puzzle's current day.":"This day is available."}
-        </div>
-      )}
-      {open&&(
-        <div className="admin-calendar">
-          <div className="admin-cal-head">
-            <div className="admin-cal-title">{monthTitle}</div>
-            <div className="admin-cal-nav">
-              <button type="button" onClick={()=>shiftMonth(-1)}>‹</button>
-              <button type="button" onClick={()=>setMonth(new Date())}>Today</button>
-              <button type="button" onClick={()=>shiftMonth(1)}>›</button>
-            </div>
-          </div>
-          <div className="admin-cal-grid">
-            {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=><div key={d} className="admin-cal-dow">{d}</div>)}
-            {cells.map(cell=>{
-              if(cell.empty) return <div key={cell.key} className="admin-cal-day empty"/>;
-              const cellGame = cell.game;
-              const isOwn = cellGame?.id===currentGameId;
-              const isUsed = Boolean(cellGame && !isOwn);
-              const selected = cell.iso===value;
-              const cls = `admin-cal-day ${selected?"selected":""} ${isUsed?"occupied":""} ${isOwn?"own":""}`;
-              return(
-                <button
-                  type="button"
-                  key={cell.iso}
-                  className={cls}
-                  onClick={()=>chooseDate(cell.iso)}
-                  title={cellGame?`${formatAdminDate(cell.iso)}: ${cellGame.themeTitle}`:formatAdminDate(cell.iso)}
-                >
-                  <span>{cell.day}</span>
-                  {cellGame&&<span className="admin-cal-status">{isOwn?"This":cellGame.status||"Used"}</span>}
-                </button>
-              );
-            })}
-          </div>
-          <div className="admin-cal-legend">
-            <span><span className="admin-cal-dot used"/>Day already has a puzzle</span>
-            <span><span className="admin-cal-dot mine"/>This puzzle's day</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return JSON.stringify(norm(normalizeEditorDraft(game)));
 }
+
+function savedAgo(at, now){
+  const s = Math.max(0, Math.round((now-at)/1000));
+  if(s<60) return "Saved just now";
+  if(s<3600) return `Saved ${Math.floor(s/60)} min ago`;
+  return `Saved at ${new Date(at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}`;
+}
+
+const BLANK_QUESTION = {itemText:"",correctCategory:"A",flavorCopy:"",explanationCopy:"",imageUrl:"",imageAlt:"",imageSource:""};
 
 function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
-  const isNew=!ig.id;
+  const inDb=(games||[]).some(g=>g.id===ig.id);
   const[game,setGame]=useState(()=>loadEditorDraft(ig));
-  const[showQF,setShowQF]=useState(false);
-  const[editQ,setEditQ]=useState(null);
-  const[dragQId,setDragQId]=useState(null);
-  const[dragOverQId,setDragOverQId]=useState(null);
+  const[tab,setTab]=useState("setup");
+  const[selected,setSelected]=useState(0); // question index, "new", or null
+  const[mobileEditing,setMobileEditing]=useState(false); // phones: editor in place of the list
+  const[newQ,setNewQ]=useState(null); // a question being written, not yet added
+  const[addError,setAddError]=useState(null);
   const[notice,setNotice]=useState(null); // {kind:"success"|"info"|"progress"|"error", text}
   const[imageWarning,setImageWarning]=useState(null); // {items, action} after a save with image failures
-  const[saving,setSaving]=useState(false);
+  const[saving,setSaving]=useState(false); // false | "save" | "publish"
+  const[saveFailed,setSaveFailed]=useState(false); // the last database save threw
+  const[lastSavedAt,setLastSavedAt]=useState(null); // when this session last saved to the database
+  const[now,setNow]=useState(()=>Date.now());
   const[focusImage,setFocusImage]=useState(null); // field id to scroll to once it renders
   const[preview,setPreview]=useState(false);
-  const[autoSaveState,setAutoSaveState]=useState("idle");
-  const[lastAutoSavedAt,setLastAutoSavedAt]=useState(()=>safeRead(getEditorDraftKey(ig.id))?.savedAt||null);
+  const[autoSaveState,setAutoSaveState]=useState("idle"); // on-device draft copy: idle | saved | failed
+  const warnRef=useRef(null);
   // Which image fields are mid-upload. Saving is held until they finish, so a
   // save can never go out with the old image while the new one is uploading.
   const[busyImages,setBusyImages]=useState({});
   const trackImage=key=>busy=>setBusyImages(m=>Boolean(m[key])===busy?m:{...m,[key]:busy});
   const imagesBusy=Object.values(busyImages).some(Boolean);
+  const questionBusy=Boolean(busyImages.question);
   // Success notes clear after ~4 s and information after ~8 s; errors and
-  // warnings stay until dismissed or resolved. All render inline next to the
-  // Save/Publish buttons, so nothing floats over the controls on a phone.
+  // warnings stay until dismissed or resolved.
   const say=(kind,text)=>setNotice({kind,text,at:Date.now()});
   useEffect(()=>{
     if(!notice) return;
@@ -4940,46 +4156,55 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
     const id = setTimeout(()=>setNotice(n=>n===notice?null:n), ms);
     return ()=>clearTimeout(id);
   },[notice]);
+  // Keeps "Saved N min ago" current.
+  useEffect(()=>{
+    if(!lastSavedAt) return;
+    const id = setInterval(()=>setNow(Date.now()), 30000);
+    return ()=>clearInterval(id);
+  },[lastSavedAt]);
   const set=(f,v)=>setGame(g=>({...g,[f]:v}));
-  const qc=game.questions?.length??0;
-  const ok=qc>=4&&qc<=15;
+  const qs=game.questions??[];
+  const qc=qs.length;
+  const ok=questionCountOk(qc);
   const dateConflict = game.date ? (games||[]).find(g=>g.date===game.date&&g.id!==game.id) : null;
   const dateOk = Boolean(localDateFromISO(game.date)) && !dateConflict;
   const canPublish = ok && dateOk;
+  const published = game.status==="published";
   const validateDate = () => {
-    if(!localDateFromISO(game.date)){say("error","Pick a puzzle date first.");return false;}
-    if(dateConflict){say("error",`That day already has "${dateConflict.themeTitle||"another puzzle"}". Pick another date.`);return false;}
+    if(!localDateFromISO(game.date)){setTab("setup");say("error","Pick a puzzle date first.");return false;}
+    if(dateConflict){setTab("setup");say("error",`That day already has "${dateConflict.themeTitle||"another puzzle"}". Pick another date.`);return false;}
     return true;
   };
+  // The old question form never let a question be added or updated without
+  // item text; editing in place keeps that rule by checking it at save time.
+  const validateItems = () => {
+    const i = firstBlankItem(qs);
+    if(i<0) return true;
+    setTab("questions");setSelected(i);setNewQ(null);setMobileEditing(true);
+    say("error",`Question ${i+1} has no item text. Add it, or delete the question, before saving.`);
+    return false;
+  };
 
-  useEffect(()=>{
-    const restored = loadEditorDraft(ig);
-    setGame(restored);
-    setShowQF(false);
-    setEditQ(null);
-    setAutoSaveState("idle");
-    setLastAutoSavedAt(safeRead(getEditorDraftKey(ig.id))?.savedAt||null);
-  },[ig]);
-
+  // Drafts keep a copy on this device as you type (restored when the puzzle
+  // is reopened). Published puzzles don't: their edits exist only here until
+  // "Publish changes".
   useEffect(()=>{
     if(!game?.id) return;
     if(game.status==="published"){
       clearEditorDraft(game.id);
-      setLastAutoSavedAt(null);
-      setAutoSaveState("idle");
       return;
     }
-    setAutoSaveState("saving");
     const timer = setTimeout(()=>{
-      if(saveEditorDraft(game)){
-        setLastAutoSavedAt(Date.now());
-        setAutoSaveState("saved");
-      }
+      setAutoSaveState(saveEditorDraft(game)?"saved":"failed");
     }, 700);
     return ()=>clearTimeout(timer);
   },[game]);
 
-  // One save path for Publish and Save Draft. "Published"/"Saved" is only
+  // The database copy is the puzzle this editor was opened with, replaced by
+  // each successful save, so this compares against what is really stored.
+  const dirty = useMemo(()=>editorSnapshot(game)!==editorSnapshot(ig),[game,ig]);
+
+  // One save path for Publish and Save draft. "Published"/"Saved" is only
   // ever shown after onSave resolves, i.e. after the database confirmed it.
   const save=async publish=>{
     if(saving) return;
@@ -4987,42 +4212,103 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
     if(!s.id)s.id=`g-${Date.now()}`;
     if(!s.questions)s.questions=[];
     const action = publish ? "Published" : "Saved";
-    setSaving(true);
+    setSaving(publish?"publish":"save");
     say("progress", publish ? "Publishing… copying images into permanent storage." : "Saving…");
     try{
       const {game:saved, imageFailures, listRefreshed} = await onSave(s);
       clearEditorDraft(saved.id);
       setGame(saved);
-      setLastAutoSavedAt(null);
       setAutoSaveState("idle");
+      setSaveFailed(false);
+      setLastSavedAt(Date.now());
+      setNow(Date.now());
       setImageWarning(imageFailures.length ? {items:imageFailures, action} : null);
       if(!listRefreshed) say("info", `${action}. The puzzle list couldn't refresh, so reload the admin to see it there.`);
       else if(imageFailures.length) setNotice(null);
       else say("success", `${action} ✓`);
     }catch(e){
+      setSaveFailed(true);
       say("error", e?.message || "The puzzle wasn't saved. Your changes are still here, so you can try again.");
     }
     // Not in a finally block: the React Compiler lint can't analyse those
     // and would silently skip this whole component.
     setSaving(false);
   };
-  const pub=async()=>{if(!ok){say("error",`A puzzle needs 4–15 questions to publish (this one has ${qc}).`);return;}await save(true);};
+  const pub=async()=>{if(!ok){setTab("questions");say("error",`A puzzle needs 4–15 questions to publish (this one has ${qc}).`);return;}await save(true);};
   const dft=()=>save(false);
   const waitForImages=()=>{if(imagesBusy){say("info","Hang on, an image is still uploading…");return true;}return false;};
+  const pubSafe=async()=>{if(waitForImages()||!validateDate()||!validateItems())return;await pub();};
+  const dftSafe=async()=>{if(waitForImages()||!validateDate()||!validateItems())return;await dft();};
   const removeGame=async()=>{
+    if(!window.confirm(`Delete "${game.themeTitle||"this draft"}"? The puzzle and all its questions will be removed. This can't be undone.`)) return;
     try{ await onDelete(game.id); }
     catch(e){ say("error", e?.message || "The puzzle wasn't deleted."); }
   };
+  // Leaving is only risky where no copy of the edits survives: a published
+  // puzzle (never kept on the device), a puzzle never saved to the database,
+  // or a draft the device couldn't store.
+  const leave=()=>{
+    const losing = dirty && (published || !inDb || autoSaveState==="failed");
+    if(losing && !window.confirm(published
+      ? "Leave without publishing? Your changes to this live puzzle will be lost."
+      : !inDb ? "Leave without saving? This new puzzle hasn't been saved yet, so it will be lost."
+      : "Leave without saving? Your changes couldn't be kept on this device, so they will be lost.")) return;
+    onBack();
+  };
+  const openPreview=()=>{ if(!waitForImages()) setPreview(true); };
+
+  // ---- questions ----
+  const sel = typeof selected==="number" ? (qc ? Math.min(selected, qc-1) : null) : selected==="new"&&newQ ? "new" : null;
+  const holdForUpload=()=>{ if(questionBusy){ say("info","Hang on, the question's image is still uploading…"); return true; } return false; };
+  const dropNewDraft=()=>{
+    if(newQ && (hasText(newQ.itemText)||hasText(newQ.explanationCopy)||hasText(newQ.flavorCopy)||hasText(newQ.imageUrl))
+       && !window.confirm("Discard the new question you started?")) return false;
+    setNewQ(null);setAddError(null);
+    return true;
+  };
+  const selectQuestion=i=>{
+    if(i===sel){ setMobileEditing(true); return; }
+    if(holdForUpload()||!dropNewDraft()) return;
+    setSelected(i);setMobileEditing(true);
+  };
+  const startNew=()=>{
+    if(sel==="new"){ setMobileEditing(true); return; }
+    if(holdForUpload()) return;
+    setNewQ({...BLANK_QUESTION});setAddError(null);setSelected("new");setMobileEditing(true);
+    requestAnimationFrame(()=>document.getElementById("ps-q-item")?.focus({preventScroll:true}));
+  };
+  const addNew=()=>{
+    if(questionBusy){ setAddError("Hang on, the image is still uploading…"); return; }
+    if(!hasText(newQ.itemText)){ setAddError("Add the item text first."); document.getElementById("ps-q-item")?.focus(); return; }
+    setGame(g=>({...g,questions:[...(g.questions??[]),{...newQ,id:`q-${Date.now()}`,orderIndex:(g.questions?.length??0)+1}]}));
+    setNewQ(null);setAddError(null);setSelected(qc);
+  };
+  const cancelNew=()=>{ if(!dropNewDraft()) return; setSelected(qc?0:null); setMobileEditing(false); };
+  const updQ=(i,patch)=>setGame(g=>({...g,questions:g.questions.map((q,j)=>j===i?{...q,...patch}:q)}));
+  const delQ=i=>{
+    const q=qs[i];
+    if(!q) return;
+    if(i===sel&&holdForUpload()) return;
+    if(!window.confirm(`Delete "${q.itemText||"this question"}"?`)) return;
+    setGame(g=>({...g,questions:g.questions.filter((_,j)=>j!==i).map((item,j)=>({...item,orderIndex:j+1}))}));
+    if(i===sel) setMobileEditing(false);
+    setSelected(s=>typeof s!=="number"?s:s>i?s-1:s===i?(qc>1?Math.min(i,qc-2):null):s);
+  };
+  const moveQ=(from,to)=>{
+    if(holdForUpload()) return;
+    setGame(g=>({...g,questions:moveQuestion(g.questions,from,to)}));
+    setSelected(s=>followMove(s,from,to));
+  };
+
   // "Upload replacement": open the field that failed and bring it into view.
   const goToImage=f=>{
     if(f.kind==="question"){
-      const qs=game.questions||[];
-      const q=f.questionId!=null?qs.find(x=>x.id===f.questionId):qs[f.questionIndex];
-      if(!q) return;
-      setShowQF(false);
-      setEditQ(q);
-      setFocusImage(`img-field-q-${q.id}`);
+      const idx=f.questionId!=null?qs.findIndex(x=>x.id===f.questionId):f.questionIndex;
+      if(idx==null||idx<0||!qs[idx]) return;
+      setNewQ(null);setTab("questions");setSelected(idx);setMobileEditing(true);
+      setFocusImage(`img-field-q-${questionKey(qs[idx],idx)}`);
     }else{
+      setTab("setup");
       setFocusImage(`img-field-${f.field}`);
     }
   };
@@ -5033,137 +4319,87 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
       setFocusImage(null);
       if(!el) return;
       el.scrollIntoView({block:"center",behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
-      el.querySelector(".img-tab")?.click(); // the Upload tab
-      setTimeout(()=>el.querySelector(".img-drop-zone")?.focus({preventScroll:true}),60);
+      el.querySelector("[data-replace]")?.click(); // opens the uploader if an image is showing
+      el.querySelector("[data-tab-upload]")?.click();
+      setTimeout(()=>el.querySelector(".ps-drop-choose")?.focus({preventScroll:true}),60);
       // Restart the highlight even if it was shown for this field a moment ago.
-      el.classList.remove("img-field-flash");
-      requestAnimationFrame(()=>el.classList.add("img-field-flash"));
+      el.classList.remove("ps-flash");
+      requestAnimationFrame(()=>el.classList.add("ps-flash"));
     });
     return ()=>cancelAnimationFrame(id);
-  },[focusImage,editQ]);
+  },[focusImage,selected,tab]);
   const openWarnings = imageWarning ? imageWarning.items.filter(f=>!isWarningResolved(game,f)) : [];
   const resolvedWarnings = imageWarning ? imageWarning.items.filter(f=>isWarningResolved(game,f)) : [];
-  const pubSafe=async()=>{if(waitForImages()||!validateDate())return;await pub();};
-  const dftSafe=async()=>{if(waitForImages()||!validateDate())return;await dft();};
-  const addQ=q=>{setGame(g=>({...g,questions:[...(g.questions??[]),{...q,id:`q-${Date.now()}`,orderIndex:(g.questions?.length??0)+1}]}));setShowQF(false);setEditQ(null);};
-  const updQ=u=>setGame(g=>({...g,questions:g.questions.map(q=>q.id===u.id?u:q)}));
-  const delQ=q=>{
-    if(!window.confirm(`Delete "${q.itemText||"this question"}"?`)) return;
-    setEditQ(e=>e?.id===q.id?null:e);
-    setGame(g=>({...g,questions:g.questions.filter(item=>item.id!==q.id).map((item,i)=>({...item,orderIndex:i+1}))}));
-  };
-  const reorderQ=(fromId,toId)=>setGame(g=>{
-    if(!fromId||!toId||fromId===toId) return g;
-    const list = [...(g.questions||[])];
-    const from = list.findIndex(q=>q.id===fromId);
-    const to = list.findIndex(q=>q.id===toId);
-    if(from<0||to<0) return g;
-    const [moved] = list.splice(from,1);
-    list.splice(to,0,moved);
-    return {...g,questions:list.map((q,i)=>({...q,orderIndex:i+1}))};
-  });
-  const startDrag=(e,id)=>{setDragQId(id);setDragOverQId(null);e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",id);};
-  const overDrag=(e,id)=>{e.preventDefault();if(id!==dragOverQId)setDragOverQId(id);};
-  const dropDrag=(e,id)=>{e.preventDefault();const from=e.dataTransfer.getData("text/plain")||dragQId;reorderQ(from,id);setDragQId(null);setDragOverQId(null);};
-  const endDrag=()=>{setDragQId(null);setDragOverQId(null);};
+  useEffect(()=>{
+    if(imageWarning) warnRef.current?.scrollIntoView({block:"nearest",behavior:"smooth"});
+  },[imageWarning]);
 
   if(preview)return <AdminPreview game={game} onBack={()=>setPreview(false)}/>;
 
+  const colorA=paletteColor(PALETTE, game.categoryAColor||"teal", 0);
+  const colorB=paletteColor(PALETTE, game.categoryBColor||"pink", 1);
+  const editing = sel==="new" ? newQ : typeof sel==="number" ? qs[sel] : null;
+  const editingKey = sel==="new" ? "new" : typeof sel==="number" ? questionKey(qs[sel],sel) : null;
+
+  const status = saving ? {tone:"saving", text:saving==="publish"?"Publishing…":"Saving…"}
+    : dirty&&saveFailed ? {tone:"error", text:"Couldn’t save", detail:!published&&autoSaveState==="saved"?"Draft kept on this device":null}
+    : dirty ? {tone:"dirty", text:"Unsaved changes", detail:published?"Not live until you publish":autoSaveState==="saved"?"Draft kept on this device":autoSaveState==="failed"?"Not kept on this device":null}
+    : lastSavedAt ? {tone:"saved", text:savedAgo(lastSavedAt, now)}
+    : inDb ? {tone:"saved", text:"No unsaved changes"}
+    : {tone:"idle", text:"Not saved yet"};
+  const actions = (
+    <EditorActions published={published} saving={saving} imagesBusy={imagesBusy} canPublish={canPublish}
+                   onSaveDraft={dftSafe} onPublish={pubSafe} onPreview={openPreview}/>
+  );
+  const noticeBar = <NoticeBar notice={notice} onDismiss={()=>setNotice(null)}/>;
+
   return(
-    <div className="adm-shell">
-      <div className="adm-hdr">
-        <div className="adm-title">{isNew?"New Game":"Edit Game"}</div>
-        <div style={{display:"flex",gap:7}}>
-          <button className="btn-adm btn-adm-g" onClick={()=>setPreview(true)}>Preview</button>
-          <button className="btn-adm btn-adm-g" onClick={onBack}>← Back</button>
-        </div>
-      </div>
-      <div className="adm-body">
-        <div className="adm-card">
-          <h3>Game Details</h3>
-          <div style={{fontSize:11,fontWeight:800,color:"rgba(255,255,255,.6)",marginBottom:10}}>
-            {autoSaveState==="saving"?"Auto-saving draft...":lastAutoSavedAt?`Draft auto-saved locally at ${new Date(lastAutoSavedAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}`:"Draft auto-save is on"}
-          </div>
-          <AdminDatePicker value={game.date||""} onChange={v=>set("date",v)} games={games} currentGameId={game.id}/>
-          <div className="adm-field"><label>Theme Title</label><input className="adm-input" value={game.themeTitle||""} placeholder="Board Game or Nicolas Cage Movie?" onChange={e=>set("themeTitle",e.target.value)}/></div>
-          <div style={{display:"flex",gap:9}}>
-            <div className="adm-field" style={{flex:1}}><label>Category A</label><input className="adm-input" value={game.categoryA||""} placeholder="Board Game" onChange={e=>set("categoryA",e.target.value)}/></div>
-            <div className="adm-field" style={{flex:1}}><label>Category B</label><input className="adm-input" value={game.categoryB||""} placeholder="Nicolas Cage Movie" onChange={e=>set("categoryB",e.target.value)}/></div>
-          </div>
-          {/* Placeholders show the fallback a blank share name uses. */}
-          <div className="adm-share-names">
-            <div style={{display:"flex",gap:9}}>
-              <div className="adm-field" style={{flex:1}}><label htmlFor="share-name-a">Share name for Category A</label><input id="share-name-a" className="adm-input" value={game.categoryAShareName||""} placeholder={game.categoryA||"Same as Category A"} onChange={e=>set("categoryAShareName",e.target.value)}/></div>
-              <div className="adm-field" style={{flex:1}}><label htmlFor="share-name-b">Share name for Category B</label><input id="share-name-b" className="adm-input" value={game.categoryBShareName||""} placeholder={game.categoryB||"Same as Category B"} onChange={e=>set("categoryBShareName",e.target.value)}/></div>
-            </div>
-            <div className="adm-hint">Optional. Only changes the copied Results text, so type the full label with any emoji, like “Pro Hockey Player? 🏒”. Leave blank to use the category name.</div>
-          </div>
-          <div style={{display:"flex",gap:9}}>
-            <div style={{flex:1}}>
-              <ImageUploader label={`Category A Image${game.categoryA?" ("+game.categoryA+")":""}`} value={game.categoryAImage||""} onChange={v=>set("categoryAImage",v)} preset="category" compact={true} onBusyChange={trackImage("categoryAImage")} fieldId="img-field-categoryAImage"/>
-            </div>
-            <div style={{flex:1}}>
-              <ImageUploader label={`Category B Image${game.categoryB?" ("+game.categoryB+")":""}`} value={game.categoryBImage||""} onChange={v=>set("categoryBImage",v)} preset="category" compact={true} onBusyChange={trackImage("categoryBImage")} fieldId="img-field-categoryBImage"/>
-            </div>
-          </div>
-          <div style={{display:"flex",gap:9}}>
-            <div style={{flex:1}}>
-              <ColorPicker label={`Category A Color${game.categoryA?" ("+game.categoryA+")":""}`} value={game.categoryAColor||"teal"} onChange={v=>set("categoryAColor",v)}/>
-            </div>
-            <div style={{flex:1}}>
-              <ColorPicker label={`Category B Color${game.categoryB?" ("+game.categoryB+")":""}`} value={game.categoryBColor||"pink"} onChange={v=>set("categoryBColor",v)}/>
-            </div>
-          </div>
-          <ImageUploader label="Header Image (shown on home screen & archive)" value={game.headerImage||""} onChange={v=>set("headerImage",v)} preset="header" compact={true} onBusyChange={trackImage("headerImage")} fieldId="img-field-headerImage"/>
-          <div style={{display:"flex",gap:7,marginTop:2}}>
-            <button className="btn-adm btn-adm-g" onClick={dftSafe} disabled={imagesBusy||saving} style={imagesBusy||saving?{opacity:.5,cursor:"progress"}:undefined}>{imagesBusy?"Uploading image…":"Save Draft"}</button>
-            <button className={`btn-adm ${canPublish&&!imagesBusy&&!saving?"btn-adm-green":""}`} style={!canPublish||imagesBusy||saving?{opacity:.5,cursor:imagesBusy||saving?"progress":"not-allowed"}:{}} disabled={imagesBusy||saving} onClick={pubSafe}>{saving?"Saving…":game.status==="published"?"Publish changes":"Publish"}</button>
-          </div>
-          {notice&&(
-            <div className={`adm-notice ${notice.kind}`} role={notice.kind==="error"?"alert":"status"}>
-              {notice.kind==="progress"&&<span className="img-spinner" aria-hidden="true"/>}
-              <span className="adm-notice-text">{notice.text}</span>
-              {notice.kind!=="progress"&&<button type="button" className="adm-notice-x" aria-label="Dismiss message" onClick={()=>setNotice(null)}>×</button>}
-            </div>
-          )}
-          {imageWarning&&(openWarnings.length>0||resolvedWarnings.length>0)&&(
+    <div className="ps-shell ps-editor">
+      <EditorHeader heading={inDb?"Edit Puzzle":"New Puzzle"} title={game.themeTitle||"Untitled puzzle"} headerImage={game.headerImage}
+                    status={status} onBack={leave} actions={actions} notice={notice?noticeBar:null}/>
+      <main className="ps-editor-main">
+        <EditorTabs tab={tab} onTab={setTab} questionsLabel={<>Questions<span className="ps-tab-count"> · {qc}</span></>}/>
+        {imageWarning&&(openWarnings.length>0||resolvedWarnings.length>0)&&(
+          <div ref={warnRef}>
             <ImageWarningPanel game={game} action={imageWarning.action} open={openWarnings} resolved={resolvedWarnings}
                                onReplace={goToImage} onDismiss={()=>setImageWarning(null)}/>
-          )}
+          </div>
+        )}
+        {/* Both tabs stay mounted, so switching never drops an edit or an
+            upload in progress. */}
+        <div id="ps-panel-setup" role="tabpanel" aria-labelledby="ps-tab-setup" hidden={tab!=="setup"}>
+          <SetupTab game={game} set={set} games={games} trackImage={trackImage}
+                    onDelete={inDb&&!published?removeGame:null}/>
         </div>
-        <div className="adm-card">
-          <h3>Questions</h3>
-          <div className={`count-bar ${ok?"ok":"bad"}`}>{qc} questions {!ok?`— need 4–15 to publish`:"— ✓ ready"}</div>
-          {(game.questions??[]).map((q,i)=>(
-            <div key={q.id}>
-              <div
-                className={`q-row ${dragQId===q.id?"dragging":""} ${dragOverQId===q.id&&dragQId!==q.id?"drag-over":""}`}
-                draggable
-                onDragStart={e=>startDrag(e,q.id)}
-                onDragOver={e=>overDrag(e,q.id)}
-                onDrop={e=>dropDrag(e,q.id)}
-                onDragEnd={endDrag}
-              >
-                <div className="q-drag" title="Drag to reorder">⋮</div>
-                <div className="q-num">{i+1}</div>
-                <div className="q-inf">
-                  <div className="q-txt">{q.itemText}</div>
-                  <div className="q-meta">{q.flavorCopy?"flavor ✓":"no flavor"} · {q.imageUrl?(isYouTubeUrl(q.imageUrl)?"video ✓":"image ✓"):"no media"}</div>
-                  <span className="q-correct">✓ {q.correctCategory==="A"?game.categoryA:game.categoryB}</span>
-                </div>
-                <div className="q-actions">
-                  <button className="btn-adm btn-adm-g" style={{padding:"4px 10px",fontSize:12}} onClick={()=>{setShowQF(false);setEditQ(editQ?.id===q.id?null:q);}}>{editQ?.id===q.id?"Close":"Edit"}</button>
-                  <button className="btn-adm btn-adm-red q-trash" style={{padding:"4px 9px",fontSize:12}} onClick={()=>delQ(q)} title="Delete question">🗑</button>
-                </div>
+        <div id="ps-panel-questions" role="tabpanel" aria-labelledby="ps-tab-questions" hidden={tab!=="questions"}>
+          <div className={`ps-qlayout${mobileEditing&&editing?" is-editing":""}`}>
+            <QuestionList questions={qs} catA={game.categoryA} catB={game.categoryB} colorA={colorA} colorB={colorB}
+                          selected={sel} onSelect={selectQuestion} onAdd={startNew} onMove={moveQ} onDelete={delQ}/>
+            {editing?(
+              <QuestionEditor
+                key={editingKey}
+                question={editing}
+                number={typeof sel==="number"?sel+1:qc+1}
+                isNew={sel==="new"}
+                catA={game.categoryA} catB={game.categoryB} colorA={colorA} colorB={colorB}
+                onChange={patch=>sel==="new"?setNewQ(q=>({...q,...patch})):updQ(sel,patch)}
+                onBusyChange={trackImage("question")}
+                fieldId={`img-field-q-${editingKey}`}
+                onAdd={addNew} onCancel={cancelNew} addError={addError}
+                onPrev={typeof sel==="number"&&sel>0?()=>selectQuestion(sel-1):null}
+                onNext={typeof sel==="number"&&sel<qc-1?()=>selectQuestion(sel+1):null}
+                onBackToList={()=>{ if(sel==="new") cancelNew(); else setMobileEditing(false); }}
+              />
+            ):(
+              <div className="ps-panel ps-qeditor is-empty">
+                <p>Add a question to start writing.</p>
+                <button type="button" className="ps-btn ps-btn-primary" onClick={startNew}>Add question</button>
               </div>
-              {editQ?.id===q.id&&<QForm key={q.id} initial={editQ} catA={game.categoryA} catB={game.categoryB} onSave={updated=>{updQ(updated);setEditQ(null);}} onCancel={()=>setEditQ(null)}/>}
-            </div>
-          ))}
-          {!showQF&&!editQ&&<button className="btn-adm btn-adm-y" style={{marginTop:9,width:"100%"}} onClick={()=>setShowQF(true)}>+ Add Question</button>}
-          {showQF&&!editQ&&<QForm catA={game.categoryA} catB={game.categoryB} onSave={addQ} onCancel={()=>setShowQF(false)}/>}
+            )}
+          </div>
         </div>
-        {!isNew&&game.status!=="published"&&<div style={{textAlign:"center"}}><button className="btn-adm btn-adm-red adm-on-page" onClick={removeGame}>Delete game</button></div>}
-      </div>
+      </main>
+      <MobileActionBar actions={actions} notice={notice?noticeBar:null}/>
     </div>
   );
 }
@@ -5172,65 +4408,35 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
 // until dismissed; each item drops out as soon as its field holds a new
 // image, and a replaced one reminds you to save again to make it live.
 function ImageWarningPanel({game,action,open,resolved,onReplace,onDismiss}){
-  const again = game.status==="published" ? "Publish changes" : "Save Draft";
+  const again = game.status==="published" ? "Publish changes" : "Save draft";
   const {title, body} = open.length ? describeImageWarning(open, game, action) : {title:"Image warnings resolved", body:null};
   return(
-    <section className="adm-warn" role="status" aria-labelledby="adm-warn-title">
-      <div className="adm-warn-head">
-        <h4 id="adm-warn-title"><span aria-hidden="true">{open.length?"⚠️":"✓"}</span> {title}</h4>
-        <button type="button" className="adm-notice-x" aria-label="Dismiss image warnings" onClick={onDismiss}>×</button>
+    <section className="ps-warn" role="status" aria-labelledby="ps-warn-title">
+      <div className="ps-warn-head">
+        <h2 id="ps-warn-title"><span aria-hidden="true">{open.length?"⚠️":"✓"}</span> {title}</h2>
+        <button type="button" className="ps-icon-btn" aria-label="Dismiss image warnings" onClick={onDismiss}>×</button>
       </div>
-      {body&&<p className="adm-warn-body">{body}</p>}
+      {body&&<p className="ps-warn-body">{body}</p>}
       {open.length===1?(
-        <div className="adm-warn-one">
-          <span className="adm-warn-why">{failureReason(open[0])}</span>
-          <button type="button" className="adm-warn-btn" onClick={()=>onReplace(open[0])}>Upload replacement</button>
+        <div className="ps-warn-one">
+          <span className="ps-warn-why">{failureReason(open[0])}</span>
+          <button type="button" className="ps-btn ps-btn-sm ps-btn-primary" onClick={()=>onReplace(open[0])}>Upload replacement</button>
         </div>
       ):open.length>1&&(
-        <ul className="adm-warn-list">
+        <ul className="ps-warn-list">
           {open.map(f=>(
             <li key={f.key}>
-              <span className="adm-warn-name">{imageName(f, game)}</span>
-              <span className="adm-warn-why">{failureReason(f)}</span>
-              <button type="button" className="adm-warn-btn" onClick={()=>onReplace(f)}>Upload replacement</button>
+              <span className="ps-warn-name">{imageName(f, game)}</span>
+              <span className="ps-warn-why">{failureReason(f)}</span>
+              <button type="button" className="ps-btn ps-btn-sm ps-btn-primary" onClick={()=>onReplace(f)}>Upload replacement</button>
             </li>
           ))}
         </ul>
       )}
       {resolved.length>0&&(
-        <p className="adm-warn-done">✓ {resolved.length===1?`${imageName(resolved[0], game)} has a new image`:`${resolved.length} images have new images`}. Press {again} to make {resolved.length===1?"it":"them"} live.</p>
+        <p className="ps-warn-done">✓ {resolved.length===1?`${imageName(resolved[0], game)} has a new image`:`${resolved.length} images have new images`}. Press {again} to make {resolved.length===1?"it":"them"} live.</p>
       )}
     </section>
-  );
-}
-
-function QForm({initial,catA,catB,onSave,onCancel}){
-  const[q,setQ]=useState(initial||{itemText:"",correctCategory:"A",flavorCopy:"",explanationCopy:"",imageUrl:"",imageAlt:"",imageSource:""});
-  const up=(f,v)=>setQ(p=>({...p,[f]:v}));
-  const[imageBusy,setImageBusy]=useState(false);
-  return(
-    <div className="q-form-box">
-      <div className="q-form-title">{initial?"Edit Question":"New Question"}</div>
-      <div className="q-form-grid">
-        <div className="adm-field"><label>Item Text *</label><input className="adm-input" value={q.itemText} placeholder="e.g. Jumanji" onChange={e=>up("itemText",e.target.value)}/></div>
-        <div className="adm-field">
-          <label>Correct Category</label>
-          <div className="tog-pair">
-            <button className={`tog ${q.correctCategory==="A"?"on":""}`} onClick={()=>up("correctCategory","A")}>A: {catA||"Cat A"}</button>
-            <button className={`tog ${q.correctCategory==="B"?"on":""}`} onClick={()=>up("correctCategory","B")}>B: {catB||"Cat B"}</button>
-          </div>
-        </div>
-        <div className="adm-field"><label>Flavor Copy</label><textarea className="adm-input adm-ta" value={q.flavorCopy} placeholder="Funny reaction line..." onChange={e=>up("flavorCopy",e.target.value)}/></div>
-        <div className="adm-field"><label>Explanation Copy</label><textarea className="adm-input adm-ta" value={q.explanationCopy} placeholder="One factual sentence..." onChange={e=>up("explanationCopy",e.target.value)}/></div>
-        <div className="q-form-wide"><ImageUploader label="Reveal Media (image or YouTube link)" value={q.imageUrl||""} onChange={v=>up("imageUrl",v)} preset="question" allowYouTube={true} compact={true} onBusyChange={setImageBusy} fieldId={`img-field-q-${initial?.id??"new"}`}/></div>
-        {q.imageUrl&&!isYouTubeUrl(q.imageUrl)&&<div className="adm-field"><label>Alt Text *</label><input className="adm-input" value={q.imageAlt} placeholder="Screen reader description..." onChange={e=>up("imageAlt",e.target.value)}/></div>}
-        {q.imageUrl&&<div className="adm-field"><label>Media Source</label><input className="adm-input" value={q.imageSource} placeholder={isYouTubeUrl(q.imageUrl)?"Official music video, lyric video, etc.":"Via Wikimedia Commons"} onChange={e=>up("imageSource",e.target.value)}/></div>}
-      </div>
-      <div style={{display:"flex",gap:7,marginTop:7}}>
-        <button className="btn-adm btn-adm-y" disabled={imageBusy} style={imageBusy?{opacity:.5,cursor:"progress"}:undefined} onClick={()=>!imageBusy&&q.itemText.trim()&&onSave({...q})}>{imageBusy?"Uploading image…":initial?"Update":"Add"}</button>
-        <button className="btn-adm btn-adm-g" onClick={onCancel}>Cancel</button>
-      </div>
-    </div>
   );
 }
 
@@ -5242,9 +4448,15 @@ function AdminPreview({game,onBack}){
   const[view,setView]=useState("home");
   const onComplete=final=>{setPr(final);setView("score");};
   return(
-    <div className="adm-shell adm-preview">
-      <div className="prev-banner">🎭 Preview Mode — scores not saved</div>
-      <div className="adm-hdr"><div className="adm-title">Preview</div><button className="btn-adm btn-adm-g" onClick={onBack}>← Exit Preview</button></div>
+    <div className="ps-shell adm-preview">
+      <header className="ps-editor-head ps-preview-head">
+        <div className="ps-editor-head-row">
+          <button type="button" className="ps-btn ps-back" onClick={onBack}><Icon name="back" size={18}/>Back to editor</button>
+          <span className="ps-head-divider" aria-hidden="true"/>
+          <h1 className="ps-head-heading">Preview</h1>
+          <span className="ps-badge is-draft">Scores not saved</span>
+        </div>
+      </header>
       {/* The player's own backdrop, drawn inside this stage only, so the
           Admin page backdrop around it never stands in for it. */}
       <div className="adm-preview-stage">
@@ -5637,8 +4849,8 @@ export default function WhatTheFudgeTrivia(){
   // Admin branch
   if(view==="admin"){
     if(!adminIn)return <><style>{styles}</style><CandyBackdrop preset="admin"/><AdminLogin onLogin={()=>{setAdminIn(true);setAdminView("dashboard");}}/></>;
-    if(adminView==="dashboard")return <><style>{styles}</style><CandyBackdrop preset="admin"/><AdminDash games={games} onNew={()=>{setEditGame({id:`g-${Date.now()}`,date:"",themeTitle:"",categoryA:"",categoryB:"",status:"draft",questions:[]});setAdminView("editor");}} onEdit={g=>{setEditGame(g);setAdminView("editor");}} onLogout={()=>{setAdminIn(false);setAdminView("login");setView("home");}}/></>;
-    if(adminView==="editor")return <><style>{styles}</style><CandyBackdrop preset="admin"/><AdminEditor game={editGame} games={games} onSave={handleSave} onDelete={handleDel} onBack={()=>setAdminView("dashboard")}/></>;
+    if(adminView==="dashboard")return <StudioContext.Provider value={STUDIO_SERVICES}><style>{styles}</style><CandyBackdrop preset="admin"/><Dashboard games={games} today={getLocalGameDay()} onNew={()=>{setEditGame({id:`g-${Date.now()}`,date:"",themeTitle:"",categoryA:"",categoryB:"",status:"draft",questions:[]});setAdminView("editor");}} onEdit={g=>{setEditGame(g);setAdminView("editor");}} onLogout={()=>{setAdminIn(false);setAdminView("login");setView("home");}}/></StudioContext.Provider>;
+    if(adminView==="editor")return <StudioContext.Provider value={STUDIO_SERVICES}><style>{styles}</style><CandyBackdrop preset="admin"/><AdminEditor game={editGame} games={games} onSave={handleSave} onDelete={handleDel} onBack={()=>setAdminView("dashboard")}/></StudioContext.Provider>;
   }
 
   // Player app
