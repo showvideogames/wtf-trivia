@@ -8,7 +8,9 @@ import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from 
 import { archivePuzzleImages, describeImageWarning, failureReason, imageName, isWarningResolved } from "./admin/publishImages.js";
 import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor } from "./crowdStats.js";
 import { gameToRow, rowToGame } from "./gameRow.js";
-import { shareOrCopy } from "./homeShare.js";
+import { copyText, shareOrCopy } from "./homeShare.js";
+import SharePreview from "./SharePreview.jsx";
+import ResultsCopyButton from "./ResultsCopyButton.jsx";
 import {
   demoGames as devDemoGames,
   devPlayer,
@@ -4100,7 +4102,9 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
     date: gameRecord?.date||null
   };
   const usesAppCrowd = crowd!==undefined;
-  const[copied,setCopied]=useState(false);
+  const[copyStatus,setCopyStatus]=useState(null);
+  const copiedTimer=useRef(null);
+  useEffect(()=>()=>clearTimeout(copiedTimer.current),[]);
   const[replayStats,setReplayStats]=useState(null);
   const[showAdvanced,setShowAdvanced]=useState(false);
   const{play}=sound;
@@ -4132,18 +4136,17 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
 
   // Until crowd stats arrive (or if they never do) the score line has no
   // percentage; preview and clipboard always use the same text.
+  // The preview shows this exact string (SharePreview).
   const txt=shareTextFor(game, safeRecord, crowd);
-  const share=()=>{try{navigator.clipboard.writeText(txt);}catch{}setCopied(true);setTimeout(()=>setCopied(false),2000);};
-
-  // The on-screen preview shows the copied text line by line, all six lines
-  // at every width. Names wrap; only the pip line is shrunk to fit its box
-  // (never wrapped). The text on the clipboard is untouched.
-  const shareLines=txt.split("\n");
-  const shareLineClass=["rs-share-name","rs-share-or","rs-share-name","rs-share-pips","rs-share-score","rs-share-url"];
+  // "Copied" only after the clipboard write succeeds (ResultsCopyButton).
+  const share=async()=>{
+    clearTimeout(copiedTimer.current);
+    setCopyStatus(null);
+    const outcome=await copyText(txt, navigator);
+    setCopyStatus(outcome);
+    if(outcome==="copied") copiedTimer.current=setTimeout(()=>setCopyStatus(null),2000);
+  };
   const pipCount=safeRecord.answers.length;
-  // ~1.42em per dot covers the widest common emoji font (Segoe UI Emoji is
-  // ~1.37em), so the row fits on every platform.
-  const pipLineEms=pipCount*1.42+0.2;
 
   // Nerd Mode: the two categories exactly as gameplay shows them (A left,
   // B right, same colours), and this player's own pick per question, matched
@@ -4193,14 +4196,8 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
 
           {!isReplay&&(
             <div className="rs-share">
-              <div className="share-box rs-share-preview" style={{"--pip-line-ems":pipLineEms}}>
-                {shareLines.map((line,i)=>(
-                  <div key={i} className={shareLineClass[i]}>{line}</div>
-                ))}
-              </div>
-              <button className="btn btn-pink rs-share-btn" onClick={share}>
-                {copied?"✓ Copied to clipboard!!":"Copy & Share 📋"}
-              </button>
+              <SharePreview text={txt}/>
+              <ResultsCopyButton status={copyStatus} onCopy={share}/>
             </div>
           )}
         </div>

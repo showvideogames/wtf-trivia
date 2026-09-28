@@ -149,9 +149,10 @@
 }
 
 .rs-page .rs-share { margin-top: 8px; }
-/* The preview shows all six copied lines at every width, styled as a little
-   matchup card: the two names face off around "OR", then the pips, score and
-   domain. Only the styling differs from the clipboard; the text is identical. */
+/* The preview is the shared text itself: left-aligned plain lines, spacing
+   kept (pre-wrap, from .share-box), exactly as a messaging app shows it.
+   Long labels wrap, and an unbroken run of characters still breaks rather
+   than pushing the box wider. */
 .rs-page .rs-share-preview {
   container-type: inline-size;
   padding: 12px 14px 11px;
@@ -159,42 +160,28 @@
   font-family: 'Nunito', sans-serif;
   font-size: 15px;
   font-weight: 800;
-  line-height: 1.3;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.rs-page .rs-share-header,
+.rs-page .rs-share-score { font-weight: 900; }
+/* The dividers and the circle row never wrap: they shrink to fit instead. */
+.rs-page .rs-share-divider,
+.rs-page .rs-share-pips {
+  white-space: pre;
+  font-size: min(1em, calc(100cqi / var(--fit-ems)));
+}
+.rs-page .rs-share-divider { color: var(--teal-dark); }
+.rs-page .rs-share-url { color: rgba(26, 26, 26, .6); }
+.rs-page .rs-share-btn { margin: 0; }
+/* Same look as Home's copy error. */
+.rs-page .rs-share-error {
+  margin: 10px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--red-dark);
   text-align: center;
 }
-/* Long names wrap in balanced lines; an unbroken run of characters still
-   breaks rather than pushing the box wider. */
-.rs-page .rs-share-name {
-  overflow-wrap: anywhere;
-  text-wrap: balance;
-}
-.rs-page .rs-share-or {
-  margin: 3px 0;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 2px;
-  line-height: 1.2;
-  color: var(--teal-dark);
-  padding-left: 2px; /* balances the trailing letter-spacing */
-}
-/* The pip line never wraps: it shrinks to fit the preview instead. */
-.rs-page .rs-share-pips {
-  margin: 9px 0 5px;
-  white-space: nowrap;
-  line-height: 1.2;
-  font-size: min(1.15em, calc(100cqi / var(--pip-line-ems)));
-}
-.rs-page .rs-share-score {
-  font-size: 16px;
-  font-weight: 900;
-}
-.rs-page .rs-share-url {
-  margin-top: 2px;
-  font-size: 12px;
-  font-weight: 700;
-  color: rgba(26, 26, 26, .55);
-}
-.rs-page .rs-share-btn { margin: 0; }
 
 /* Desktop: score on the left, sharing on the right -- the same order,
    side by side. Replay has no share block and stays a single column. */

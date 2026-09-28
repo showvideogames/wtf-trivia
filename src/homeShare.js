@@ -3,7 +3,8 @@
    sheet; desktops and laptops copy straight to the clipboard, so
    Windows never opens its share panel (Outlook, OneNote, ...).
    The text itself always comes from shareTextFor (crowdStats.js),
-   the same text the Results page copies.
+   the same text the Results page copies. The share sheet gets only
+   that text, no title, so apps don't repeat the header.
    ============================================================ */
 
 // True on phones and tablets. The user agent is enough: iPhone, iPod and
@@ -33,6 +34,12 @@ export async function shareOrCopy(text, nav) {
       if (err?.name === "AbortError") return "cancelled";
     }
   }
+  return copyText(text, nav);
+}
+
+// Puts `text` on the clipboard exactly as given: Home's desktop copy and
+// fallback, and Results' copy button. Resolves to "copied" or "failed".
+export async function copyText(text, nav) {
   try {
     await nav.clipboard.writeText(text);
     return "copied";
