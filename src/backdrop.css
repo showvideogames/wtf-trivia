@@ -1,0 +1,93 @@
+/* ================= SHARED CANDY BACKDROP (placement only) =================
+   The layers themselves are .landing-bg / .candy-bg (App.jsx) and .gp-bg /
+   .gp-shapes (game.css), put together by CandyBackdrop. This file only
+   decides where they sit on the screens that joined later: Stats and
+   Account, and Admin Preview's player stage. Home is not touched here. */
+
+/* Stats and Account (.app.cbd-page). home.css anchors .app's candy layer to
+   the document on phones, which suits Home's single short screen. These
+   pages scroll like Archive and Results do, so keep the sprinkles pinned to
+   the screen the same way. */
+@media (max-width: 599px) {
+  .app.cbd-page .candy-bg {
+    position: fixed;
+    inset: 0;
+    height: auto;
+  }
+}
+
+/* ===== CONTAINED MODE =====
+   <CandyBackdrop contained/> draws the layers inside the nearest positioned
+   box instead of the viewport. The window is as tall as the screen (or the
+   box, if that's shorter) and sticks while the box scrolls past, so a long
+   screen gets the same framing a player sees rather than one glow stretched
+   down its whole height. overflow: clip (not hidden) keeps it sticky while
+   clipping it to the box's rounded corners. */
+.cbd-contained {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  overflow: hidden;
+  overflow: clip;
+}
+.cbd-window {
+  position: sticky;
+  top: 0;
+  height: min(100%, 100vh);
+}
+.cbd-contained .landing-bg,
+.cbd-contained .gp-bg,
+.cbd-contained .gp-shapes,
+.cbd-contained .candy-bg {
+  position: absolute;
+  inset: 0;
+  height: auto;
+}
+
+/* The contained stage shows a phone-width player screen whatever the window
+   size, so it always takes the phone arrangement: phone sprinkle sets, no
+   accent marks, and the phone-size edge shapes (values as in game.css). */
+.cbd-contained .decor-dt,
+.cbd-contained .decor-tb,
+.cbd-contained .decor-ps,
+.cbd-contained .gpd-dt,
+.cbd-contained .gpd-tb,
+.cbd-contained .gp-mark {
+  display: none;
+}
+.cbd-contained .decor-ph,
+.cbd-contained .gpd-ph {
+  display: block;
+}
+.cbd-contained .gp-shape-teal { width: 250px; height: 214px; top: -104px; left: -128px; opacity: 0.55; }
+.cbd-contained .gp-shape-pink { width: 180px; height: 250px; top: 44%; right: -128px; opacity: 0.5; }
+.cbd-contained .gp-shape-sun  { width: 280px; height: 220px; bottom: -132px; left: -104px; opacity: 0.5; }
+.cbd-contained .gp-shape-rose { width: 200px; height: 170px; bottom: -104px; right: -86px; opacity: 0.42; }
+
+/* ===== ADMIN PREVIEW STAGE =====
+   The previewed player screen gets its own backdrop inside this stage; the
+   Admin backdrop only shows around it. Phones: the stage fills the rest of
+   the screen edge to edge, like the real thing. Wider: a framed phone-width
+   screen, so the two backdrops never meet at an unexplained seam. */
+.adm-preview {
+  display: flex;
+  flex-direction: column;
+}
+.adm-preview-stage {
+  position: relative;
+  isolation: isolate;
+  flex: 1 0 auto;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 14px 18px;
+}
+@media (min-width: 540px) {
+  .adm-preview-stage {
+    margin: 20px auto 28px;
+    border-radius: 28px;
+    box-shadow: 0 0 0 3px var(--black), 0 10px 0 3px rgba(0, 0, 0, 0.16);
+  }
+}

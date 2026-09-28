@@ -30,7 +30,9 @@
 /* ===== BACKDROP =====
    The homepage spotlight, turned down. Same warm buttery page and cream pool
    of light, but a wider, flatter falloff so it sits behind the game without
-   competing with it. The homepage backdrop is untouched. */
+   competing with it. The homepage backdrop is untouched. This glow and the
+   edge shapes below are shared through CandyBackdrop's "game" and "admin"
+   presets (Stats, Account, the error page, every Admin screen). */
 .gp-bg {
   position: fixed;
   inset: 0;
