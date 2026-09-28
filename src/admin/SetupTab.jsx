@@ -108,7 +108,11 @@ function Artwork({game, set, trackImage}){
   );
 }
 
-export default function SetupTab({game, set, games, trackImage, onDelete}){
+// onDelete: any saved puzzle, but the database refuses once anyone has
+// played it. onRetire: published puzzles. A played puzzle is retired
+// instead: hidden from players, its date freed, its plays and stats kept.
+export default function SetupTab({game, set, games, trackImage, onDelete, onRetire}){
+  const isDraft = game.status!=="published"&&game.status!=="retired";
   return(
     <div className="ps-setup">
       <PuzzleBasics game={game} set={set} games={games}/>
@@ -116,8 +120,21 @@ export default function SetupTab({game, set, games, trackImage, onDelete}){
       <Artwork game={game} set={set} trackImage={trackImage}/>
       {onDelete&&(
         <div className="ps-danger">
-          <span>Delete this draft and all its questions.</span>
-          <button type="button" className="ps-btn ps-btn-sm ps-btn-danger" onClick={onDelete}><Icon name="trash" size={16}/>Delete draft</button>
+          <span>{isDraft
+            ? "Delete this draft and all its questions."
+            : "Delete this puzzle and all its questions. Only possible while nobody has played it; after that, retire it."}</span>
+          <button type="button" className="ps-btn ps-btn-sm ps-btn-danger" onClick={onDelete}><Icon name="trash" size={16}/>{isDraft?"Delete draft":"Delete puzzle"}</button>
+        </div>
+      )}
+      {onRetire&&(
+        <div className="ps-danger">
+          <span>Retire this puzzle: players stop seeing it and its date becomes free. Its plays and stats are kept.</span>
+          <button type="button" className="ps-btn ps-btn-sm ps-btn-danger" onClick={onRetire}>Retire puzzle</button>
+        </div>
+      )}
+      {game.status==="retired"&&(
+        <div className="ps-danger">
+          <span>This puzzle is retired, so players don't see it. Publish it again to bring it back (its date must be free).</span>
         </div>
       )}
     </div>

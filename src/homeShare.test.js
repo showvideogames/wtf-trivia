@@ -87,8 +87,8 @@ describe("shareOrCopy", () => {
     const game = { categoryA: "Harry Potter Characters", categoryB: "Professional Hockey Players",
       categoryAShareName: "Harry Potter Character 🧙‍♂️", categoryBShareName: "Pro Hockey Player? 🏒" };
     const answers = [..."0001111100"].map((c, i) => ({ questionIndex: i, correct: c === "1" }));
-    const record = { date: "2026-09-27", score: 5, totalQuestions: 10, answers, completed: true };
-    const crowd = { date: "2026-09-27", score: 5, status: "ready", stats: { finishedPlayers: 10, scoreHistogram: { 4: 2, 5: 3, 7: 5 } } };
+    const record = { puzzleId: "g-hp", date: "2026-09-27", score: 5, totalQuestions: 10, answers, completed: true };
+    const crowd = { puzzleId: "g-hp", score: 5, status: "ready", stats: { finishedPlayers: 10, scoreHistogram: { 4: 2, 5: 3, 7: 5 } } };
     const text = shareTextFor(game, record, crowd);
     expect(text).toBe(
       "What The Fudge Trivia 🍬\n━━━━━━━━━━━━━━━━━━━━━━━━━━\nHarry Potter Character 🧙‍♂️\n     OR\nPro Hockey Player? 🏒\n" +

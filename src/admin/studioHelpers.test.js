@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupPuzzles, matchesSearch } from "./dashboardGroups.js";
+import { findDateConflict, groupPuzzles, matchesSearch } from "./dashboardGroups.js";
 import { countReady, firstBlankItem, followMove, missingSummary, moveQuestion, questionGaps, questionKey } from "./questionStatus.js";
 import { daysFrom, formatLongDate, parseAdminDate } from "./adminDates.js";
 
@@ -25,6 +25,32 @@ describe("groupPuzzles", ()=>{
     const {drafts, history} = groupPuzzles([{id:"x", status:"draft", date:"2020-01-01"}], "2026-09-28");
     expect(drafts).toHaveLength(1);
     expect(history).toHaveLength(0);
+  });
+  it("keeps retired puzzles in their own group, newest first", ()=>{
+    const {drafts, upcoming, history, retired} = groupPuzzles([
+      ...games,
+      {id:"r1", status:"retired", date:"2026-09-10"},
+      {id:"r2", status:"retired", date:"2026-09-28"},
+    ], "2026-09-28");
+    expect(retired.map(g=>g.id)).toEqual(["r2","r1"]);
+    expect([...drafts, ...upcoming, ...history].some(g=>g.status==="retired")).toBe(false);
+  });
+});
+
+describe("findDateConflict", ()=>{
+  const games = [
+    {id:"pub", status:"published", date:"2026-09-28", themeTitle:"Mario Kart"},
+    {id:"draft", status:"draft", date:"2026-09-30"},
+    {id:"gone", status:"retired", date:"2026-10-01"},
+  ];
+  it("finds another puzzle on the same day, published or draft", ()=>{
+    expect(findDateConflict(games, {id:"new", date:"2026-09-28"})?.id).toBe("pub");
+    expect(findDateConflict(games, {id:"new", date:"2026-09-30"})?.id).toBe("draft");
+  });
+  it("ignores the puzzle itself, retired puzzles and undated puzzles", ()=>{
+    expect(findDateConflict(games, {id:"pub", date:"2026-09-28"})).toBeNull();
+    expect(findDateConflict(games, {id:"new", date:"2026-10-01"})).toBeNull();
+    expect(findDateConflict(games, {id:"new", date:""})).toBeNull();
   });
 });
 

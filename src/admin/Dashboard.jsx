@@ -14,6 +14,7 @@ function whenLabel(today, iso){
 }
 
 function StatusBadge({game, today}){
+  if(game.status==="retired") return <span className="ps-badge is-retired">Retired</span>;
   if(game.status!=="published") return <span className="ps-badge is-draft">{game.status==="draft"?"Draft":game.status||"Draft"}</span>;
   if(game.date===today) return <span className="ps-badge is-live">Live today</span>;
   if((game.date||"")>today) return <span className="ps-badge is-scheduled">Scheduled</span>;
@@ -78,7 +79,7 @@ function PuzzleTable({games, today, onEdit, quiet=false}){
 export default function Dashboard({games, today, onNew, onEdit, onLogout}){
   const {BrandIcon} = useStudio();
   const[query,setQuery]=useState("");
-  const {drafts, upcoming, history} = groupPuzzles(games, today);
+  const {drafts, upcoming, history, retired} = groupPuzzles(games, today);
   const published = upcoming.length + history.length;
   const shownHistory = history.filter(g=>matchesSearch(g, query, formatAdminDate));
 
@@ -146,6 +147,13 @@ export default function Dashboard({games, today, onNew, onEdit, onLogout}){
               ? <div className="ps-empty"><span>No past puzzles match “{query.trim()}”.</span></div>
               : <PuzzleTable games={shownHistory} today={today} onEdit={onEdit} quiet/>}
         </section>
+
+        {retired.length>0&&(
+          <section className="ps-panel ps-dash-section" aria-labelledby="ps-retired-title">
+            <SectionHead icon="doc" tone="yellow" title={<span id="ps-retired-title">Retired</span>} sub="Hidden from players. Kept because people played them; their dates are free again."/>
+            <PuzzleTable games={retired} today={today} onEdit={onEdit} quiet/>
+          </section>
+        )}
       </main>
     </div>
   );

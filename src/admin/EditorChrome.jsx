@@ -17,17 +17,17 @@ function SaveStatus({status}){
   );
 }
 
-// Save draft (drafts only), Publish / Publish changes. Both run the editor's
-// existing save path; Publish stays pressable when the puzzle isn't ready so
-// it can say why.
-export function EditorActions({published, saving, imagesBusy, canPublish, onSaveDraft, onPublish, onPreview}){
+// Save draft (drafts; "Save" for a retired puzzle, which stays retired),
+// Publish / Publish changes. Both run the editor's existing save path;
+// Publish stays pressable when the puzzle isn't ready so it can say why.
+export function EditorActions({published, retired=false, saving, imagesBusy, canPublish, onSaveDraft, onPublish, onPreview}){
   const held = saving||imagesBusy;
   return(
     <div className="ps-actions">
       <button type="button" className="ps-btn" onClick={onPreview}><Icon name="eye" size={18}/>Preview</button>
       {!published&&(
         <button type="button" className="ps-btn" onClick={onSaveDraft} disabled={held} aria-busy={held||undefined}>
-          {imagesBusy?"Uploading image…":"Save draft"}
+          {imagesBusy?"Uploading image…":retired?"Save":"Save draft"}
         </button>
       )}
       <button type="button" className={`ps-btn ps-btn-publish${canPublish?"":" is-unready"}`} onClick={onPublish} disabled={held} aria-busy={held||undefined}>

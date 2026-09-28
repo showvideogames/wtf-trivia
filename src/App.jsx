@@ -15,6 +15,7 @@ import SharePreview from "./SharePreview.jsx";
 import ResultsCopyButton from "./ResultsCopyButton.jsx";
 import { StudioContext, paletteColor } from "./admin/StudioContext.js";
 import { localDateFromISO } from "./admin/adminDates.js";
+import { findDateConflict } from "./admin/dashboardGroups.js";
 import { firstBlankItem, followMove, hasText, moveQuestion, questionCountOk, questionKey } from "./admin/questionStatus.js";
 import Dashboard from "./admin/Dashboard.jsx";
 import { EditorActions, EditorHeader, EditorTabs, MobileActionBar, NoticeBar } from "./admin/EditorChrome.jsx";
@@ -26,12 +27,14 @@ import {
   demoGames as devDemoGames,
   devPlayer,
   devGetRecord,
+  devGetAllRecords,
   devInitRecord,
   devRecordAnswer,
   devCompleteGame,
   devGetStats,
   devCommunityStats,
   devSaveGameRow,
+  devDeleteGameRow,
   devMergeSavedGames,
 } from "./dev/offlineBackend.js";
 
@@ -2138,11 +2141,16 @@ function describeSaveError(e){
   const status = msg.match(/Supabase error (\d{3})/)?.[1];
   if(status==="401"||status==="403") return "the database refused the change (permission denied).";
   if(msg.includes("_share_name")) return "the database doesn't have the share-name columns yet (supabase/share_names.sql). Clear both share names to save without them.";
+  if(msg.includes("games_one_published_per_date")) return "another published puzzle already has that date. Pick another day.";
+  if(msg.includes("game_records_puzzle_id_fkey")) return "players have already played this puzzle, so it can't be deleted. Retire it instead.";
   if(status) return `the database returned an error (${status}).`;
   if(msg.includes("didn't confirm")) return "the database didn't confirm the save.";
   return "something went wrong while saving.";
 }
+// Deleting is allowed only while nobody has played the puzzle: the database
+// refuses once any play points at it (describeSaveError says to retire it).
 async function dbDeleteGame(id){
+  if(OFFLINE_PREVIEW) return devDeleteGameRow(id);
   await sbFetch(`/rest/v1/games?id=eq.${encodeURIComponent(id)}`, {method:"DELETE"});
 }
 
@@ -2175,42 +2183,60 @@ async function dbGetOrCreatePlayer(user){
 }
 
 // ===== DB FUNCTIONS — GAME RECORDS =====
-async function dbGetGameRecord(playerId, date){
-  if(OFFLINE_PREVIEW) return devGetRecord(date);
+// Every play belongs to a puzzle (game_records.puzzle_id = games.id), never
+// to a date: moving a puzzle to another day keeps its plays and stats.
+// game_date is only a snapshot of the day the puzzle was scheduled for.
+const puzzleFilter = (playerId, puzzleId) => `player_id=eq.${playerId}&puzzle_id=eq.${encodeURIComponent(puzzleId)}`;
+function rowToRecord(r){
+  return {
+    puzzleId: r.puzzle_id,
+    date: r.game_date,
+    themeTitle: r.theme_title,
+    score: r.score,
+    totalQuestions: r.total_questions,
+    currentIndex: r.answers?.length||0,
+    answers: r.answers||[],
+    completed: r.completed,
+    startedAt: r.started_at,
+    completedAt: r.completed_at
+  };
+}
+// A not-yet-played record for a puzzle (a new game, a replay, Admin Preview).
+function newRecordFor(game){
+  return {puzzleId:game.id,date:game.date,themeTitle:game.themeTitle,score:0,totalQuestions:game.questions.length,currentIndex:0,answers:[],completed:false,startedAt:new Date().toISOString(),completedAt:null};
+}
+async function dbGetGameRecord(playerId, puzzleId){
+  if(OFFLINE_PREVIEW) return devGetRecord(puzzleId);
   try {
-    const rows = await sbFetch(`/rest/v1/game_records?player_id=eq.${playerId}&game_date=eq.${date}&select=*`);
-    if(!rows||!rows.length) return null;
-    const r = rows[0];
-    return {
-      date: r.game_date,
-      themeTitle: r.theme_title,
-      score: r.score,
-      totalQuestions: r.total_questions,
-      currentIndex: r.answers?.length||0,
-      answers: r.answers||[],
-      completed: r.completed,
-      startedAt: r.started_at,
-      completedAt: r.completed_at
-    };
+    const rows = await sbFetch(`/rest/v1/game_records?${puzzleFilter(playerId, puzzleId)}&select=*`);
+    return rows?.length ? rowToRecord(rows[0]) : null;
   } catch(e){ return null; }
 }
-async function dbInitGameRecord(playerId, date, themeTitle, total){
-  if(OFFLINE_PREVIEW) return devInitRecord(date, themeTitle, total);
-  const existing = await dbGetGameRecord(playerId, date);
+// All of a player's plays, keyed by puzzle id (Archive).
+async function dbGetPlayerRecords(playerId){
+  if(OFFLINE_PREVIEW) return devGetAllRecords();
+  try {
+    const rows = await sbFetch(`/rest/v1/game_records?player_id=eq.${playerId}&select=*`);
+    return Object.fromEntries((rows||[]).map(r=>[r.puzzle_id, rowToRecord(r)]));
+  } catch { return {}; }
+}
+async function dbInitGameRecord(playerId, game){
+  if(OFFLINE_PREVIEW) return devInitRecord(game);
+  const existing = await dbGetGameRecord(playerId, game.id);
   if(existing) return existing;
-  await sbFetch("/rest/v1/game_records", {
+  await sbFetch("/rest/v1/game_records?on_conflict=player_id,puzzle_id", {
     method:"POST",
     headers:{"Prefer":"resolution=ignore-duplicates"},
     body: JSON.stringify({
-      player_id: playerId, game_date: date, theme_title: themeTitle,
-      score:0, total_questions:total, answers:[], completed:false
+      player_id: playerId, puzzle_id: game.id, game_date: game.date, theme_title: game.themeTitle,
+      score:0, total_questions:game.questions.length, answers:[], completed:false
     })
   });
-  return {date,themeTitle,score:0,totalQuestions:total,currentIndex:0,answers:[],completed:false,startedAt:new Date().toISOString(),completedAt:null};
+  return newRecordFor(game);
 }
-async function dbRecordAnswer(playerId, date, answers, score){
-  if(OFFLINE_PREVIEW) return devRecordAnswer(date, answers, score);
-  await sbFetch(`/rest/v1/game_records?player_id=eq.${playerId}&game_date=eq.${date}`, {
+async function dbRecordAnswer(playerId, puzzleId, answers, score){
+  if(OFFLINE_PREVIEW) return devRecordAnswer(puzzleId, answers, score);
+  await sbFetch(`/rest/v1/game_records?${puzzleFilter(playerId, puzzleId)}`, {
     method:"PATCH",
     body: JSON.stringify({answers, score})
   });
@@ -2219,9 +2245,9 @@ async function dbRecordAnswer(playerId, date, answers, score){
 // updated row as completed; throws otherwise. The puzzle_stats trigger on
 // game_records runs inside this same UPDATE's transaction, so crowd stats
 // read after this resolves already count the game (see crowdStats.js).
-async function dbCompleteGame(playerId, date, answers, score, totalQuestions){
-  if(OFFLINE_PREVIEW) return devCompleteGame(date, answers, score, totalQuestions);
-  const rows = await sbFetch(`/rest/v1/game_records?player_id=eq.${playerId}&game_date=eq.${date}`, {
+async function dbCompleteGame(playerId, puzzleId, answers, score, totalQuestions){
+  if(OFFLINE_PREVIEW) return devCompleteGame(puzzleId, answers, score, totalQuestions);
+  const rows = await sbFetch(`/rest/v1/game_records?${puzzleFilter(playerId, puzzleId)}`, {
     method:"PATCH",
     body: JSON.stringify({answers, score, completed:true, completed_at:new Date().toISOString()})
   });
@@ -2233,10 +2259,10 @@ async function dbUpdatePlayerStatsForFinish(playerId, date, score, totalQuestion
   if(OFFLINE_PREVIEW) return; // devCompleteGame already updated them
   await dbUpdateStats(playerId, date, score, totalQuestions, answers);
 }
-async function dbGetPuzzleCommunityStats(date, userScore){
-  if(OFFLINE_PREVIEW) return devCommunityStats(date, userScore);
+async function dbGetPuzzleCommunityStats(puzzleId, userScore){
+  if(OFFLINE_PREVIEW) return devCommunityStats(puzzleId, userScore);
   try {
-    const rows = await sbFetch(`/rest/v1/puzzle_stats?game_date=eq.${date}&select=*`);
+    const rows = await sbFetch(`/rest/v1/puzzle_stats?puzzle_id=eq.${encodeURIComponent(puzzleId)}&select=*`);
     const stats = rows?.[0];
     if(!stats){
       return {
@@ -2384,7 +2410,7 @@ function getEditorDraftKey(id){return `wtf-editor-draft:${id||"unsaved"}`;}
 function normalizeEditorDraft(game){
   return {
     ...game,
-    status: game.status==="published" ? "published" : "draft",
+    status: game.status==="published"||game.status==="retired" ? game.status : "draft",
     questions: game.questions||[]
   };
 }
@@ -3277,7 +3303,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
     setChosen(null);
 
     // Sync to Supabase (fire and forget)
-    if(!isReplay) onAnswer(game.date, newAnswers, newScore);
+    if(!isReplay) onAnswer(game.id, newAnswers, newScore);
 
     if(isLast){
       const final={...updated,completed:true,completedAt:new Date().toISOString()};
@@ -3450,14 +3476,16 @@ function balancedPipColumns(count,maxPerRow){
 // crowd: today's live Results gets the app's crowd stats (loaded only after
 // the finished game is saved; see crowdStats.js), so Crowd Showdown and the
 // share text use the same up-to-date numbers. Replays and Admin Preview pass
-// no crowd and read the day's stats themselves, as before.
+// no crowd and read the puzzle's stats themselves.
 function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrome=false,player,onAccount,onAdmin}){
   const safeRecord = {
     themeTitle: gameRecord?.themeTitle||"Puzzle Results",
     score: Number.isFinite(gameRecord?.score) ? gameRecord.score : 0,
     totalQuestions: Number.isFinite(gameRecord?.totalQuestions) ? gameRecord.totalQuestions : 0,
     answers: Array.isArray(gameRecord?.answers) ? gameRecord.answers : [],
-    date: gameRecord?.date||null
+    puzzleId: gameRecord?.puzzleId||game?.id||null,
+    // The puzzle's scheduled day, for display only.
+    date: game?.date||gameRecord?.date||null
   };
   const usesAppCrowd = crowd!==undefined;
   const[copyStatus,setCopyStatus]=useState(null);
@@ -3477,12 +3505,12 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
     if(usesAppCrowd) return;
     let cancelled = false;
     (async()=>{
-      if(!safeRecord.date) return;
-      const stats = await dbGetPuzzleCommunityStats(safeRecord.date, safeRecord.score);
+      if(!safeRecord.puzzleId) return;
+      const stats = await dbGetPuzzleCommunityStats(safeRecord.puzzleId, safeRecord.score);
       if(!cancelled) setReplayStats(stats);
     })();
     return ()=>{cancelled = true;};
-  },[usesAppCrowd, safeRecord.date, safeRecord.score]);
+  },[usesAppCrowd, safeRecord.puzzleId, safeRecord.score]);
 
   const communityStats = usesAppCrowd
     ? crowdStatsFor(crowd, safeRecord)
@@ -3810,9 +3838,12 @@ function ArchiveTodayCard({game,record}){
 
 // The whole card is a single <button>: no separate Replay control to miss,
 // no nested interactive elements, and a real focusable, keyboard-operable
-// control for free. canReplay preserves the exact existing rule.
+// control for free. canReplay preserves the exact existing rule; a retired
+// puzzle (shown only to players who played it) keeps its score but can't be
+// replayed.
 function ArchivePastCard({game,record,onReplay,eager}){
-  const canReplay = game.questions?.length>0;
+  const retired = game.status==="retired";
+  const canReplay = !retired && game.questions?.length>0;
   return(
     <button type="button" className="ah-card" onClick={onReplay} disabled={!canReplay}>
       <ArchiveCardArt game={game} eager={eager}/>
@@ -3824,6 +3855,7 @@ function ArchivePastCard({game,record,onReplay,eager}){
             <span className={`ah-score-pill${record.score===record.totalQuestions?" perfect":""}`}>{record.score}/{record.totalQuestions}</span>
           )}
           {canReplay&&<span className="ah-play-again">Play again →</span>}
+          {retired&&<span className="ah-play-again">Retired</span>}
         </div>
       </div>
     </button>
@@ -3831,25 +3863,26 @@ function ArchivePastCard({game,record,onReplay,eager}){
 }
 
 function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onAdmin}){
-  const sorted=[...games].filter(g=>g.status==="published").sort((a,b)=>b.date.localeCompare(a.date));
   const today=getLocalGameDay();
   const[records,setRecords]=useState({});
   const[showHelp,setShowHelp]=useState(false);
 
+  // One request for all of this player's plays, keyed by puzzle id, so a
+  // score stays on its puzzle whatever day the puzzle is scheduled for.
   useEffect(()=>{
-    if(!playerId||!sorted.length) return;
-    (async()=>{
-      const recs={};
-      await Promise.all(sorted.map(async g=>{
-        const r = await dbGetGameRecord(playerId, g.date);
-        if(r) recs[g.date]=r;
-      }));
-      setRecords(recs);
-    })();
+    if(!playerId) return;
+    let cancelled = false;
+    dbGetPlayerRecords(playerId).then(recs=>{ if(!cancelled) setRecords(recs); });
+    return ()=>{cancelled = true;};
   },[playerId, games.length]);
 
-  const todayGame = sorted.find(g=>g.date===today);
-  const pastGames = sorted.filter(g=>g.date!==today);
+  // Published puzzles, plus retired ones this player has a result for.
+  // Only a published puzzle can be today's.
+  const sorted=games
+    .filter(g=>g.status==="published"||(g.status==="retired"&&records[g.id]))
+    .sort((a,b)=>b.date.localeCompare(a.date));
+  const todayGame = sorted.find(g=>g.date===today&&g.status==="published");
+  const pastGames = sorted.filter(g=>g!==todayGame);
 
   return(
     <div className="ah-wrap">
@@ -3863,9 +3896,9 @@ function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onAdmin}){
         <div className="ah-empty">No games yet!</div>
       ):(
         <div className="ah-grid">
-          {todayGame&&<ArchiveTodayCard game={todayGame} record={records[todayGame.date]}/>}
+          {todayGame&&<ArchiveTodayCard game={todayGame} record={records[todayGame.id]}/>}
           {pastGames.map((g,i)=>(
-            <ArchivePastCard key={g.date} game={g} record={records[g.date]} onReplay={()=>onReplay(g)} eager={!todayGame&&i===0}/>
+            <ArchivePastCard key={g.id} game={g} record={records[g.id]} onReplay={()=>onReplay(g)} eager={!todayGame&&i===0}/>
           ))}
         </div>
       )}
@@ -4166,10 +4199,11 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
   const qs=game.questions??[];
   const qc=qs.length;
   const ok=questionCountOk(qc);
-  const dateConflict = game.date ? (games||[]).find(g=>g.date===game.date&&g.id!==game.id) : null;
+  const dateConflict = findDateConflict(games, game);
   const dateOk = Boolean(localDateFromISO(game.date)) && !dateConflict;
   const canPublish = ok && dateOk;
   const published = game.status==="published";
+  const retired = game.status==="retired";
   const validateDate = () => {
     if(!localDateFromISO(game.date)){setTab("setup");say("error","Pick a puzzle date first.");return false;}
     if(dateConflict){setTab("setup");say("error",`That day already has "${dateConflict.themeTitle||"another puzzle"}". Pick another date.`);return false;}
@@ -4204,16 +4238,18 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
   // each successful save, so this compares against what is really stored.
   const dirty = useMemo(()=>editorSnapshot(game)!==editorSnapshot(ig),[game,ig]);
 
-  // One save path for Publish and Save draft. "Published"/"Saved" is only
-  // ever shown after onSave resolves, i.e. after the database confirmed it.
-  const save=async publish=>{
+  // One save path for Publish, Save draft and Retire. "Published"/"Saved"/
+  // "Retired" is only ever shown after onSave resolves, i.e. after the
+  // database confirmed it. Saving keeps a published or retired puzzle's status.
+  const save=async (publish, retire=false)=>{
     if(saving) return;
-    const s={...game,status:publish||game.status==="published"?"published":"draft"};
+    const status = retire ? "retired" : publish||published ? "published" : retired ? "retired" : "draft";
+    const s={...game,status};
     if(!s.id)s.id=`g-${Date.now()}`;
     if(!s.questions)s.questions=[];
-    const action = publish ? "Published" : "Saved";
+    const action = retire ? "Retired" : publish ? "Published" : "Saved";
     setSaving(publish?"publish":"save");
-    say("progress", publish ? "Publishing… copying images into permanent storage." : "Saving…");
+    say("progress", retire ? "Retiring…" : publish ? "Publishing… copying images into permanent storage." : "Saving…");
     try{
       const {game:saved, imageFailures, listRefreshed} = await onSave(s);
       clearEditorDraft(saved.id);
@@ -4238,11 +4274,22 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
   const dft=()=>save(false);
   const waitForImages=()=>{if(imagesBusy){say("info","Hang on, an image is still uploading…");return true;}return false;};
   const pubSafe=async()=>{if(waitForImages()||!validateDate()||!validateItems())return;await pub();};
-  const dftSafe=async()=>{if(waitForImages()||!validateDate()||!validateItems())return;await dft();};
+  // A retired puzzle holds no date, so saving it never needs a free one.
+  const dftSafe=async()=>{if(waitForImages()||(!retired&&!validateDate())||!validateItems())return;await dft();};
   const removeGame=async()=>{
-    if(!window.confirm(`Delete "${game.themeTitle||"this draft"}"? The puzzle and all its questions will be removed. This can't be undone.`)) return;
+    const ask = published||retired
+      ? `Delete "${game.themeTitle||"this puzzle"}"? This only works if nobody has played it yet. The puzzle and all its questions will be removed. This can't be undone.`
+      : `Delete "${game.themeTitle||"this draft"}"? The puzzle and all its questions will be removed. This can't be undone.`;
+    if(!window.confirm(ask)) return;
     try{ await onDelete(game.id); }
     catch(e){ say("error", e?.message || "The puzzle wasn't deleted."); }
+  };
+  // Once anyone has played a puzzle it can't be deleted (the database
+  // refuses): retiring hides it from players and frees its date instead.
+  const retireGame=async()=>{
+    if(dirty){ say("error","Publish or undo your changes before retiring this puzzle."); return; }
+    if(!window.confirm(`Retire "${game.themeTitle||"this puzzle"}"? Players will stop seeing it and its date becomes free. Its plays and stats are kept, and you can publish it again later.`)) return;
+    await save(false, true);
   };
   // Leaving is only risky where no copy of the edits survives: a published
   // puzzle (never kept on the device), a puzzle never saved to the database,
@@ -4348,7 +4395,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
     : inDb ? {tone:"saved", text:"No unsaved changes"}
     : {tone:"idle", text:"Not saved yet"};
   const actions = (
-    <EditorActions published={published} saving={saving} imagesBusy={imagesBusy} canPublish={canPublish}
+    <EditorActions published={published} retired={retired} saving={saving} imagesBusy={imagesBusy} canPublish={canPublish}
                    onSaveDraft={dftSafe} onPublish={pubSafe} onPreview={openPreview}/>
   );
   const noticeBar = <NoticeBar notice={notice} onDismiss={()=>setNotice(null)}/>;
@@ -4369,7 +4416,8 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
             upload in progress. */}
         <div id="ps-panel-setup" role="tabpanel" aria-labelledby="ps-tab-setup" hidden={tab!=="setup"}>
           <SetupTab game={game} set={set} games={games} trackImage={trackImage}
-                    onDelete={inDb&&!published?removeGame:null}/>
+                    onDelete={inDb?removeGame:null}
+                    onRetire={inDb&&published?retireGame:null}/>
         </div>
         <div id="ps-panel-questions" role="tabpanel" aria-labelledby="ps-tab-questions" hidden={tab!=="questions"}>
           <div className={`ps-qlayout${mobileEditing&&editing?" is-editing":""}`}>
@@ -4408,7 +4456,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
 // until dismissed; each item drops out as soon as its field holds a new
 // image, and a replaced one reminds you to save again to make it live.
 function ImageWarningPanel({game,action,open,resolved,onReplace,onDismiss}){
-  const again = game.status==="published" ? "Publish changes" : "Save draft";
+  const again = game.status==="published" ? "Publish changes" : game.status==="retired" ? "Save" : "Save draft";
   const {title, body} = open.length ? describeImageWarning(open, game, action) : {title:"Image warnings resolved", body:null};
   return(
     <section className="ps-warn" role="status" aria-labelledby="ps-warn-title">
@@ -4444,7 +4492,7 @@ function AdminPreview({game,onBack}){
   // The preview uses a silent stand-in for the sound engine. It now also needs
   // the mute controls, because the gameplay header renders a sound toggle.
   const dummySound={play:()=>{},muted:false,setMuted:()=>{}};
-  const[pr,setPr]=useState({date:game.date,themeTitle:game.themeTitle,totalQuestions:game.questions.length,currentIndex:0,answers:[],score:0,completed:false,startedAt:new Date().toISOString(),completedAt:null});
+  const[pr,setPr]=useState(()=>newRecordFor(game));
   const[view,setView]=useState("home");
   const onComplete=final=>{setPr(final);setView("score");};
   return(
@@ -4523,9 +4571,11 @@ export default function WhatTheFudgeTrivia(){
     ]);
     setGames(allGames);
     setStats(playerStats);
+    // Which puzzle is today's is a scheduling question (by date); the
+    // player's record for it is looked up by the puzzle's id.
     const todayG = allGames.find(g=>g.date===today&&g.status==="published");
     if(todayG){
-      const rec = await dbGetGameRecord(p.id, today);
+      const rec = await dbGetGameRecord(p.id, todayG.id);
       setGameRecord(rec);
     } else {
       setGameRecord(null);
@@ -4592,6 +4642,10 @@ export default function WhatTheFudgeTrivia(){
   },[loadAppData]);
 
   const todayGame = games.find(g=>g.date===today&&g.status==="published") || null;
+  // The player's record counts as today's only if it belongs to today's
+  // puzzle: if the puzzle on today's date changes, another puzzle's result
+  // is never shown, resumed or shared as today's.
+  const todayRecord = gameRecord && todayGame && gameRecord.puzzleId===todayGame.id ? gameRecord : null;
   const isGameplay = view==="game"||view==="replay";
   // Results carries its own warm backdrop and PageHeader, like Archive.
   const isResults = view==="score"||view==="replay-score";
@@ -4607,32 +4661,32 @@ export default function WhatTheFudgeTrivia(){
   // with Home's own render or make boot/refresh take any longer. Skipped
   // entirely on a flagged data-saver connection.
   useEffect(()=>{
-    if(view!=="home" || !todayGame || gameRecord?.completed) return;
+    if(view!=="home" || !todayGame || todayRecord?.completed) return;
     if(typeof navigator!=="undefined" && navigator.connection?.saveData) return;
-    const url = getPuzzleImageUrls(todayGame)[gameRecord?.currentIndex ?? 0];
+    const url = getPuzzleImageUrls(todayGame)[todayRecord?.currentIndex ?? 0];
     if(!url) return;
     const schedule = typeof requestIdleCallback==="function" ? requestIdleCallback : (fn)=>setTimeout(fn,300);
     const cancel = typeof cancelIdleCallback==="function" ? cancelIdleCallback : clearTimeout;
     const handle = schedule(()=>preloadImage(url));
     return ()=>cancel(handle);
-  },[view, todayGame, gameRecord]);
+  },[view, todayGame, todayRecord]);
 
   // Crowd stats for today's finished game, shared by Results (Crowd Showdown
   // and the share text) and the homepage Share button so they always agree.
-  // { date, score, status: "ready" | "unavailable", stats? }; null or a
-  // different date/score means still loading. A game finished this session
+  // { puzzleId, score, status: "ready" | "unavailable", stats? }; null or a
+  // different puzzle/score means still loading. A game finished this session
   // loads them in handleComplete, after its save. A game already finished
   // before this page load (it's in the database) loads them here, once.
   const[crowd,setCrowd]=useState(null);
   const crowdRequestRef=useRef(null);
   useEffect(()=>{
-    if(!gameRecord?.completed || !gameRecord.date) return;
-    const {date, score} = gameRecord;
-    const key = `${date}:${score}`;
+    if(!gameRecord?.completed || !gameRecord.puzzleId) return;
+    const {puzzleId, score} = gameRecord;
+    const key = `${puzzleId}:${score}`;
     if(crowdRequestRef.current===key) return;
     crowdRequestRef.current = key;
-    loadCrowdStats({fetchStats:()=>dbGetPuzzleCommunityStats(date, score), score})
-      .then(result=>setCrowd({date, score, ...result}));
+    loadCrowdStats({fetchStats:()=>dbGetPuzzleCommunityStats(puzzleId, score), score})
+      .then(result=>setCrowd({puzzleId, score, ...result}));
   },[gameRecord]);
 
   const showToast = m => { setToast(m); setTimeout(()=>setToast(null),2100); };
@@ -4707,10 +4761,11 @@ export default function WhatTheFudgeTrivia(){
   const handleSave = async(sg) => {
     if(!localDateFromISO(sg.date)) throw new Error("Pick a valid puzzle date first.");
     // Check the date against the latest list, not the one loaded when the
-    // editor opened: nothing in the database stops two puzzles sharing a day.
+    // editor opened. The database only refuses two PUBLISHED puzzles on one
+    // day; Admin also keeps drafts apart. Retired puzzles hold no day.
     let latest = games;
     try{ latest = await dbLoadGames(); }catch(e){ console.error(e); }
-    const conflict = latest.find(g=>g.date===sg.date&&g.id!==sg.id);
+    const conflict = sg.status==="retired" ? null : findDateConflict(latest, sg);
     if(conflict) throw new Error(`That day already has "${conflict.themeTitle||"another puzzle"}". Pick another date.`);
     let result;
     try{
@@ -4748,7 +4803,7 @@ export default function WhatTheFudgeTrivia(){
     // question screen that's about to appear. (GameScreen's own effect
     // re-primes on mount too; this is what makes the window start warming
     // immediately rather than one render cycle later.)
-    primeActiveWindow(getPuzzleImageUrls(todayGame), gameRecord?.currentIndex ?? 0, todayGame.id);
+    primeActiveWindow(getPuzzleImageUrls(todayGame), todayRecord?.currentIndex ?? 0, todayGame.id);
     try {
       let activePlayer = player;
       if(!activePlayer){
@@ -4760,7 +4815,7 @@ export default function WhatTheFudgeTrivia(){
         showToast("Still connecting... try again in a sec.");
         return;
       }
-      const rec = await dbInitGameRecord(activePlayer.id, today, todayGame.themeTitle, todayGame.questions.length);
+      const rec = await dbInitGameRecord(activePlayer.id, todayGame);
       setGameRecord(rec);
       setView("game");
     } catch(e){
@@ -4770,9 +4825,9 @@ export default function WhatTheFudgeTrivia(){
   };
 
   // Record an answer mid-game
-  const handleAnswer = async(date, answers, score) => {
+  const handleAnswer = async(puzzleId, answers, score) => {
     if(!player) return;
-    try { await dbRecordAnswer(player.id, date, answers, score); } catch(e){}
+    try { await dbRecordAnswer(player.id, puzzleId, answers, score); } catch(e){}
   };
 
   // Complete game
@@ -4781,36 +4836,38 @@ export default function WhatTheFudgeTrivia(){
   // request first stops the revisit loader from reading ahead of the save.
   const handleComplete = async(finalRec) => {
     if(!player) return;
-    crowdRequestRef.current = `${finalRec.date}:${finalRec.score}`;
+    const {puzzleId} = finalRec;
+    crowdRequestRef.current = `${puzzleId}:${finalRec.score}`;
     setGameRecord(finalRec);
     setView("score");
     const result = await saveThenLoadCrowdStats({
-      save: ()=>dbCompleteGame(player.id, finalRec.date, finalRec.answers, finalRec.score, finalRec.totalQuestions),
-      fetchStats: ()=>dbGetPuzzleCommunityStats(finalRec.date, finalRec.score),
+      save: ()=>dbCompleteGame(player.id, puzzleId, finalRec.answers, finalRec.score, finalRec.totalQuestions),
+      fetchStats: ()=>dbGetPuzzleCommunityStats(puzzleId, finalRec.score),
       score: finalRec.score,
       onSaved: async()=>{
         try{
+          // Streaks count calendar days, so they use the day the puzzle ran.
           await dbUpdatePlayerStatsForFinish(player.id, finalRec.date, finalRec.score, finalRec.totalQuestions, finalRec.answers);
           setStats(await dbGetStats(player.id));
         }catch(e){ console.error("Complete game error:", e); }
       }
     });
     if(result.reason==="save-failed") console.error("Complete game error:", result.error);
-    setCrowd({date:finalRec.date, score:finalRec.score, ...result});
+    setCrowd({puzzleId, score:finalRec.score, ...result});
   };
 
   // Share today's result from the homepage: the same text Results copies.
   // Resolves to shareOrCopy's outcome; HomeScreen shows the feedback.
   const handleShareToday = async() => {
-    if(!gameRecord?.completed) return null;
-    return shareOrCopy(shareTextFor(todayGame, gameRecord, crowd), navigator);
+    if(!todayRecord?.completed) return null;
+    return shareOrCopy(shareTextFor(todayGame, todayRecord, crowd), navigator);
   };
 
   // Replay
   const handleReplay = g => {
     primeActiveWindow(getPuzzleImageUrls(g), 0, g.id);
     setReplayGame(g);
-    setReplayRecord({date:g.date,themeTitle:g.themeTitle,totalQuestions:g.questions.length,currentIndex:0,answers:[],score:0,completed:false,startedAt:new Date().toISOString(),completedAt:null});
+    setReplayRecord(newRecordFor(g));
     setView("replay");
   };
 
@@ -4891,7 +4948,7 @@ export default function WhatTheFudgeTrivia(){
           )}
 
           {todayGame&&view==="home"&&(
-            <HomeScreen game={todayGame} gameRecord={gameRecord} stats={stats}
+            <HomeScreen game={todayGame} gameRecord={todayRecord} stats={stats}
               player={player}
               sound={sound}
               onPlay={handlePlay}
@@ -4901,10 +4958,10 @@ export default function WhatTheFudgeTrivia(){
             />
           )}
 
-          {view==="game"&&todayGame&&gameRecord&&(
+          {view==="game"&&todayGame&&todayRecord&&(
             <GameScreen
               game={todayGame}
-              gameRecord={gameRecord}
+              gameRecord={todayRecord}
               onAnswer={handleAnswer}
               onComplete={handleComplete}
               onNav={setView}
@@ -4926,8 +4983,8 @@ export default function WhatTheFudgeTrivia(){
             />
           )}
 
-          {view==="score"&&gameRecord&&(
-            <ScoreScreen gameRecord={gameRecord} game={todayGame} crowd={crowd} onNav={setView} sound={sound}
+          {view==="score"&&todayRecord&&(
+            <ScoreScreen gameRecord={todayRecord} game={todayGame} crowd={crowd} onNav={setView} sound={sound}
               withChrome player={player} onAccount={()=>setView("account")}
               onAdmin={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}/>
           )}

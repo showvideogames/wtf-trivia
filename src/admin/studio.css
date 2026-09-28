@@ -750,6 +750,7 @@ span.ps-qrow-main { cursor: default; }
 .ps-badge.is-live { background: #FFE0EB; color: #9C1446; }
 .ps-badge.is-scheduled { background: var(--ps-teal-wash); color: var(--ps-teal-ink); }
 .ps-badge.is-published { background: var(--ps-green-wash); color: var(--ps-green-ink); }
+.ps-badge.is-retired { background: #ECE7DC; color: #4E4636; }
 
 /* ---------- Admin Preview frame ----------
    Only the frame is Studio-styled. The stage inherits the page defaults a

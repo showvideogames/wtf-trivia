@@ -14,9 +14,9 @@ const GAME = {
   categoryAShareName: "Nicolas Cage Movie 🤩🎬", categoryBShareName: "Board Game 🎲♟️",
 };
 const answers = [..."110011001111"].map((c, i) => ({ questionIndex: i, correct: c === "1" }));
-const RECORD = { date: "2026-09-27", score: 8, totalQuestions: 12, answers, completed: true };
+const RECORD = { puzzleId: "g-cage", date: "2026-09-27", score: 8, totalQuestions: 12, answers, completed: true };
 // 100 finishers: 77 below 8, 5 at 8 (you included), 18 above.
-const CROWD = { status: "ready", date: "2026-09-27", score: 8, stats: { finishedPlayers: 100, scoreHistogram: { 5: 77, 8: 5, 11: 18 } } };
+const CROWD = { status: "ready", puzzleId: "g-cage", score: 8, stats: { finishedPlayers: 100, scoreHistogram: { 5: 77, 8: 5, 11: 18 } } };
 const EXPECTED =
   "What The Fudge Trivia 🍬\n━━━━━━━━━━━━━━━━━━━━━━━━━━\nNicolas Cage Movie 🤩🎬\n     OR\nBoard Game 🎲♟️\n" +
   "━━━━━━━━━━━━━━━━━━━━━━━━━━\n🟢🟢🔴🔴🟢🟢🔴🔴🟢🟢🟢🟢\n8/12 • Beat 77% of players\nwhatthefudge.gg";

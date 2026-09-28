@@ -6,8 +6,12 @@
 -- (Average Chaos, Crowd Showdown, Perfect Goblins, Nerd Mode) have realistic
 -- numbers to show.
 --
+-- Plays belong to a puzzle (game_records.puzzle_id), not to a date: moving
+-- a puzzle to another day keeps its synthetic plays and stats with it.
+-- Requires the puzzle-id cutover (supabase/puzzle_id_cutover/C1).
+--
 --   Run:     paste into the Supabase SQL Editor and run once.
---   Rerun:   safe. Existing synthetic rows are skipped, never duplicated.
+--   Rerun:   safe. Existing synthetic plays are skipped, never duplicated.
 --            A puzzle published since the last run gets its 50 plays.
 --   Check:   supabase/results_test_verify.sql (read-only).
 --   Remove:  supabase/results_test_cleanup.sql
@@ -18,13 +22,15 @@
 -- so none of them can sign in.
 --
 -- Aggregates are produced by the production trigger
--- (game_records_completed_stats -> rebuild_single_puzzle_stats), exactly as
--- a real completion does. The script aborts, changing nothing, if:
+-- (game_records_completed_stats -> rebuild_puzzle_stats_for), exactly as a
+-- real completion does. The script aborts, changing nothing, if:
+--   * the puzzle-id cutover has not been applied,
 --   * any stored puzzle_stats row can't be reproduced from game_records
 --     (rebuilding would otherwise overwrite figures that can't be recreated),
---   * a published puzzle date is ambiguous or has a malformed question,
+--   * a published puzzle has a malformed question,
 --   * a synthetic id is already taken by a non-synthetic user,
---   * the trigger did not update puzzle_stats after the insert.
+--   * a puzzle did not end up with exactly 50 synthetic plays, or the
+--     trigger did not update its stats.
 --
 -- Generation is fully deterministic (md5-derived, no random()), so every run
 -- against the same puzzles produces the same dataset.
@@ -32,36 +38,36 @@
 
 begin;
 
--- Live columns may store dates as text or date and JSON as json or jsonb, so
--- every stored value is cast explicitly. ISO output keeps any date written
--- into a text column in the app's own YYYY-MM-DD form.
-set local datestyle = 'ISO, YMD';
-
--- 0. Refuse to run if rebuilding stats would change any stored figures.
+-- 0. Refuse to run before the cutover, or if rebuilding stats would change
+--    any stored figures.
 do $$
 declare
-  d date;
+  pid text;
   before_row jsonb;
   after_row jsonb;
   drifted text := '';
 begin
-  for d in
-    select game_date::date from public.puzzle_stats
+  if not exists (select 1 from information_schema.columns
+                  where table_schema = 'public' and table_name = 'game_records' and column_name = 'puzzle_id') then
+    raise exception 'results_test seed aborted: run the puzzle-id cutover (C1) first.';
+  end if;
+  for pid in
+    select puzzle_id from public.puzzle_stats
     union
-    select distinct game_date::date from public.game_records where completed
+    select distinct puzzle_id from public.game_records where completed
   loop
     select to_jsonb(ps) - 'updated_at' into before_row
-      from public.puzzle_stats ps where ps.game_date::date = d;
+      from public.puzzle_stats ps where ps.puzzle_id = pid;
     begin
-      perform public.rebuild_single_puzzle_stats(d);
+      perform public.rebuild_puzzle_stats_for(pid);
       select to_jsonb(ps) - 'updated_at' into after_row
-        from public.puzzle_stats ps where ps.game_date::date = d;
+        from public.puzzle_stats ps where ps.puzzle_id = pid;
       raise exception 'results_test_probe';  -- always undo the probe rebuild
     exception when raise_exception then
       if sqlerrm <> 'results_test_probe' then raise; end if;
     end;
     if before_row is distinct from after_row then
-      drifted := drifted || ' ' || d;
+      drifted := drifted || ' ' || pid;
     end if;
   end loop;
   if drifted <> '' then
@@ -71,7 +77,7 @@ end $$;
 
 -- 1. Target puzzles: every published puzzle with questions.
 create temp table rt_puzzles on commit drop as
-select g.id::text as id, g.date::date as date, g.theme_title, g.questions::jsonb as questions,
+select g.id as id, g.date as date, g.theme_title, g.questions::jsonb as questions,
        jsonb_array_length(g.questions::jsonb) as n
 from public.games g
 where g.status = 'published'
@@ -81,12 +87,6 @@ where g.status = 'published'
 do $$
 declare bad text;
 begin
-  select string_agg(date::text, ', ') into bad
-  from (select date from rt_puzzles group by date having count(*) > 1) x;
-  if bad is not null then
-    raise exception 'results_test seed aborted: more than one published puzzle on %', bad;
-  end if;
-
   select string_agg(p.id || ' Q' || q.ord, ', ') into bad
   from rt_puzzles p
   cross join lateral jsonb_array_elements(p.questions) with ordinality q(elem, ord)
@@ -131,8 +131,8 @@ select '00000000-0000-0000-0000-000000000000', p.id, 'authenticated', 'authentic
        p.email, '',
        '{"provider":"results_test","providers":["results_test"]}'::jsonb,
        '{"results_test":true}'::jsonb,
-       (select min(date) from rt_puzzles)::timestamptz - interval '1 day' + p.k * interval '7 minutes',
-       (select min(date) from rt_puzzles)::timestamptz - interval '1 day' + p.k * interval '7 minutes',
+       (select min(date::date) from rt_puzzles)::timestamptz - interval '1 day' + p.k * interval '7 minutes',
+       (select min(date::date) from rt_puzzles)::timestamptz - interval '1 day' + p.k * interval '7 minutes',
        '', '', '', ''
 from rt_players p
 on conflict (id) do nothing;
@@ -151,9 +151,9 @@ on conflict (id) do update set email = excluded.email
 --    next 40% medium (55-70%), rest easy (75-90%).
 create temp table rt_questions on commit drop as
 with ranked as (
-  select p.id as game_id, p.date, p.n, q.ord - 1 as idx,
+  select p.id as game_id, p.n, q.ord - 1 as idx,
          q.elem ->> 'correctCategory' as correct_cat,
-         (row_number() over (partition by p.date order by md5(p.id || ':band:' || (q.ord - 1))) - 1)::numeric / p.n as pos
+         (row_number() over (partition by p.id order by md5(p.id || ':band:' || (q.ord - 1))) - 1)::numeric / p.n as pos
   from rt_puzzles p
   cross join lateral jsonb_array_elements(p.questions) with ordinality q(elem, ord)
 )
@@ -186,7 +186,7 @@ where rn <= nperfect;
 --    skill + per-question noise, so no two questions share a winner set.
 create temp table rt_cells on commit drop as
 with scored as (
-  select q.game_id, q.date, q.idx, q.correct_cat, q.target_correct, pl.id as player_id,
+  select q.game_id, q.idx, q.correct_cat, q.target_correct, pl.id as player_id,
          (pf.player_id is not null) as is_perfect,
          pl.skill + 0.8 * ((('x' || substr(md5(q.game_id || ':' || q.idx || ':' || pl.k), 1, 8))::bit(32)::bigint / 4294967296.0) - 0.5) as strength
   from rt_questions q
@@ -199,17 +199,18 @@ ranked as (
          count(*) filter (where s.is_perfect) over (partition by s.game_id, s.idx) as nperfect
   from scored s
 )
-select game_id, date, idx, correct_cat, player_id,
+select game_id, idx, correct_cat, player_id,
        (is_perfect or rnk <= target_correct - nperfect) as correct
 from ranked;
 
--- 6. One completed first-attempt record per player per puzzle, in the exact
+-- 6. One completed first-attempt play per player per puzzle, in the exact
 --    shape GameScreen writes: [{questionIndex, chosenCategory, correct}].
+--    game_date is only the snapshot of the puzzle's scheduled day.
 insert into public.game_records (
-  player_id, game_date, theme_title, score, total_questions, answers,
+  player_id, puzzle_id, game_date, theme_title, score, total_questions, answers,
   completed, started_at, completed_at
 )
-select c.player_id, c.date, p.theme_title,
+select c.player_id, p.id, p.date, p.theme_title,
        count(*) filter (where c.correct)::int,
        p.n,
        jsonb_agg(jsonb_build_object(
@@ -226,25 +227,37 @@ join rt_puzzles p on p.id = c.game_id
 cross join lateral (
   -- Finished between 12:00 and 03:00 UTC on the puzzle's own day, and never
   -- in the future when the puzzle is today's.
-  select (p.date + time '12:00') at time zone 'UTC' + greatest(
-           least(interval '15 hours', now() - ((p.date + time '12:00') at time zone 'UTC')),
+  select (p.date::date + time '12:00') at time zone 'UTC' + greatest(
+           least(interval '15 hours', now() - ((p.date::date + time '12:00') at time zone 'UTC')),
            interval '15 minutes'
          ) * (('x' || substr(md5(p.id || ':done:' || c.player_id), 1, 8))::bit(32)::bigint / 4294967296.0)
            as completed_at,
          ('x' || substr(md5(p.id || ':took:' || c.player_id), 1, 8))::bit(32)::bigint / 4294967296.0 as u2
 ) t
-group by c.player_id, c.date, p.theme_title, p.n, t.completed_at, t.u2
-on conflict (player_id, game_date) do nothing;
+group by c.player_id, p.id, p.date, p.theme_title, p.n, t.completed_at, t.u2
+-- Skips plays that already exist. (Before cutover step C2, a synthetic
+-- player also can't have two plays on one date; step 7 reports that.)
+on conflict do nothing;
 
--- 7. Confirm the production trigger rebuilt puzzle_stats for every puzzle.
+-- 7. Every target puzzle has its 50 synthetic plays, and the production
+--    trigger rebuilt its stats.
 do $$
 declare bad text;
 begin
-  select string_agg(p.date::text, ', ') into bad
+  select string_agg(p.id || ' (' || p.date || ')', ', ') into bad
   from rt_puzzles p
-  left join public.puzzle_stats ps on ps.game_date::date = p.date
+  where (select count(*) from public.game_records r
+          where r.puzzle_id = p.id and r.completed
+            and r.player_id in (select id from rt_players)) <> 50;
+  if bad is not null then
+    raise exception 'results_test seed aborted: these puzzles did not get exactly 50 synthetic plays: %', bad;
+  end if;
+
+  select string_agg(p.id, ', ') into bad
+  from rt_puzzles p
+  left join public.puzzle_stats ps on ps.puzzle_id = p.id
   where coalesce(ps.total_finished, -1) <> (
-    select count(*) from public.game_records r where r.completed and r.game_date::date = p.date
+    select count(*) from public.game_records r where r.completed and r.puzzle_id = p.id
   );
   if bad is not null then
     raise exception 'results_test seed aborted: puzzle_stats was not rebuilt for %', bad;
@@ -255,7 +268,7 @@ commit;
 
 select count(distinct r.player_id) as synthetic_players,
        count(*) as synthetic_completed_plays,
-       count(distinct r.game_date) as puzzles_covered
+       count(distinct r.puzzle_id) as puzzles_covered
 from public.game_records r
 where r.player_id in (
   select md5('results_test_player_' || lpad(k::text, 2, '0'))::uuid from generate_series(1, 50) k
