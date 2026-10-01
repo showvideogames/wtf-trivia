@@ -456,6 +456,21 @@ export function devGetStats() {
 // 142 other demo finishers on an 8-question puzzle, as { score: players }.
 const DEMO_SCORE_HISTOGRAM = { 0: 2, 1: 4, 2: 9, 3: 17, 4: 24, 5: 30, 6: 26, 7: 18, 8: 12 };
 
+// The demo crowd spread over a puzzle of any length, so every demo puzzle's
+// histogram stays within 0..its question count, like the live data.
+function demoCrowdFor(total) {
+  const scaled = {};
+  for (const [s, n] of Object.entries(DEMO_SCORE_HISTOGRAM)) {
+    const score = Math.round((Number(s) * total) / 8);
+    scaled[score] = (scaled[score] || 0) + n;
+  }
+  return scaled;
+}
+
+// Per-question accuracy for Nerd Mode: a fixed spread of correct rates over
+// everyone counted, so the breakdown can be reviewed offline.
+const DEMO_CORRECT_RATES = [0.77, 0.38, 0.58, 0.36, 0.84, 0.49, 0.67, 0.22];
+
 // A running log of finish-game saves and stats reads (localStorage
 // "wtf-dev-log"), so their order can be checked in the browser.
 function devLog(entry) {
@@ -479,7 +494,8 @@ export function devCommunityStats(puzzleId, userScore) {
     lag = localStorage.getItem("wtf-dev-crowd-lag");
   } catch { /* ignore */ }
   if (mode === "none") { devLog("stats:failed"); return null; }
-  let others = mode === "empty" ? {} : DEMO_SCORE_HISTOGRAM;
+  const total = demoGames().find((g) => g.id === puzzleId)?.questions.length || 8;
+  let others = mode === "empty" ? {} : demoCrowdFor(total);
   if (mode && mode !== "empty") {
     try { others = JSON.parse(mode); } catch { /* keep the demo crowd */ }
   }
@@ -502,8 +518,11 @@ export function devCommunityStats(puzzleId, userScore) {
     finishedPlayers,
     averageScore: finishedPlayers ? Math.round(totalScore / finishedPlayers) : 0,
     beatRate: finishedPlayers ? Math.round((atOrBelow / finishedPlayers) * 100) : 0,
-    perfectRate: finishedPlayers ? 11 : 0,
-    questionAccuracies: [],
+    perfectRate: finishedPlayers ? Math.round(((Number(histogram[total]) || 0) / finishedPlayers) * 100) : 0,
+    questionAccuracies: Array.from({ length: total }, (_, index) => {
+      const correct = Math.round(finishedPlayers * DEMO_CORRECT_RATES[index % DEMO_CORRECT_RATES.length]);
+      return { index, answered: finishedPlayers, correct, correctRate: finishedPlayers ? Math.round((correct / finishedPlayers) * 100) : 0 };
+    }),
     scoreHistogram: histogram,
   };
 }
