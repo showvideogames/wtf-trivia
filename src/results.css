@@ -1,11 +1,11 @@
-/* ================= RESULTS (layout + integration pass) =================
-   The Results content keeps its existing components and styles (score,
-   perfect banner, pips, share box, Game Show Recap, crowd cards, Nerd Mode,
-   countdown). This file only places them inside the shared warm backdrop and
-   PageHeader, and makes the layout respond to the space it's given.
+/* ================= RESULTS =================
+   One result experience, in order of importance: the player's score (the
+   biggest thing on the page), where it sits in the crowd ("You beat N%" and
+   the score distribution), two quiet supporting numbers beside the share
+   button, then Nerd Mode's question scorecard and the footer.
 
    Layout follows the width of .rs-page (a size container), not the viewport,
-   so Admin preview -- which renders the same content inside a 500px shell --
+   so Admin preview -- which renders the same content inside a narrow shell --
    keeps the phone layout on a desktop screen.
 
    Selectors are prefixed with .rs-page because App.jsx's inline <style>
@@ -18,9 +18,10 @@
 
 .rs-wrap {
   width: 100%;
-  max-width: 1000px;
+  max-width: 1040px;
   margin: 0 auto;
   padding: 0 16px 40px;
+  padding-bottom: max(40px, env(safe-area-inset-bottom));
 }
 
 /* Same reasoning as Archive: Results is a long page, so on phones the candy
@@ -56,10 +57,13 @@
 }
 
 .rs-page .rs-card {
-  padding: 22px 18px 24px;
+  padding: 20px 16px 22px;
+}
+@container rs (min-width: 420px) {
+  .rs-page .rs-card { padding: 22px 20px 24px; }
 }
 @container rs (min-width: 860px) {
-  .rs-page .rs-card { padding: 30px 34px 32px; }
+  .rs-page .rs-card { padding: 26px 26px 28px; }
 }
 
 /* ===== REPLAY STATUS =====
@@ -98,7 +102,7 @@
 .rs-page .rs-title {
   font-family: 'Fredoka One', cursive;
   font-weight: 400;
-  font-size: clamp(19px, 4.6cqi, 26px);
+  font-size: clamp(19px, 4.6cqi, 28px);
   line-height: 1.15;
   color: var(--black);
   text-wrap: balance;
@@ -111,17 +115,108 @@
   text-wrap: balance;
 }
 
-/* ===== SCORE + SHARE ===== */
-.rs-page .score-msg { margin-bottom: 6px; }
+/* ===== SHARED SURFACES =====
+   One soft surface for the hero halves: pale pink, a hairline edge, no
+   inner outline or extra shadow, so the card's own black outline stays the
+   only heavy line. */
+.rs-page .rs-panel {
+  position: relative;
+  background: #FFF3F6;
+  border: 1.5px solid rgba(204, 51, 102, 0.14);
+  border-radius: 20px;
+  min-width: 0;
+}
+
+/* Shared disclosure chevron (Nerd Mode and the share preview). */
+.rs-page .rs-chevron {
+  display: inline-block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-right: 2.5px solid currentColor;
+  border-bottom: 2.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform .2s ease;
+}
+.rs-page [aria-expanded="true"] .rs-chevron { transform: translateY(2px) rotate(-135deg); }
+
+/* ===== HERO =====
+   Stacked: score, then crowd. Roomy: side by side, equal heights. */
+.rs-page .rs-hero {
+  display: grid;
+  gap: 12px;
+}
+@container rs (min-width: 760px) {
+  .rs-page .rs-hero {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 14px;
+  }
+}
+
+/* ---- Your score ---- */
+.rs-page .rs-hero-score {
+  container: rsscore / inline-size;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  /* No side padding on phones: a row of 8 pips needs the full 280px. */
+  padding: 14px 0 6px;
+}
+.rs-page .rs-hero-score .score-msg { padding: 0 10px; }
+@container rs (min-width: 420px) {
+  .rs-page .rs-hero-score { padding: 14px 12px 6px; }
+}
+/* The sticker score (ResultsScore.jsx): both copies share one grid cell,
+   the extrusion behind, the face in front; their hard-edged layers come
+   from the inline --rs-*-shadow lists. The padding leaves room for the
+   outline and extrusion inside the box, so nothing is clipped. */
+.rs-page .rs-hero-score .rs-score {
+  display: inline-grid;
+  font-size: clamp(72px, 30cqi, 132px);
+  line-height: .9;
+  letter-spacing: 0;
+  margin: 0;
+  padding: .07em .1em .14em .07em;
+  color: var(--pink);
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+  white-space: nowrap;
+}
+.rs-page .rs-score > span { grid-area: 1 / 1; }
+.rs-page .rs-score-face { text-shadow: var(--rs-face-shadow); }
+.rs-page .rs-score-ext {
+  color: var(--pink-dark);
+  text-shadow: var(--rs-extrusion-shadow);
+  user-select: none;
+}
+.rs-page .rs-hero-score .score-denom {
+  font-size: .78em;
+  color: inherit;
+  -webkit-text-stroke: 0;
+}
+.rs-page .rs-hero-score .score-sublbl {
+  font-size: clamp(15px, 4.4cqi, 19px);
+  color: #8A8A8A;
+  margin: 2px 0 4px;
+}
+.rs-page .score-msg {
+  margin-bottom: 2px;
+  font-size: 14.5px;
+  line-height: 1.4;
+  max-width: 34em;
+  text-wrap: balance;
+}
 
 /* Rows are balanced by balancedPipColumns(): the width cap below holds
-   exactly that many. */
+   exactly that many. The wide cap only applies where the score panel itself
+   is wide (stacked on a tablet); beside the chart it keeps the phone rows. */
 .rs-page .rs-pips {
   max-width: calc(var(--pips-narrow) * 36px - 8px);
   margin: 6px auto 2px;
   padding: 6px 0 10px;
 }
-@container rs (min-width: 560px) {
+@container rsscore (min-width: 560px) {
   .rs-page .rs-pips { max-width: calc(var(--pips-wide) * 36px - 8px); }
 }
 
@@ -148,7 +243,402 @@
   14%, 100% { transform: translateY(0) scale(1); }
 }
 
-.rs-page .rs-share { margin-top: 8px; }
+/* ---- The crowd ---- */
+.rs-page .rs-crowd {
+  container: rscrowd / inline-size;
+  padding: 14px 12px 12px;
+}
+.rs-page .rs-crowd-inner {
+  display: grid;
+  gap: 10px;
+}
+.rs-page .rs-crowd-quiet {
+  display: grid;
+  place-items: center;
+  min-height: 96px;
+  padding: 18px 20px;
+}
+.rs-page .rs-crowd-msg {
+  margin: 0;
+  max-width: 24em;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.45;
+  color: rgba(26, 26, 26, 0.72);
+  text-wrap: balance;
+}
+
+/* "You beat 26% of players": one line above the chart when narrow, its own
+   column beside the chart when roomy. */
+.rs-page .rs-beat {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  column-gap: 8px;
+  line-height: 1;
+}
+.rs-page .rs-beat-kicker {
+  font-family: 'Fredoka One', cursive;
+  font-size: 14px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--black);
+}
+.rs-page .rs-beat-num {
+  font-family: 'Fredoka One', cursive;
+  font-size: 46px;
+  color: var(--pink);
+  -webkit-text-stroke: 1.5px var(--pink-dark);
+  letter-spacing: -0.5px;
+}
+.rs-page .rs-beat-sub {
+  font-family: 'Fredoka One', cursive;
+  font-size: 16px;
+  color: #7A7A7A;
+}
+@container rscrowd (min-width: 470px) {
+  .rs-page .rs-crowd-inner {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0;
+    height: 100%;
+  }
+  .rs-page .rs-hist { --bar-max: 96px; }
+  .rs-page .rs-beat {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 18px 0 12px;
+    margin-right: 16px;
+    border-right: 1.5px solid rgba(204, 51, 102, 0.16);
+  }
+  .rs-page .rs-beat-num { font-size: 58px; }
+}
+
+.rs-page .rs-crowd-chart { min-width: 0; }
+.rs-page .rs-crowd-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-bottom: 4px;
+}
+.rs-page .rs-crowd-title {
+  margin: 0;
+  font-family: 'Fredoka One', cursive;
+  font-weight: 400;
+  font-size: 17px;
+  color: var(--black);
+}
+.rs-page .rs-crowd-chip {
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(26, 26, 26, 0.12);
+  color: rgba(26, 26, 26, 0.65);
+  white-space: nowrap;
+}
+.rs-page .rs-crowd-note {
+  margin: 6px auto 0;
+  max-width: 36em;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: rgba(26, 26, 26, 0.55);
+  text-wrap: balance;
+}
+
+/* ---- Where you landed (ScoreHistogram) ----
+   Real counts only: each bar's height is its bucket's share of the tallest
+   bucket, and an empty bucket keeps its column and axis number but no bar.
+   Above the bars: 34px reserved for the percentage and the YOU pill, so
+   neither ever reaches the average label's row. */
+.rs-page .rs-hist {
+  container: rshist / inline-size;
+  margin: 0;
+  --bar-max: 80px;
+  --gap: clamp(2px, 1.6cqi, 8px);
+}
+.rs-page .rs-hist-chart {
+  position: relative;
+  padding: 20px 6px 0;
+}
+.rs-page .rs-hist-plot,
+.rs-page .rs-hist-axis {
+  display: grid;
+  grid-template-columns: repeat(var(--buckets), minmax(0, 1fr));
+  column-gap: var(--gap);
+}
+.rs-page .rs-hist-plot {
+  height: calc(var(--bar-max) + 36px);
+  align-items: end;
+  border-bottom: 2px solid rgba(26, 26, 26, 0.2);
+}
+.rs-page .rs-hist-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  height: 100%;
+}
+.rs-page .rs-hist-bar {
+  display: block;
+  width: 100%;
+  max-width: 36px;
+  height: calc(var(--h) * var(--bar-max));
+  background: #FFBFD3;
+  border-radius: 5px 5px 0 0;
+  transform-origin: bottom;
+  animation: rsBarGrow .5s cubic-bezier(.3, .9, .4, 1) backwards;
+  animation-delay: calc(150ms + var(--i) * 35ms);
+}
+.rs-page .rs-hist-col.is-empty .rs-hist-bar { animation: none; }
+.rs-page .rs-hist-col.is-you .rs-hist-bar {
+  background: linear-gradient(180deg, #FF7AA2 0%, var(--pink) 100%);
+  box-shadow: inset 0 0 0 2px var(--pink-dark);
+}
+@keyframes rsBarGrow {
+  from { transform: scaleY(0); }
+}
+.rs-page .rs-hist-pct {
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: rgba(26, 26, 26, 0.6);
+  white-space: nowrap;
+}
+.rs-page .rs-hist-col.is-you .rs-hist-pct { color: var(--pink-dark); font-weight: 900; }
+.rs-page .rs-hist-you {
+  position: relative;
+  font-family: 'Fredoka One', cursive;
+  font-size: 10.5px;
+  letter-spacing: 0.6px;
+  line-height: 1;
+  padding: 3px 6px 2px;
+  margin-bottom: 7px;
+  border-radius: 999px;
+  background: var(--pink);
+  color: #fff;
+  border: 1.5px solid var(--pink-dark);
+  white-space: nowrap;
+}
+.rs-page .rs-hist-you::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  background: var(--pink);
+  border-right: 1.5px solid var(--pink-dark);
+  border-bottom: 1.5px solid var(--pink-dark);
+  transform: rotate(45deg);
+}
+.rs-page .rs-hist-axis {
+  height: 20px;
+  align-items: center;
+  font-family: 'Fredoka One', cursive;
+  font-size: 12px;
+  color: rgba(26, 26, 26, 0.55);
+}
+.rs-page .rs-hist-axis span { text-align: center; min-width: 0; white-space: nowrap; }
+.rs-page .rs-hist-axis span.is-you { color: var(--black); text-decoration: underline 2px var(--pink); text-underline-offset: 3px; }
+/* 15-question charts on a phone: every bar stays, only the ends, every
+   fifth score and the player's own keep their numbers. */
+@container rshist (max-width: 440px) {
+  .rs-page .rs-hist-dense .rs-hist-axis span.is-minor { visibility: hidden; }
+}
+.rs-page .rs-hist-caption {
+  margin-top: 2px;
+  font-family: 'Fredoka One', cursive;
+  font-size: 10.5px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: rgba(26, 26, 26, 0.5);
+}
+
+/* The average: a dashed line from the label row down to the baseline, at
+   the exact average score; the label sits beside it, flipped to the left
+   in the chart's right half so it never runs off the edge. */
+.rs-page .rs-hist-avg {
+  /* --m is the exact average score; this lands it between bucket centres
+     the same way the grid lays the columns out (6px padding, --gap gaps). */
+  --col: calc((100% - 12px - (var(--buckets) - 1) * var(--gap)) / var(--buckets));
+  position: absolute;
+  top: 0;
+  bottom: 20px;
+  left: calc(6px + var(--m) * (var(--col) + var(--gap)) + var(--col) / 2);
+  width: 0;
+  pointer-events: none;
+}
+.rs-page .rs-hist-avg::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 0;
+  left: -1px;
+  border-left: 2px dashed rgba(26, 26, 26, 0.32);
+}
+.rs-page .rs-hist-avg-label {
+  position: absolute;
+  top: 0;
+  left: 6px;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: rgba(26, 26, 26, 0.6);
+  white-space: nowrap;
+}
+.rs-page .rs-hist-avg-label b { color: var(--black); font-weight: 900; }
+.rs-page .rs-hist-avg.is-flipped .rs-hist-avg-label { left: auto; right: 6px; }
+
+/* ===== SUPPORTING ROW: two quiet tiles + share =====
+   Phones: tiles side by side, a full-width share button under them. Roomy:
+   one compact row. */
+.rs-page .rs-support {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+.rs-page .rs-support-share-only { grid-template-columns: minmax(0, 1fr); }
+.rs-page .rs-share { grid-column: 1 / -1; min-width: 0; }
+@container rs (min-width: 760px) {
+  .rs-page .rs-support {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.25fr);
+    gap: 14px;
+    align-items: start;
+    margin-top: 14px;
+  }
+  .rs-page .rs-support.rs-support-no-share { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .rs-page .rs-support.rs-support-share-only { grid-template-columns: minmax(0, 420px); justify-content: center; }
+  .rs-page .rs-share { grid-column: auto; }
+}
+
+.rs-page .rs-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 72px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  border: 1.5px solid;
+  text-align: left;
+}
+.rs-page .rs-tile-avg { background: #EFFCF9; border-color: rgba(15, 148, 136, 0.3); }
+.rs-page .rs-tile-perfect { background: #FFFAE3; border-color: rgba(214, 178, 0, 0.42); }
+.rs-page .rs-tile-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+}
+.rs-page .rs-tile-avg .rs-tile-icon {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  padding-bottom: 9px;
+  background: #CCF5EC;
+}
+/* Three little bars, drawn in CSS. */
+.rs-page .rs-tile-avg .rs-tile-icon i {
+  display: block;
+  width: 4px;
+  border-radius: 2px 2px 1px 1px;
+  background: var(--teal-dark);
+}
+.rs-page .rs-tile-avg .rs-tile-icon i:nth-child(1) { height: 8px; }
+.rs-page .rs-tile-avg .rs-tile-icon i:nth-child(2) { height: 15px; }
+.rs-page .rs-tile-avg .rs-tile-icon i:nth-child(3) { height: 11px; }
+.rs-page .rs-tile-perfect .rs-tile-icon { background: #FFEFA6; }
+.rs-page .rs-tile-perfect .rs-tile-icon img { width: 22px !important; height: 22px !important; }
+.rs-page .rs-tile-text { min-width: 0; }
+.rs-page .rs-tile-label {
+  font-family: 'Fredoka One', cursive;
+  font-size: 11px;
+  letter-spacing: 1px;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+.rs-page .rs-tile-avg .rs-tile-label { color: var(--teal-dark); }
+.rs-page .rs-tile-perfect .rs-tile-label { color: #8A6A00; }
+.rs-page .rs-tile-value {
+  font-family: 'Fredoka One', cursive;
+  font-size: 26px;
+  line-height: 1.05;
+  color: var(--black);
+  margin-top: 2px;
+}
+@container rs (min-width: 420px) {
+  .rs-page .rs-tile { gap: 12px; padding: 12px 14px; }
+  .rs-page .rs-tile-icon { width: 42px; height: 42px; }
+  .rs-page .rs-tile-avg .rs-tile-icon { padding-bottom: 12px; }
+  .rs-page .rs-tile-label { font-size: 12px; letter-spacing: 1.2px; }
+  .rs-page .rs-tile-value { font-size: 30px; }
+}
+
+/* ---- Share ---- */
+.rs-page .rs-share-btn { margin: 0; }
+/* Same look as Home's copy error. */
+.rs-page .rs-share-error {
+  margin: 10px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--red-dark);
+  text-align: center;
+}
+/* The preview toggle: one quiet row under the button. */
+.rs-page .rs-share-summary {
+  display: flex;
+  width: 100%;
+  margin-top: 10px;
+  font-family: inherit;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1.5px solid rgba(26, 26, 26, 0.12);
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(26, 26, 26, 0.8);
+  cursor: pointer;
+  list-style: none;
+  text-align: left;
+}
+.rs-page .rs-share-summary:hover { background: #fff; }
+.rs-page .rs-share-summary:focus-visible,
+.rs-page .rs-nerd-toggle:focus-visible {
+  outline: 3px solid var(--teal-dark);
+  outline-offset: 2px;
+}
+
+/* Opened, the preview is its own row across the whole supporting row
+   (under the tiles and the button alike), so the controls above it keep
+   their size and alignment. */
+.rs-page .rs-share-preview-row { grid-column: 1 / -1; min-width: 0; }
+/* Kept quiet: a soft card at a message-like width, centred in the row. */
+.rs-page .rs-share-preview-row .rs-share-preview {
+  max-width: 460px;
+  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1.5px dashed rgba(15, 148, 136, 0.45);
+}
+
 /* The preview is the shared text itself: left-aligned plain lines, spacing
    kept (pre-wrap, from .share-box), exactly as a messaging app shows it.
    Long labels wrap, and an unbroken run of characters still breaks rather
@@ -156,7 +646,7 @@
 .rs-page .rs-share-preview {
   container-type: inline-size;
   padding: 12px 14px 11px;
-  margin-bottom: 10px;
+  margin: 0;
   font-family: 'Nunito', sans-serif;
   font-size: 15px;
   font-weight: 800;
@@ -173,60 +663,98 @@
 }
 .rs-page .rs-share-divider { color: var(--teal-dark); }
 .rs-page .rs-share-url { color: rgba(26, 26, 26, .6); }
-.rs-page .rs-share-btn { margin: 0; }
-/* Same look as Home's copy error. */
-.rs-page .rs-share-error {
-  margin: 10px 0 0;
-  font-size: 14px;
+
+/* ===== NERD MODE: question scorecard =====
+   Per question, how the audience split between the two categories (A
+   always left, B always right, in their gameplay colours), which side was
+   correct, and which side this player picked. Category colour, ✓ Correct
+   and YOU are three separate signals. The visual split is aria-hidden;
+   .rs-sr carries the same result as one sentence. */
+.rs-page .rs-nerd {
+  margin-top: 18px;
+  padding-top: 6px;
+  border-top: 1.5px solid rgba(26, 26, 26, 0.1);
+}
+.rs-page .rs-nerd-heading { margin: 0; font-size: inherit; font-weight: inherit; }
+.rs-page .rs-nerd-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 6px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--black);
+}
+.rs-page .rs-nerd-toggle:hover { background: rgba(255, 92, 141, 0.06); }
+.rs-page .rs-nerd-glasses {
+  flex: none;
+  width: 34px;
+  height: 17px;
+  fill: none;
+  stroke: var(--pink);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.rs-page .rs-nerd-title {
+  flex: 1;
+  min-width: 0;
+  font-family: 'Fredoka One', cursive;
+  font-size: clamp(17px, 4.6cqi, 21px);
+  line-height: 1.2;
+}
+.rs-page .rs-nerd-action {
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(26, 26, 26, 0.55);
+}
+.rs-page .rs-nerd-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+@container rs (min-width: 760px) {
+  .rs-page .rs-nerd-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+}
+.rs-page .rs-q {
+  min-width: 0;
+  padding: 12px 14px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(26, 26, 26, 0.1);
+  text-align: left;
+}
+.rs-page .rs-q-num {
+  font-family: 'Fredoka One', cursive;
+  font-size: 11.5px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--purple-dark);
+}
+.rs-page .rs-q-title {
+  margin-top: 1px;
+  font-size: 15.5px;
+  font-weight: 900;
+  line-height: 1.25;
+  color: var(--black);
+  overflow-wrap: anywhere;
+}
+.rs-page .rs-q-sub {
+  margin-top: 3px;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--red-dark);
-  text-align: center;
+  color: rgba(26, 26, 26, 0.62);
 }
-
-/* Desktop: score on the left, sharing on the right -- the same order,
-   side by side. Replay has no share block and stays a single column. */
-@container rs (min-width: 860px) {
-  .rs-page .rs-hero-split {
-    display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-    gap: 28px;
-    align-items: center;
-  }
-  .rs-page .rs-hero-split .rs-share { margin-top: 0; }
-}
-
-.rs-page .results-jazz { margin: 12px 0; }
-/* Sized to stay on one line down to 360px instead of wrapping to two; on
-   anything narrower it still wraps rather than clipping. */
-.rs-page .results-marquee-main {
-  font-size: clamp(16px, calc((100cqi - 76px) / 14.6), 22px);
-  text-wrap: balance;
-}
-
-/* ===== HOW THE CROWD SURVIVED ===== */
-.rs-page .crowd-wrap {
-  container: crowd / inline-size;
-}
-@container crowd (min-width: 700px) {
-  .rs-page .crowd-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  /* Crowd Showdown left out (no honest comparison): two cards, no gap. */
-  .rs-page .crowd-grid.crowd-grid-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .rs-page .advanced-panel { grid-template-columns: 1fr 1fr; }
-}
-
-/* Nerd Mode: each question shows how the audience split between the two
-   categories (A always left, B always right, in their gameplay colours),
-   which side was correct, and which side this player picked. Category
-   colour, ✓ Correct and YOU are three separate signals. The visual split is
-   aria-hidden; .rs-sr carries the same result as one sentence. */
-.rs-page .advanced-card { padding: 9px 12px 10px; }
-.rs-page .rs-split { margin-top: 7px; }
+.rs-page .rs-split { margin-top: 9px; }
 .rs-page .rs-split-bar {
   display: flex;
-  height: 12px;
+  height: 13px;
   border-radius: 999px;
   overflow: hidden;
-  border: 1.5px solid rgba(26, 26, 26, 0.22);
+  border: 1.5px solid rgba(26, 26, 26, 0.2);
   background: rgba(26, 26, 26, 0.06);
 }
 .rs-page .rs-split-bar > span { display: block; min-width: 0; }
@@ -274,9 +802,12 @@
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 5px;
+  margin-top: 6px;
 }
-.rs-page .rs-marks { display: flex; gap: 4px; }
+.rs-page .rs-marks { display: flex; flex-wrap: wrap; gap: 4px; }
+.rs-page .rs-marks-b { justify-content: flex-end; }
+/* YOU only marks the player's pick (neutral ink, whichever side was right);
+   ✓ Correct is the unmistakable green one. */
 .rs-page .rs-you,
 .rs-page .rs-correct {
   font-family: 'Fredoka One', cursive;
@@ -284,11 +815,11 @@
   letter-spacing: 0.7px;
   text-transform: uppercase;
   line-height: 1;
-  padding: 3px 7px;
+  padding: 3px 8px;
   border-radius: 999px;
   white-space: nowrap;
 }
-.rs-page .rs-you { background: var(--black); color: #fff; }
+.rs-page .rs-you { background: var(--black); color: #fff; border: 1.5px solid var(--black); }
 .rs-page .rs-correct {
   background: var(--green-light);
   color: var(--green-dark);
@@ -313,13 +844,55 @@
   gap: 14px;
 }
 .rs-page .rs-foot .cdown-box { margin-top: 0; }
-@container rs (min-width: 860px) {
+@container rs (min-width: 760px) {
   .rs-page .rs-foot-split {
     grid-template-columns: 1fr 1fr;
     align-items: center;
   }
 }
 
+/* ===== PHONES: denser top =====
+   Real phones only (the viewport, not the container), so Admin Preview's
+   narrow stage keeps its look. Same composition, less air: the score panel
+   and the whole chart fit the first screen of a 390x844 phone. Pip size and
+   pitch are untouched, so the balanced 8 and 8+7 rows hold. */
+@media (max-width: 599px) {
+  .rs-page .rs-card { padding-top: 14px; padding-bottom: 18px; }
+  .rs-page .rs-title-block { margin-bottom: 10px; }
+  .rs-page .rs-kicker { margin-bottom: 2px; }
+  .rs-page .rs-hero { gap: 10px; }
+
+  .rs-page .rs-hero-score { padding: 8px 0 2px; }
+  .rs-page .rs-hero-score .rs-score { font-size: clamp(64px, 21cqi, 76px); }
+  .rs-page .rs-hero-score .score-sublbl { font-size: 15px; margin: 0 0 2px; }
+  .rs-page .score-msg { font-size: 14px; line-height: 1.35; }
+  .rs-page .rs-pips { margin: 4px auto 0; padding: 4px 0 8px; }
+
+  .rs-page .rs-crowd { padding: 10px 10px 8px; }
+  .rs-page .rs-crowd-inner { gap: 4px; }
+  .rs-page .rs-beat-kicker { font-size: 13px; }
+  .rs-page .rs-beat-num { font-size: 40px; }
+  .rs-page .rs-beat-sub { font-size: 15px; }
+  .rs-page .rs-crowd-head { margin-bottom: 0; }
+  .rs-page .rs-crowd-title { font-size: 16px; }
+  .rs-page .rs-crowd-chip { padding: 3px 8px; }
+  .rs-page .rs-hist { --bar-max: 62px; }
+  .rs-page .rs-hist-chart { padding-top: 16px; }
+  .rs-page .rs-hist-plot { height: calc(var(--bar-max) + 34px); }
+  .rs-page .rs-hist-you { margin-bottom: 6px; }
+  .rs-page .rs-hist-pct { margin-bottom: 3px; }
+  .rs-page .rs-hist-axis { height: 18px; }
+  .rs-page .rs-hist-avg { bottom: 18px; }
+  .rs-page .rs-hist-caption { margin-top: 0; }
+  .rs-page .rs-crowd-note { margin-top: 3px; font-size: 11px; }
+  .rs-page .rs-crowd-quiet { min-height: 0; padding: 16px; }
+
+  .rs-page .rs-support { margin-top: 10px; }
+  .rs-page .rs-tile { min-height: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .rs-page .rs-pips .emoji-cell { animation: none; }
+  .rs-page .rs-pips .emoji-cell,
+  .rs-page .rs-hist-bar { animation: none; }
+  .rs-page .rs-chevron { transition: none; }
 }

@@ -1,5 +1,5 @@
 /* ============================================================
-   Crowd stats for today's finished game, used by Crowd Showdown and the
+   Crowd stats for today's finished game, used by the Results hero ("You beat N%") and the
    share text (Results and Home alike).
 
    Finishing a game: read the stats once as a baseline (the game can't be
@@ -94,7 +94,7 @@ export function crowdStatsFor(crowd, record) {
     : null;
 }
 
-// Crowd Showdown's "You beat N% of players": the share text's number
+// The Results hero's "You beat N% of players": the share text's number
 // (strictlyBetterPercent), from stats whose histogram accounts for every
 // finisher. Null (no comparison shown) for missing or inconsistent stats.
 // saved: true (today's saved result) keeps the check that the player is in
@@ -109,7 +109,7 @@ export function crowdBeatPercent(stats, score, { saved = true } = {}) {
 }
 
 // The one share text for a finished game, used by Results and Home alike.
-// Its "Beat N%" is Crowd Showdown's own number for today's saved result.
+// Its "Beat N%" is the Results hero's own number for today's saved result.
 export function shareTextFor(game, record, crowd) {
   const beatPercent = crowdBeatPercent(crowdStatsFor(crowd, record), record?.score);
   return buildResultsShareText({ game, record, beatPercent });

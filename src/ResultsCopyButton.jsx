@@ -11,7 +11,7 @@ export default function ResultsCopyButton({ status, onCopy }) {
       <span className="hp-sr-only" role="status">{status === "copied" ? "Result copied to clipboard" : ""}</span>
       {status === "failed" && (
         <p className="rs-share-error" role="alert">
-          Couldn&rsquo;t copy your result. Select the text above and copy it yourself.
+          Couldn&rsquo;t copy your result. Select the share text below and copy it yourself.
         </p>
       )}
     </>

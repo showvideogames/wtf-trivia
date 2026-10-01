@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, useId } from "react";
 import { createClient } from "@supabase/supabase-js";
 import "./home.css";
 import "./game.css";
@@ -13,6 +13,10 @@ import { gameToRow, rowToGame } from "./gameRow.js";
 import { copyText, shareOrCopy } from "./homeShare.js";
 import SharePreview from "./SharePreview.jsx";
 import ResultsCopyButton from "./ResultsCopyButton.jsx";
+import { CrowdPanel, CrowdTiles } from "./ResultsCrowd.jsx";
+import ResultsNerdMode from "./ResultsNerdMode.jsx";
+import ResultsScore from "./ResultsScore.jsx";
+import { histogramBuckets } from "./scoreHistogram.js";
 import { StudioContext, paletteColor } from "./admin/StudioContext.js";
 import { localDateFromISO } from "./admin/adminDates.js";
 import { findDateConflict } from "./admin/dashboardGroups.js";
@@ -1227,214 +1231,6 @@ const styles = `
 
   .perfect-sub { font-size: 14px; font-weight: 800; color: rgba(255,255,255,.9); }
 
-  .results-jazz {
-    margin: 14px 0 18px;
-    display: grid;
-    gap: 10px;
-  }
-
-  .results-marquee {
-    background: linear-gradient(135deg, #FF8C00 0%, #FFE347 40%, #FF5C8D 100%);
-    border: 3px solid var(--black);
-    border-radius: 18px;
-    box-shadow: 0 6px 0 rgba(0,0,0,0.22);
-    padding: 12px 14px;
-    position: relative;
-    overflow: hidden;
-  }
-  .results-marquee::before {
-    content: '';
-    position: absolute;
-    inset: 4px;
-    border-radius: 13px;
-    background:
-      radial-gradient(circle at 12% 30%, rgba(255,255,255,.55) 0 10px, transparent 11px),
-      radial-gradient(circle at 84% 26%, rgba(255,255,255,.45) 0 7px, transparent 8px),
-      linear-gradient(180deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,0) 70%);
-    pointer-events: none;
-  }
-  .results-marquee-top {
-    font-family: 'Fredoka One', cursive;
-    font-size: 12px;
-    letter-spacing: 1.8px;
-    text-transform: uppercase;
-    color: rgba(26,26,26,.75);
-    margin-bottom: 4px;
-    position: relative;
-    z-index: 1;
-  }
-  .results-marquee-main {
-    font-family: 'Fredoka One', cursive;
-    font-size: 22px;
-    line-height: 1.08;
-    color: white;
-    -webkit-text-stroke: 1.2px var(--black);
-    text-shadow: 3px 3px 0 rgba(0,0,0,.24);
-    position: relative;
-    z-index: 1;
-  }
-
-  .crowd-wrap {
-    margin-top: 14px;
-    background: linear-gradient(160deg, #FFF6D9 0%, #FFE8F2 52%, #E6FFFB 100%);
-    border: 3px solid var(--black);
-    border-radius: 22px;
-    padding: 14px;
-    box-shadow: 0 6px 0 rgba(0,0,0,0.16);
-    position: relative;
-    overflow: hidden;
-  }
-  .crowd-wrap::before {
-    content: '';
-    position: absolute;
-    top: 4px; left: 12px; right: 12px;
-    height: 26%;
-    border-radius: 18px 18px 50% 50%;
-    background: linear-gradient(180deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,0) 100%);
-    pointer-events: none;
-  }
-  .crowd-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 10px;
-    position: relative;
-    z-index: 1;
-  }
-  .crowd-title {
-    font-family: 'Fredoka One', cursive;
-    font-size: 18px;
-    color: var(--black);
-    text-align: left;
-  }
-  .crowd-chip {
-    font-family: 'Fredoka One', cursive;
-    font-size: 11px;
-    letter-spacing: .8px;
-    text-transform: uppercase;
-    color: var(--black);
-    padding: 4px 10px;
-    border-radius: var(--r-pill);
-    border: 2px solid var(--black);
-    background: linear-gradient(180deg, #FFF176 0%, #FFE347 55%, #E6C800 100%);
-    box-shadow: 0 3px 0 rgba(0,0,0,.2);
-    white-space: nowrap;
-  }
-  .crowd-warning {
-    font-size: 12px;
-    font-weight: 900;
-    color: var(--teal-dark);
-    margin-bottom: 10px;
-    background: rgba(255,255,255,.55);
-    border: 2px dashed rgba(15,148,136,.45);
-    border-radius: 14px;
-    padding: 8px 10px;
-    text-align: left;
-    position: relative;
-    z-index: 1;
-  }
-  .crowd-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-    position: relative;
-    z-index: 1;
-  }
-  .crowd-stat {
-    border: 3px solid var(--black);
-    border-radius: 18px;
-    padding: 12px 12px 10px;
-    box-shadow: 0 5px 0 rgba(0,0,0,.16);
-    text-align: left;
-    position: relative;
-    overflow: hidden;
-  }
-  .crowd-stat::before {
-    content: '';
-    position: absolute;
-    top: 4px; left: 10px; right: 10px;
-    height: 32%;
-    border-radius: 12px 12px 50% 50%;
-    background: linear-gradient(180deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,0) 100%);
-    pointer-events: none;
-  }
-  .crowd-stat-avg { background: linear-gradient(160deg, #5EEAD4 0%, #2DD4BF 55%, #0F9488 100%); border-color: var(--teal-dark); }
-  .crowd-stat-beat { background: linear-gradient(160deg, #FF85AA 0%, #FF5C8D 55%, #CC3366 100%); border-color: var(--pink-dark); }
-  .crowd-stat-perfect { background: linear-gradient(160deg, #FFF176 0%, #FFE347 55%, #FB923C 100%); border-color: var(--orange-dark); }
-  .crowd-stat-kicker {
-    font-family: 'Fredoka One', cursive;
-    font-size: 11px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-    position: relative;
-    z-index: 1;
-  }
-  .crowd-stat-avg .crowd-stat-kicker,
-  .crowd-stat-beat .crowd-stat-kicker { color: rgba(255,255,255,.82); }
-  .crowd-stat-perfect .crowd-stat-kicker { color: rgba(26,26,26,.62); }
-  .crowd-stat-main {
-    font-family: 'Fredoka One', cursive;
-    font-size: 20px;
-    line-height: 1.12;
-    position: relative;
-    z-index: 1;
-  }
-  .crowd-stat-avg .crowd-stat-main,
-  .crowd-stat-beat .crowd-stat-main {
-    color: white;
-    text-shadow: 2px 2px 0 rgba(0,0,0,.2);
-  }
-  .crowd-stat-perfect .crowd-stat-main { color: var(--black); }
-  .crowd-foot {
-    margin-top: 10px;
-    font-size: 12px;
-    font-weight: 900;
-    color: rgba(26,26,26,.66);
-    text-align: center;
-    position: relative;
-    z-index: 1;
-  }
-  .advanced-toggle {
-    margin-top: 12px;
-    width: 100%;
-  }
-  .advanced-panel {
-    margin-top: 10px;
-    display: grid;
-    gap: 8px;
-    position: relative;
-    z-index: 1;
-  }
-  .advanced-card {
-    background: linear-gradient(160deg, rgba(255,255,255,.88) 0%, rgba(255,255,255,.72) 100%);
-    border: 3px solid rgba(26,26,26,.15);
-    border-radius: 16px;
-    padding: 10px 12px;
-    text-align: left;
-    box-shadow: 0 4px 0 rgba(0,0,0,.08);
-  }
-  .advanced-card-top {
-    font-family: 'Fredoka One', cursive;
-    font-size: 12px;
-    color: var(--purple-dark);
-    text-transform: uppercase;
-    letter-spacing: .6px;
-  }
-  .advanced-card-title {
-    font-size: 14px;
-    font-weight: 900;
-    color: var(--black);
-    margin-top: 2px;
-  }
-  .advanced-card-sub {
-    font-size: 13px;
-    font-weight: 800;
-    color: rgba(26,26,26,.72);
-    margin-top: 4px;
-  }
-
   /* ===== COUNTDOWN ===== */
   .cdown-box {
     margin-top: 16px;
@@ -2433,18 +2229,6 @@ function clearEditorDraft(id){
   return safeRemove(getEditorDraftKey(id));
 }
 function scoreMsg(s,t){const p=s/t;if(p===1)return"🏆 PERFECT!! Absolutely flawless. You are the champion.";if(p>=.875)return"Almost perfect!! Just one little slip.";if(p>=.75)return"Really solid! The theme tried hard. It mostly failed.";if(p>=.5)return"Decent showing! Some of those were genuinely sneaky.";if(p>=.25)return"The theme had you. It happens to everyone.";return"Wow okay. The theme absolutely won today. Tomorrow!";}
-function averageScoreCopy(score,total){
-  return `Average chaos level: ${score}/${total}`;
-}
-// The same strictly-lower number as the share text's "Beat N% of players"
-// (crowdBeatPercent in crowdStats.js).
-function beatPercentCopy(percent){
-  return `You beat ${percent}% of players.`;
-}
-function perfectRateCopy(rate){
-  if(rate===0) return "Nobody else nailed a perfect score yet";
-  return `${rate}% joined the perfect goblin club`;
-}
 
 
 // ============================================================
@@ -3454,16 +3238,6 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
 }
 
 // ---- SCORE ----
-// Nerd Mode audience split. Every answer is one of the two categories, so the
-// share choosing each side follows from the correct count and the answer key.
-// The correct side is rounded exactly like "N% of players got it right" and
-// the other side takes the remainder, so the pair always adds to 100.
-function categorySplit(correctCategory,correctCount,answeredCount){
-  if(!(answeredCount>0)||(correctCategory!=="A"&&correctCategory!=="B")) return null;
-  const correctPct=Math.round(correctCount/answeredCount*100);
-  return correctCategory==="A"?{A:correctPct,B:100-correctPct}:{A:100-correctPct,B:correctPct};
-}
-
 // Pips per row, balanced so a long puzzle never leaves a lonely last pip:
 // 13 answers at a max of 8 per row become 7 + 6, not 8 + 5.
 function balancedPipColumns(count,maxPerRow){
@@ -3474,7 +3248,7 @@ function balancedPipColumns(count,maxPerRow){
 // withChrome: the real Results page, with the shared warm backdrop and page
 // header. Admin preview renders the bare content inside its own shell.
 // crowd: today's live Results gets the app's crowd stats (loaded only after
-// the finished game is saved; see crowdStats.js), so Crowd Showdown and the
+// the finished game is saved; see crowdStats.js), so "You beat N%" and the
 // share text use the same up-to-date numbers. Replays and Admin Preview pass
 // no crowd and read the puzzle's stats themselves.
 function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrome=false,player,onAccount,onAdmin}){
@@ -3491,8 +3265,11 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
   const[copyStatus,setCopyStatus]=useState(null);
   const copiedTimer=useRef(null);
   useEffect(()=>()=>clearTimeout(copiedTimer.current),[]);
-  const[replayStats,setReplayStats]=useState(null);
-  const[showAdvanced,setShowAdvanced]=useState(false);
+  // undefined while a Replay / Admin Preview read is in flight; then the
+  // stats, or null when the read failed.
+  const[replayStats,setReplayStats]=useState(undefined);
+  const[previewOpen,setPreviewOpen]=useState(false);
+  const previewId=useId();
   const{play}=sound;
   const{canvasRef,shoot}=useConfetti();
   const isPerfect=safeRecord.totalQuestions>0&&safeRecord.score===safeRecord.totalQuestions;
@@ -3514,11 +3291,25 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
 
   const communityStats = usesAppCrowd
     ? crowdStatsFor(crowd, safeRecord)
-    : replayStats;
+    : replayStats??null;
   // No honest comparison (only finisher, inconsistent stats, ...) means no
-  // Crowd Showdown card at all. Replays and Admin Preview aren't saved, so
-  // they compare against all historical finishers instead.
+  // "You beat" and no chart at all. Replays and Admin Preview aren't saved,
+  // so they compare against all historical finishers instead, and their
+  // score is only marked on the chart, never added to it.
   const beatPercent = communityStats ? crowdBeatPercent(communityStats, safeRecord.score, {saved:!isReplay}) : null;
+  const chart = beatPercent!==null
+    ? histogramBuckets(communityStats.scoreHistogram, safeRecord.totalQuestions, {finishers:communityStats.finishedPlayers})
+    : null;
+  const crowdPending = usesAppCrowd
+    ? !(crowd&&crowd.puzzleId===safeRecord.puzzleId&&crowd.score===safeRecord.score)
+    : Boolean(safeRecord.puzzleId)&&replayStats===undefined;
+  // Nobody else has finished yet (the sole finisher, or a Replay of a
+  // puzzle nobody has completed): the quiet "first players" line.
+  const crowdState = beatPercent!==null ? "ready"
+    : crowdPending ? "loading"
+    : communityStats&&communityStats.finishedPlayers<=(isReplay?0:1) ? "early"
+    : "unavailable";
+  const showTiles = Boolean(communityStats)&&communityStats.finishedPlayers>0;
 
   // Until crowd stats arrive (or if they never do) the score line has no
   // percentage; preview and clipboard always use the same text.
@@ -3531,6 +3322,8 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
     const outcome=await copyText(txt, navigator);
     setCopyStatus(outcome);
     if(outcome==="copied") copiedTimer.current=setTimeout(()=>setCopyStatus(null),2000);
+    // The error asks the player to copy the preview by hand, so show it.
+    if(outcome==="failed") setPreviewOpen(true);
   };
   const pipCount=safeRecord.answers.length;
 
@@ -3564,11 +3357,11 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
           </div>
         )}
 
-        <div className={`rs-hero${isReplay?"":" rs-hero-split"}`}>
-          <div className="rs-hero-score">
-            <div className="score-big">
-              {safeRecord.score}<span className="score-denom">/{safeRecord.totalQuestions}</span>
-            </div>
+        {/* The hero: this player's own result, then where it sits in the
+            crowd. Side by side on roomy screens, stacked otherwise. */}
+        <div className="rs-hero">
+          <section className="rs-panel rs-hero-score" aria-label="Your score">
+            <ResultsScore score={safeRecord.score} total={safeRecord.totalQuestions}/>
             <div className="score-sublbl">questions correct</div>
             <div className="score-msg">{scoreMsg(safeRecord.score,safeRecord.totalQuestions||1)}</div>
 
@@ -3578,121 +3371,38 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
                 <div key={i} className={`emoji-cell ${a.correct?'correct-dot':'wrong-dot'}`} style={{"--i":i}}/>
               ))}
             </div>
-          </div>
+          </section>
 
-          {!isReplay&&(
-            <div className="rs-share">
-              <SharePreview text={txt}/>
-              <ResultsCopyButton status={copyStatus} onCopy={share}/>
-            </div>
-          )}
+          <CrowdPanel state={crowdState} beatPercent={beatPercent} chart={chart} stats={communityStats}
+                      score={safeRecord.score} total={safeRecord.totalQuestions} replay={isReplay}/>
         </div>
 
-        <div className="results-jazz">
-          <div className="results-marquee">
-            <div className="results-marquee-top">Game Show Recap</div>
-            <div className="results-marquee-main">
-              {isPerfect?"Jackpot round cleared!!":"Scoreboard drama delivered!!"}
-            </div>
+        {(showTiles||!isReplay)&&(
+          <div className={`rs-support${showTiles?"":" rs-support-share-only"}${isReplay?" rs-support-no-share":""}`}>
+            {showTiles&&<CrowdTiles stats={communityStats} total={safeRecord.totalQuestions} trophy={<FI name="trophy" size={26}/>}/>}
+            {!isReplay&&(
+              <div className="rs-share">
+                <ResultsCopyButton status={copyStatus} onCopy={share}/>
+                <button type="button" className="rs-share-summary" onClick={()=>setPreviewOpen(v=>!v)}
+                        aria-expanded={previewOpen} aria-controls={previewId}>
+                  <span className="rs-chevron" aria-hidden="true"/>Preview share text
+                </button>
+              </div>
+            )}
+            {/* The exact share text, folded away until asked for. Its own
+                full-width row under the tiles and button, so opening it
+                never stretches the row above. */}
+            {!isReplay&&previewOpen&&(
+              <div className="rs-share-preview-row" id={previewId}>
+                <SharePreview text={txt}/>
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
         {communityStats&&(
-          <div className="crowd-wrap">
-            <div className="crowd-head">
-              <div className="crowd-title">How The Crowd Survived</div>
-              <div className="crowd-chip">{communityStats.finishedPlayers} player{communityStats.finishedPlayers===1?"":"s"}</div>
-            </div>
-            {communityStats.finishedPlayers<10&&(
-              <div className="crowd-warning">
-                You are one of the first players, so these stats may change. Come back later for more accurate results!
-              </div>
-            )}
-            <div className={`crowd-grid${beatPercent===null?" crowd-grid-two":""}`}>
-              <div className="crowd-stat crowd-stat-avg">
-                <div className="crowd-stat-kicker">Average Chaos</div>
-                <div className="crowd-stat-main">{averageScoreCopy(communityStats.averageScore, safeRecord.totalQuestions)}</div>
-              </div>
-              {beatPercent!==null&&(
-                <div className="crowd-stat crowd-stat-beat">
-                  <div className="crowd-stat-kicker">Crowd Showdown</div>
-                  <div className="crowd-stat-main">{beatPercentCopy(beatPercent)}</div>
-                </div>
-              )}
-              <div className="crowd-stat crowd-stat-perfect">
-                <div className="crowd-stat-kicker">Perfect Goblins</div>
-                <div className="crowd-stat-main">{perfectRateCopy(communityStats.perfectRate)}</div>
-              </div>
-            </div>
-            <div className="crowd-foot">Only finished first attempts count. Replays do not mess with the scoreboard.</div>
-            <button className="btn-sm advanced-toggle" onClick={()=>setShowAdvanced(v=>!v)} aria-expanded={showAdvanced}>
-              {showAdvanced?"Hide Nerd Mode":"Show Nerd Mode"}
-            </button>
-            {showAdvanced&&(
-              <div className="advanced-panel">
-                {(Array.isArray(communityStats.questionAccuracies)?communityStats.questionAccuracies:[]).map(q=>{
-                  const question=game?.questions?.[q.index];
-                  const correctCat=question?.correctCategory;
-                  const split=categorySplit(correctCat,q.correct,q.answered);
-                  const pick=playerPicks.get(q.index);
-                  const summary=split&&[
-                    ...["A","B"].map(cat=>`${split[cat]}% chose ${nerdCategories[cat].name}${cat===correctCat?", the correct answer":""}.`),
-                    pick?`You chose ${nerdCategories[pick].name}.`:""
-                  ].join(" ").trim();
-                  return(
-                    <div key={q.index} className="advanced-card">
-                      <div className="advanced-card-top">Question {q.index+1}</div>
-                      <div className="advanced-card-title">{question?.itemText||"Accuracy"}</div>
-                      {!(q.answered>0)?(
-                        <div className="advanced-card-sub">No community answers for this one yet.</div>
-                      ):(
-                        <div className="advanced-card-sub">{q.correctRate}% of players got it right</div>
-                      )}
-                      {split&&(
-                        <>
-                          <div className="rs-split" aria-hidden="true">
-                            <div className="rs-split-bar">
-                              {["A","B"].map(cat=>{
-                                const c=nerdCategories[cat].color;
-                                return <span key={cat} style={{flexBasis:`${split[cat]}%`,background:`linear-gradient(180deg,${c.light} 0%,${c.mid} 100%)`}}/>;
-                              })}
-                            </div>
-                            <div className="rs-split-sides">
-                              {["A","B"].map(cat=>{
-                                const c=nerdCategories[cat].color;
-                                return(
-                                  <div key={cat} className={`rs-side rs-side-${cat.toLowerCase()}`}>
-                                    <div className="rs-side-label">
-                                      <span className="rs-side-pct" style={{color:c.isDark?c.dark:"var(--black)"}}>
-                                        <span className="rs-swatch" style={{background:c.mid,borderColor:c.dark}}/>{split[cat]}%
-                                      </span>
-                                      <span className="rs-side-name">{nerdCategories[cat].name}</span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            {/* One shared marker row: A's markers hug the left
-                                edge, B's the right, so two pills on one side
-                                never have to squeeze into a half-width column. */}
-                            <div className="rs-split-marks">
-                              {["A","B"].map(cat=>(
-                                <div key={cat} className={`rs-marks rs-marks-${cat.toLowerCase()}`}>
-                                  {pick===cat&&<span className="rs-you">YOU</span>}
-                                  {correctCat===cat&&<span className="rs-correct">✓ Correct</span>}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          <span className="rs-sr">{summary}</span>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          <ResultsNerdMode accuracies={communityStats.questionAccuracies} questions={game?.questions}
+                           categories={nerdCategories} picks={playerPicks}/>
         )}
 
         <div className={`rs-foot${isReplay?"":" rs-foot-split"}`}>
@@ -4671,7 +4381,7 @@ export default function WhatTheFudgeTrivia(){
     return ()=>cancel(handle);
   },[view, todayGame, todayRecord]);
 
-  // Crowd stats for today's finished game, shared by Results (Crowd Showdown
+  // Crowd stats for today's finished game, shared by Results ("You beat N%"
   // and the share text) and the homepage Share button so they always agree.
   // { puzzleId, score, status: "ready" | "unavailable", stats? }; null or a
   // different puzzle/score means still loading. A game finished this session
@@ -4831,7 +4541,7 @@ export default function WhatTheFudgeTrivia(){
   };
 
   // Complete game
-  // Results shows straight away; the crowd stats behind Crowd Showdown and
+  // Results shows straight away; the crowd stats behind "You beat N%" and
   // the share text wait for the save (see crowdStats.js). Claiming the crowd
   // request first stops the revisit loader from reading ahead of the save.
   const handleComplete = async(finalRec) => {

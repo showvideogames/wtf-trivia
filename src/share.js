@@ -38,7 +38,7 @@ export function shareCategoryName(shareName, categoryName, fallback) {
 }
 
 // Share of finishers who scored strictly lower than `score`: the "Beat N% of
-// players" in the share text and in Crowd Showdown. Read from the puzzle's
+// players" in the share text and in the Results hero. Read from the puzzle's
 // score histogram ({ "<score>": <players> }), which must already
 // include this player's own finished game (see crowdStats.js). Players tied
 // with you are not beaten, so they never count toward the number; everyone,
@@ -76,7 +76,7 @@ const isBeatPercent = (value) => Number.isInteger(value) && value >= 0 && value 
 // The full share text. `record` is the finished game record (score,
 // totalQuestions, answers in question order: one circle per saved answer);
 // `game` supplies the share names and category names; `beatPercent` is
-// Crowd Showdown's already-validated "Beat N%" (crowdBeatPercent), or null
+// the Results hero's already-validated "Beat N%" (crowdBeatPercent), or null
 // when there is no honest comparison, which leaves the score line bare.
 export function buildResultsShareText({ game, record, beatPercent = null }) {
   const score = Number.isFinite(record?.score) ? record.score : 0;
