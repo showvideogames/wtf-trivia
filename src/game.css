@@ -648,10 +648,16 @@
     flex: 0 1 auto;
     min-height: 120px;
   }
+  /* Once the row reaches its cap, the auto block margins share the height
+     left over above and below it, so on a tall phone the cards sit midway
+     between the stage and the bottom padding instead of hugging the stage.
+     They only take space the row could not grow into, so on a short phone
+     they are zero and the stage's own 10px margin remains the gap. */
   .gp-qmod > .ans-btns {
     flex: 1 0 96px;
     min-height: 96px;
     max-height: 220px;
+    margin-block: auto;
   }
   .gp-qmod .ans-box {
     height: auto;
@@ -1243,7 +1249,10 @@
      doesn't become enormous on a wide screen. */
   .gp-qmod { max-width: 500px; margin: 0 auto; }
   .gp-mystery { margin-bottom: 12px; }
-  .gp-wrap .ans-box { --gp-ans-h: 120px; }
+  /* Tall enough that, with the 60px label band, the category art gets a
+     substantial icon band rather than a sliver: about 18% of the screen
+     height, between 144px and 172px. */
+  .gp-wrap .ans-box { --gp-ans-h: clamp(144px, 18dvh, 172px); }
   .gp-hdr { padding: 14px 0 16px; gap: 12px; }
   .gp-hdr-logo { max-width: 150px; max-height: 62px; }
   .gp-hdr-right { gap: 9px; }
