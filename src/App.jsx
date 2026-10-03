@@ -2883,6 +2883,9 @@ function catSizeClass(text){
   return"xl";
 }
 
+// Matches the wide desktop answer row in game.css.
+const WIDE_ANSWER_ROW_MQ="(min-width: 1100px)";
+
 // Step the clue down by length rather than auto-fitting it, so a short title
 // stays big and a very long one still lands on the card. Wrapping happens at
 // spaces only; words are never broken.
@@ -3037,7 +3040,18 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
   // shouting. Each label still auto-fits below that ceiling, which is what
   // keeps a long name shrinking rather than breaking inside a word.
   const longestLabel=Math.max(String(game.categoryA||"").length,String(game.categoryB||"").length);
-  const labelMax = longestLabel<=8?32:longestLabel<=12?27:longestLabel<=18?22:longestLabel<=26?19:17;
+  const baseLabelMax = longestLabel<=8?32:longestLabel<=12?27:longestLabel<=18?22:longestLabel<=26?19:17;
+  // The wide desktop answer row (game.css, 1100px and up) has buttons about
+  // twice a phone's width, so the ceiling rises there -- by about a third,
+  // up to 28px, never below the phone ceiling. Phones and tablets keep it.
+  const[wideRow,setWideRow]=useState(()=>typeof window!=="undefined"&&window.matchMedia(WIDE_ANSWER_ROW_MQ).matches);
+  useEffect(()=>{
+    const mq=window.matchMedia(WIDE_ANSWER_ROW_MQ);
+    const onChange=()=>setWideRow(mq.matches);
+    mq.addEventListener("change",onChange);
+    return()=>mq.removeEventListener("change",onChange);
+  },[]);
+  const labelMax = wideRow?Math.max(baseLabelMax,Math.min(28,Math.round(baseLabelMax*1.3))):baseLabelMax;
 
   // Keep the reveal-media active window warm for this puzzle: the current
   // question's image plus the next two. Re-runs (and slides the window

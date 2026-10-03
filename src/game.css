@@ -1431,20 +1431,43 @@
 }
 
 @media (min-width: 600px) {
-  /* Same 500px width as before; a shorter stage that gives up height on a
-     shorter desktop window, so the choices never have to. */
+  /* From tablet up the module is no longer one 500px column. The stage keeps
+     its own 500px cap, centred, and the answer row is a separate, wider
+     centred row beneath it -- up to 920px, so on a desktop its outside edges
+     reach well beyond the stage. When the row is wider than the page column
+     it overflows that column equally on both sides (flex centring), and it
+     always stays 24px inside the window. */
+  .gp-qmod {
+    max-width: none;
+    align-items: center;
+  }
+  /* A shorter stage that gives up height on a shorter desktop window, so the
+     choices never have to. */
   .gp-qmod > .gp-mystery {
+    width: min(494px, calc(100% - 6px));
     height: clamp(170px, calc(100dvh - 600px), 290px);
   }
-  /* Chunky game-show controls: about a quarter of the window height, 180 to
-     225px, with category art up to 145px. */
-  .gp-qmod .ans-box { --gp-ans-h: clamp(180px, 23dvh, 225px); }
-  .gp-qmod .ans-box-img { max-height: 145px; }
+  .gp-qmod > .ans-btns {
+    width: min(920px, calc(100vw - 48px));
+    flex-shrink: 0;
+    gap: clamp(12px, 1.6vw, 22px);
+  }
+  /* Enormous game-show controls: up to 280px tall, limited by the window
+     height on a short screen and by its width on a tablet, so they grow
+     smoothly from the tablet size to the full desktop one. Category art up
+     to 190px. */
+  .gp-qmod .ans-box { --gp-ans-h: clamp(180px, min(29dvh, 24vw), 280px); }
+  .gp-qmod .ans-box-img { max-height: 190px; }
 
   .gp-q .gp-clue-text.lg { font-size: 52px; }
   .gp-q .gp-clue-text.md { font-size: 44px; }
   .gp-q .gp-clue-text.sm { font-size: 36px; }
   .gp-q .gp-clue-text.xs { font-size: 29px; }
+}
+/* The wide desktop buttons carry larger labels (see GameScreen's label
+   ceiling), so their label band has room for two lines at that size. */
+@media (min-width: 1100px) {
+  .gp-qmod .ans-box-label { height: 70px; }
 }
 
 /* ===== REDUCED MOTION =====
