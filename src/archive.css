@@ -1,34 +1,9 @@
-/* ================= ARCHIVE (visual catalog) =================
-   New `ah-` classes, plus the reusable `pgh-` internal-page header (used by
-   Archive now; Results can adopt it later without any changes here). Nothing
-   here reaches gameplay, Results, Stats, Sign in, Admin or the homepage. */
-
-.main:has(> .ah-wrap) {
-  max-width: none;
-  padding: 0;
-}
-
-.ah-wrap {
-  width: 100%;
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 0 16px 40px;
-}
-
-/* home.css anchors the candy layer to the document (position:absolute,
-   height:100%) on phones, because the homepage is one short screen and the
-   layer needs a band below its footer to live in. Archive is a long
-   scrollable grid instead -- inheriting that override would stretch the
-   layer over the whole page height, collapsing every phone decoration down
-   near the true bottom of the list where it's never seen. Keep it pinned to
-   the viewport here instead, the same as tablet/desktop. */
-@media (max-width: 599px) {
-  .ah-wrap .candy-bg {
-    position: fixed;
-    inset: 0;
-    height: auto;
-  }
-}
+/* ================= ARCHIVE =================
+   The Archive page (`arc-` classes), plus the older reusable `pgh-`
+   internal-page header, which Results still uses. The custard page shell,
+   the cream site header and the candy controls live in site.css. Nothing
+   here reaches gameplay, Results' own layout, Stats, Sign in, Admin or the
+   homepage. */
 
 /* ===== REUSABLE PAGE HEADER =====
    Same grid approach as the gameplay header: two independent side tracks so
@@ -144,7 +119,6 @@
 .pgh-admin:active,
 .pgh-signin:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--black); }
 
-.ah-wrap :focus-visible,
 .pgh-hdr :focus-visible {
   outline: 3px solid #1D4ED8;
   outline-offset: 3px;
@@ -185,227 +159,265 @@
   .pgh-sound { font-size: 19px; min-width: 34px; padding: 2px; }
 }
 
-/* ===== TITLE =====
-   Deliberately compact: the whole point of the redesign is that artwork
-   shows up fast, not that the banner does. */
-.ah-title-row {
-  text-align: center;
-  padding: 4px 0 16px;
-}
-.ah-title {
-  font-family: 'Fredoka One', cursive;
-  font-size: clamp(28px, 6vw, 38px);
-  color: var(--black);
-  margin: 0 0 4px;
-  line-height: 1.1;
-}
-.ah-sub {
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--teal-dark);
-  margin: 0;
+/* ===== ARCHIVE PAGE =====
+   Built on the custard page shell and site header (site.css). */
+.main:has(> .cps-page) {
+  max-width: none;
+  padding: 0;
 }
 
-.ah-empty {
+.arc-inner {
+  width: 100%;
+  max-width: 1232px;
+  margin: 0 auto;
+  padding: max(14px, env(safe-area-inset-top)) 24px 72px;
+}
+
+/* ===== HEADING ===== */
+.arc-head {
   text-align: center;
-  padding: 48px 20px;
+  margin: 26px 0 0;
+}
+.arc-title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 0;
   font-family: 'Fredoka One', cursive;
-  font-size: 18px;
-  color: rgba(26, 26, 26, 0.4);
+  font-weight: 400;
+  font-size: clamp(36px, 4.6vw, 64px);
+  line-height: 1.05;
+  color: var(--black);
+}
+.arc-flourish {
+  display: block;
+  width: 0.5em;
+  height: 0.62em;
+  flex-shrink: 0;
+  color: var(--cs-pink);
+}
+.arc-flourish svg { display: block; width: 100%; height: 100%; }
+.arc-flourish-r { transform: scaleX(-1); }
+.arc-sub {
+  margin: 8px 0 0;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: clamp(16px, 1.5vw, 21px);
+  line-height: 1.3;
+  color: var(--black);
+}
+
+/* ===== SEARCH + FILTERS ===== */
+.arc-tools {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px 14px;
+  margin: 24px auto 30px;
+}
+.arc-tools .candy-search { width: 340px; }
+.arc-filters {
+  display: flex;
+  gap: 8px;
+}
+
+.arc-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ===== GRID =====
-   One column on phones; a spacious two-column grid from tablet up. Never
-   three or four -- the artwork stays the star at every width. */
-.ah-grid {
+   One column until two cards can each keep ~440px of artwork, then two.
+   Never more: the candy art stays the star. */
+.arc-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
-}
-@media (min-width: 700px) {
-  .ah-grid { grid-template-columns: 1fr 1fr; gap: 26px; }
-}
-
-/* ===== CARD =====
-   A real <button> for every replayable puzzle: no separate Replay control to
-   miss, no nested interactive elements, a native focusable/keyboard target.
-   Today's card (see below) is deliberately not a button. */
-.ah-card {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: var(--white);
-  border: var(--ink-thick);
-  border-radius: 24px;
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  max-width: 640px;
+  margin: 0 auto;
+  list-style: none;
   padding: 0;
-  margin: 0;
-  font-family: inherit;
-  color: inherit;
-  appearance: none;
-  transition: transform .12s, box-shadow .12s;
 }
-button.ah-card {
-  cursor: pointer;
-}
-button.ah-card:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-button.ah-card:hover:not(:disabled) {
-  transform: translate(-2px, -3px);
-  box-shadow: 10px 10px 0 var(--black);
-}
-button.ah-card:active:not(:disabled) {
-  transform: translate(2px, 2px);
-  box-shadow: 4px 4px 0 var(--black);
+@media (min-width: 960px) {
+  .arc-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 30px 30px;
+    max-width: 1180px;
+  }
 }
 
-/* ===== ARTWORK =====
-   A fixed 3:2 frame with `contain`, never `cover`: the real header images run
-   from roughly 5:4 to 3:1 in their native proportions, and 3:2 both matches
-   the single most common ratio exactly (so most cards fill it edge to edge)
-   and, because nothing is ever cropped to reach it, an outlier just
-   letterboxes on the warm background instead of losing a subject off the
-   edge. The aspect-ratio reserves the space up front, so no layout shift
-   waits on the image to load. */
-.ah-art {
+/* ===== CARD ===== */
+.arc-card {
   position: relative;
-  width: 100%;
-  aspect-ratio: 3 / 2;
-  background: linear-gradient(160deg, #FFFDF2 0%, #FFF3CE 100%);
-  border-bottom: var(--ink-thick);
-  overflow: hidden;
-}
-.ah-art-img {
-  display: block;
-  width: 100%;
+  display: flex;
+  flex-direction: column;
   height: 100%;
-  object-fit: contain;
+  background: var(--cs-cream);
+  border: var(--cs-outline);
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 4px 0 rgba(26, 26, 26, 0.12);
 }
-.ah-art-split {
+.arc-card.is-actionable { cursor: pointer; }
+.arc-card.is-retired .arc-art { filter: saturate(0.55); }
+
+/* A small lift on real pointers only, and never with reduced motion. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .arc-card { transition: transform .16s ease, box-shadow .16s ease; }
+  .arc-card.is-actionable:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 9px 0 rgba(26, 26, 26, 0.14);
+  }
+}
+/* Keyboard focus on the card's button also rings the whole card. */
+.arc-card:has(:focus-visible) {
+  box-shadow: 0 0 0 4px var(--cs-cream), 0 0 0 7px var(--cs-focus);
+}
+
+/* The artwork: Category A left, Category B right, each on its own colour
+   in a square half (2:1 overall). The candy images are `contain`ed with
+   padding, never cropped. */
+.arc-art {
   display: grid;
   grid-template-columns: 1fr 1fr;
-}
-.ah-art-half {
-  position: relative;
+  grid-template-rows: minmax(0, 1fr);
+  aspect-ratio: 2 / 1;
+  min-height: 0;
   overflow: hidden;
+}
+.arc-half {
+  position: relative;
   display: grid;
   place-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 8%;
+  overflow: hidden;
 }
-.ah-art-half img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+/* Positioned, so a tall or wide source can never stretch its square: the
+   image is fitted inside the padded box, whatever its proportions. */
+.arc-half img {
+  position: absolute;
+  inset: 8%;
   display: block;
+  width: 84%;
+  height: 84%;
+  object-fit: contain;
 }
-.ah-art-half span {
+.arc-half-name {
   font-family: 'Fredoka One', cursive;
-  font-size: 16px;
-  color: #fff;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-  padding: 0 10px;
+  font-size: clamp(16px, 2.2vw, 22px);
+  line-height: 1.15;
   text-align: center;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.28);
+  overflow-wrap: break-word;
+  min-width: 0;
 }
+.arc-half-name.on-light { color: var(--black); text-shadow: none; }
 
-.ah-card-body {
-  padding: 14px 18px 18px;
-}
-.ah-card-date {
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--teal-dark);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 4px;
-}
-.ah-card-title {
-  font-family: 'Fredoka One', cursive;
-  font-size: 20px;
-  line-height: 1.25;
-  color: var(--black);
-  overflow-wrap: normal;
-  word-break: normal;
-  hyphens: none;
-}
-.ah-card-foot {
+/* The cream information strip. */
+.arc-foot {
+  flex: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 12px;
-  min-height: 26px;
+  gap: 14px;
+  padding: 14px 16px 15px 20px;
 }
-.ah-play-again {
+.arc-text {
+  flex: 1;
+  min-width: 0;
+}
+.arc-card-title {
+  margin: 0;
   font-family: 'Fredoka One', cursive;
+  font-weight: 400;
+  font-size: 20px;
+  line-height: 1.22;
+  color: var(--black);
+  overflow-wrap: break-word;
+}
+.arc-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 4px;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 700;
   font-size: 14px;
-  color: var(--teal-dark);
-  margin-left: auto;
+  line-height: 1.3;
+  color: var(--cs-ink-soft);
 }
-
-.ah-score-pill {
+.arc-tag {
   display: inline-block;
-  font-family: 'Fredoka One', cursive;
-  font-size: 13px;
-  padding: 3px 12px;
-  border-radius: var(--r-pill);
+  padding: 2px 9px 3px;
   border: 2px solid var(--black);
-  background: linear-gradient(180deg, #FFF176 0%, #FFE347 55%, #E6C800 100%);
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25);
-}
-.ah-score-pill.perfect {
-  background: linear-gradient(180deg, #4ADE80 0%, #22C55E 55%, #16A34A 100%);
-  color: white;
-  border-color: var(--green-dark);
-}
-
-/* ===== TODAY =====
-   Distinct border/background and a badge, spanning the full grid width so it
-   reads as the featured entry -- larger, not just differently coloured. Not
-   a button: tapping today's entry in Archive has never navigated anywhere
-   (today is played from Home), and that stays exactly as it was. */
-.ah-today {
-  grid-column: 1 / -1;
-  position: relative;
-  border-color: var(--orange-dark);
-  background: linear-gradient(160deg, #FFFDF2 0%, #FFF3CE 100%);
-}
-.ah-today-badge {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  z-index: 2;
+  border-radius: 999px;
+  background: var(--yellow);
+  color: var(--black);
   font-family: 'Fredoka One', cursive;
   font-size: 12px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  padding: 5px 14px;
-  border-radius: var(--r-pill);
-  background: linear-gradient(180deg, #FB923C 0%, #FF8C00 55%, #CC6600 100%);
-  color: white;
-  border: 2px solid var(--orange-dark);
-  box-shadow: 0 3px 0 var(--orange-dark);
+  line-height: 1.1;
+  letter-spacing: 0.3px;
 }
-.ah-today .ah-card-title { font-size: 23px; }
+.arc-tag-quiet { background: #EDE7DA; }
+.arc-action { flex-shrink: 0; }
 
-@media (min-width: 700px) {
-  .ah-card-title { font-size: 22px; }
-  .ah-today .ah-card-title { font-size: 28px; }
-  .ah-card-body { padding: 18px 22px 22px; }
+/* ===== EMPTY ===== */
+.arc-empty {
+  max-width: 520px;
+  margin: 10px auto 0;
+  padding: 28px 24px;
+  text-align: center;
+  background: var(--cs-cream);
+  border: var(--cs-outline);
+  border-radius: 24px;
+}
+.arc-empty-title {
+  margin: 0 0 14px;
+  font-family: 'Fredoka One', cursive;
+  font-weight: 400;
+  font-size: 20px;
+  line-height: 1.3;
+  overflow-wrap: break-word;
 }
 
-/* ===== REDUCED MOTION ===== */
-@media (prefers-reduced-motion: reduce) {
-  .ah-wrap *,
-  .ah-wrap *::before,
-  .ah-wrap *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-  }
-  button.ah-card:hover:not(:disabled),
-  button.ah-card:active:not(:disabled) {
-    transform: none;
-  }
+/* ===== TABLET + PHONE ===== */
+@media (max-width: 899px) {
+  .arc-inner { padding-left: 16px; padding-right: 16px; }
+  .arc-head { margin-top: 22px; }
+  .arc-title { gap: 10px; }
+}
+@media (max-width: 599px) {
+  .arc-inner { padding-bottom: 48px; }
+  .arc-head { margin-top: 18px; }
+  .arc-sub { margin-top: 6px; }
+  .arc-tools { margin: 18px 0 20px; gap: 10px; }
+  .arc-tools .candy-search { width: 100%; }
+  .arc-filters { width: 100%; }
+  .arc-filters .candy-pill { flex: 1 1 0; padding: 0 8px; }
+  .arc-grid { gap: 18px; }
+  .arc-card { border-radius: 20px; }
+  .arc-foot { gap: 10px; padding: 12px 12px 13px 15px; }
+  .arc-card-title { font-size: 18px; }
+  .arc-meta { font-size: 13px; }
+  .arc-action.candy-btn,
+  .arc-action.candy-badge { min-height: 42px; font-size: 17px; }
+  .arc-action.candy-btn { padding: 0 16px 0 14px; }
+  .arc-action.candy-badge { padding: 0 14px 0 10px; }
+}
+@media (max-width: 380px) {
+  .arc-card-title { font-size: 17px; }
+  .arc-action.candy-btn,
+  .arc-action.candy-badge { font-size: 16px; gap: 6px; }
 }
