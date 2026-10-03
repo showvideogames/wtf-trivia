@@ -440,7 +440,17 @@
 }
 .ps-matchup-head { text-align: center; }
 .ps-matchup-head .ps-hint { margin-top: 2px; }
-.ps-matchup-card { width: 100%; max-width: 380px; }
+/* Closer to the answer buttons than the Home card: each half is about square
+   and the whole image is shown, padded off the edges and the centre split. */
+.ps-matchup-card { --matchup-pad: 16px; width: 100%; max-width: 580px; }
+.ps-home-mini.ps-matchup-card .hp-art-split { aspect-ratio: 2; }
+.ps-matchup-card .hp-art-half img {
+  position: absolute;
+  inset: var(--matchup-pad);
+  width: calc(100% - 2 * var(--matchup-pad));
+  height: calc(100% - 2 * var(--matchup-pad));
+  object-fit: contain;
+}
 .ps-matchup-card .ps-home-mini-title { padding-bottom: 4px; }
 .ps-matchup-names {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
@@ -816,6 +826,7 @@ span.ps-qrow-main { cursor: default; }
 
 /* ---------- phones ---------- */
 @media (max-width: 759px) {
+  .ps-matchup-card { --matchup-pad: 10px; }
   .ps-topbar { padding: 10px 16px; flex-wrap: wrap; }
   .ps-brand { font-size: 21px; }
   .ps-brand img { width: 28px !important; height: 28px !important; }
