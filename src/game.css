@@ -1110,6 +1110,13 @@
     calc((var(--gp-next-inner) - var(--gp-next-fs)) * 0.53)
     15px
     calc((var(--gp-next-inner) - var(--gp-next-fs)) * 0.47);
+  /* Rests at what used to be the top of the breath and only ever grows from
+     there. Scale is a transform, so the layout box (and everything above and
+     below it) never moves. The peak is relative to rest and is tuned per
+     phone layout further down, so it stops 7-10px short of the screen edge. */
+  --gp-next-rest: 1.045;
+  --gp-next-peak: 1.06;
+  scale: var(--gp-next-rest);
   transform-origin: 50% 50%;
   border-radius: 999px;
   border: 3px solid var(--black);
@@ -1120,7 +1127,7 @@
   letter-spacing: 0.4px;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
   transition: translate 0.1s ease-out, box-shadow 0.1s ease-out;
-  animation: gpNextBreathe 3.6s ease-in-out 1.2s infinite;
+  animation: gpNextBreathe 4.14s ease-in-out 1.2s infinite;
 }
 /* A solid, rounded arrow sized with the label. */
 .gp-next-arrow {
@@ -1151,14 +1158,32 @@
   box-shadow: 0 0 22px 1px rgba(255, 164, 0, 0.45);
   opacity: 0;
   pointer-events: none;
-  animation: gpNextGlow 3.6s ease-in-out 1.2s infinite;
+  animation: gpNextGlow 4.14s ease-in-out 1.2s infinite;
 }
-/* A continuous slow breath: 1.8s to swell, 1.8s to settle, straight into
+/* A continuous slow breath: 2.07s to swell, 2.07s to settle, straight into
    the next, with no rest in between. Scale only, about the centre -- never
-   a lift. */
+   a lift, and never below the resting size. */
 @keyframes gpNextBreathe {
-  0%, 100% { scale: 1; }
-  50%      { scale: 1.045; }
+  0%, 100% { scale: var(--gp-next-rest); }
+  50%      { scale: calc(var(--gp-next-rest) * var(--gp-next-peak)); }
+}
+/* Peaks measured against each phone layout's pill width (92% of the column,
+   96% on short screens) and side padding (16px, 12px at 380px and below),
+   so the swell reaches about 8-9px from the screen edges. */
+@media (max-width: 599px) {
+  .gp-wrap .gp-next.btn { --gp-next-peak: 1.08; }
+}
+@media (min-width: 500px) and (max-width: 599px) {
+  .gp-wrap .gp-next.btn { --gp-next-peak: 1.06; }
+}
+@media (max-width: 599px) and (max-height: 700px) {
+  .gp-wrap .gp-next.btn { --gp-next-peak: 1.04; }
+}
+@media (max-width: 380px) {
+  .gp-wrap .gp-next.btn { --gp-next-peak: 1.06; }
+}
+@media (max-width: 380px) and (max-height: 700px) {
+  .gp-wrap .gp-next.btn { --gp-next-peak: 1.02; }
 }
 @keyframes gpNextGlow {
   0%, 100% { opacity: 0; }
