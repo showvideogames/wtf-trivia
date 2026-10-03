@@ -1373,6 +1373,103 @@
   .gp-replay { padding: 1px 8px; font-size: 10.5px; }
 }
 
+/* ===== QUESTION PHASE HIERARCHY =====
+   While a question is open, the order of importance is: the question, then
+   the two choices and their category art, then the mystery stage. So when
+   height runs short the stage gives first and the choices last.
+
+   The stage stops being a fixed 4:3 picture here: it keeps the full width of
+   the module (so the answer row stays aligned with its edges) and takes a
+   restrained, height-aware height, its frame filling it. It is decoration --
+   the reveal media that replaces it keeps its own sizing, untouched.
+
+   Everything below is scoped to .gp-qmod or .gp-q, which only exist in the
+   question phase. The reveal's clue card, verdict and media are not
+   affected. */
+.gp-qmod > .gp-mystery {
+  aspect-ratio: auto;
+}
+.gp-qmod .gp-mystery-frame {
+  width: 100cqw;
+  height: 100cqh;
+  aspect-ratio: auto;
+}
+
+@media (max-width: 599px) {
+  /* The stage starts from about a quarter of the screen height and is the
+     first thing to shrink, down to an 80px strip. The answer row starts from
+     about a third of the screen and takes any spare height first, up to
+     330px (or 40% of the screen on a short phone); only then does the stage
+     grow back towards its own cap, and anything beyond both caps is shared
+     above and below the row. The row's tiny shrink factor means it only
+     gives once the stage is at its floor, and never below 176px -- enough
+     for a label band and category art of about 100px. */
+  .gp-qmod > .gp-mystery {
+    flex: 1 1 24dvh;
+    height: auto;
+    min-height: 80px;
+    max-height: min(calc((100vw - 24px) * 0.75), 27dvh);
+  }
+  .gp-qmod > .ans-btns {
+    flex: 1000 0.001 clamp(176px, 34dvh, 330px);
+    min-height: 176px;
+    max-height: min(330px, 40dvh);
+  }
+  /* Tall phone buttons get room for larger art. */
+  .gp-qmod .ans-box-img { max-height: 155px; }
+
+  /* The question reads a step larger than before on a phone of ordinary
+     height; the short-phone sizes are kept. */
+  .gp-q .gp-clue-text.lg { font-size: clamp(29px, 9vw, 46px); }
+  .gp-q .gp-clue-text.md { font-size: clamp(24px, 7.2vw, 38px); }
+  .gp-q .gp-clue-text.sm { font-size: clamp(19px, 5.4vw, 30px); }
+}
+@media (max-width: 599px) and (max-height: 700px) {
+  .gp-q .gp-clue-text.lg { font-size: clamp(29px, 8.0vw, 46px); }
+  .gp-q .gp-clue-text.md { font-size: clamp(24px, 6.4vw, 38px); }
+  .gp-q .gp-clue-text.sm { font-size: clamp(19px, 4.8vw, 30px); }
+}
+
+@media (min-width: 600px) {
+  /* From tablet up the module is no longer one 500px column. The stage keeps
+     its own 500px cap, centred, and the answer row is a separate, wider
+     centred row beneath it -- up to 920px, so on a desktop its outside edges
+     reach well beyond the stage. When the row is wider than the page column
+     it overflows that column equally on both sides (flex centring), and it
+     always stays 24px inside the window. */
+  .gp-qmod {
+    max-width: none;
+    align-items: center;
+  }
+  /* A shorter stage that gives up height on a shorter desktop window, so the
+     choices never have to. */
+  .gp-qmod > .gp-mystery {
+    width: min(494px, calc(100% - 6px));
+    height: clamp(170px, calc(100dvh - 600px), 290px);
+  }
+  .gp-qmod > .ans-btns {
+    width: min(920px, calc(100vw - 48px));
+    flex-shrink: 0;
+    gap: clamp(12px, 1.6vw, 22px);
+  }
+  /* Enormous game-show controls: up to 280px tall, limited by the window
+     height on a short screen and by its width on a tablet, so they grow
+     smoothly from the tablet size to the full desktop one. Category art up
+     to 190px. */
+  .gp-qmod .ans-box { --gp-ans-h: clamp(180px, min(29dvh, 24vw), 280px); }
+  .gp-qmod .ans-box-img { max-height: 190px; }
+
+  .gp-q .gp-clue-text.lg { font-size: 52px; }
+  .gp-q .gp-clue-text.md { font-size: 44px; }
+  .gp-q .gp-clue-text.sm { font-size: 36px; }
+  .gp-q .gp-clue-text.xs { font-size: 29px; }
+}
+/* The wide desktop buttons carry larger labels (see GameScreen's label
+   ceiling), so their label band has room for two lines at that size. */
+@media (min-width: 1100px) {
+  .gp-qmod .ans-box-label { height: 70px; }
+}
+
 /* ===== REDUCED MOTION =====
    Honoured across the whole gameplay surface, including the existing
    answer-card pop and shake, which previously ran regardless. */
