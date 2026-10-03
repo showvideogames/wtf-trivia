@@ -421,6 +421,35 @@
 .ps-home-mini .hp-art,
 .ps-home-mini .hp-art-split { aspect-ratio: 2.75; border-bottom-width: 3px; }
 .ps-home-mini-title { padding: 10px 14px 12px; font-family: 'Fredoka One', cursive; font-size: 16px; line-height: 1.2; overflow-wrap: anywhere; }
+.ps-home-empty {
+  display: grid; gap: 4px;
+  padding: 18px 16px;
+  border: 1px dashed var(--ps-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--ps-ink-3);
+  font-size: 14px; line-height: 1.4;
+}
+.ps-home-empty strong { color: var(--ps-ink); font-weight: 700; }
+
+/* The category matchup: a full-width row under the two category cards. */
+.ps-matchup {
+  display: grid; justify-items: center; gap: 12px;
+  margin-top: 22px; padding-top: 20px;
+  border-top: 1px solid var(--ps-line);
+}
+.ps-matchup-head { text-align: center; }
+.ps-matchup-head .ps-hint { margin-top: 2px; }
+.ps-matchup-card { width: 100%; max-width: 380px; }
+.ps-matchup-card .ps-home-mini-title { padding-bottom: 4px; }
+.ps-matchup-names {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
+  padding: 0 14px 12px;
+  font-size: 13px; font-weight: 700; color: var(--ps-ink);
+}
+.ps-matchup-names span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.ps-matchup-names i { flex: none; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--black, #1A1A1A); }
+.ps-matchup-names .ps-matchup-or { color: var(--ps-ink-3); font-weight: 600; }
 
 .ps-danger {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;

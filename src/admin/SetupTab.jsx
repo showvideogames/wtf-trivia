@@ -74,6 +74,31 @@ function CategoryCard({side, game, set, trackImage}){
   );
 }
 
+// The category split on its own, drawn by the Home screen's artwork
+// component with the header left out, so a header upload never replaces it.
+function CategoryMatchup({game}){
+  const {HomeArt, palette} = useStudio();
+  const colorA = paletteColor(palette, game.categoryAColor||"teal", 0);
+  const colorB = paletteColor(palette, game.categoryBColor||"pink", 1);
+  return(
+    <div className="ps-matchup">
+      <div className="ps-matchup-head">
+        <div className="ps-label">Category matchup preview</div>
+        <div className="ps-hint">Shows how the two category images, colors and names work together.</div>
+      </div>
+      <div className="ps-home-mini ps-matchup-card">
+        <HomeArt game={{...game, headerImage:""}}/>
+        <div className="ps-home-mini-title">{game.themeTitle||"Untitled puzzle"}</div>
+        <div className="ps-matchup-names">
+          <span><i style={{background:colorA.mid}} aria-hidden="true"/>{game.categoryA||"Category A"}</span>
+          <span className="ps-matchup-or">or</span>
+          <span><i style={{background:colorB.mid}} aria-hidden="true"/>{game.categoryB||"Category B"}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CategoryAppearance({game, set, trackImage}){
   return(
     <section className="ps-panel ps-card" aria-labelledby="ps-appearance-title">
@@ -82,12 +107,14 @@ function CategoryAppearance({game, set, trackImage}){
         <CategoryCard side="A" game={game} set={set} trackImage={trackImage}/>
         <CategoryCard side="B" game={game} set={set} trackImage={trackImage}/>
       </div>
+      <CategoryMatchup game={game}/>
     </section>
   );
 }
 
 // The header image plus a small Home card preview drawn by the Home screen's
-// own artwork component (it falls back to the category split, like Home).
+// own artwork component. Without a header, Home and Archive fall back to the
+// category split, which the matchup preview above already shows.
 function Artwork({game, set, trackImage}){
   const {HomeArt} = useStudio();
   return(
@@ -97,11 +124,18 @@ function Artwork({game, set, trackImage}){
         <ImageField label="Header image" value={game.headerImage||""} onChange={v=>set("headerImage",v)} preset="header"
                     onBusyChange={trackImage("headerImage")} fieldId="img-field-headerImage" layout="wide"/>
         <div className="ps-home-preview">
-          <div className="ps-label">Preview (Home screen)</div>
-          <div className="ps-home-mini">
-            <HomeArt game={game}/>
-            <div className="ps-home-mini-title">{game.themeTitle||"Untitled puzzle"}</div>
-          </div>
+          <div className="ps-label">Preview (Home &amp; Archive)</div>
+          {game.headerImage?(
+            <div className="ps-home-mini">
+              <HomeArt game={game}/>
+              <div className="ps-home-mini-title">{game.themeTitle||"Untitled puzzle"}</div>
+            </div>
+          ):(
+            <div className="ps-home-empty">
+              <strong>No header artwork uploaded yet.</strong>
+              <span>Home and Archive will use the category artwork shown above.</span>
+            </div>
+          )}
         </div>
       </div>
     </section>
