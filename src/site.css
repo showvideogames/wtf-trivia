@@ -1,0 +1,325 @@
+/* ================= SITE DESIGN SYSTEM (custard pages) =================
+   Shared pieces from the Archive redesign, written to spread to the rest of
+   the site later: the page shell (CandyPageShell.jsx), the cream navigation
+   bar (SiteHeader.jsx) and the outlined candy controls. Only Archive uses
+   them for now, and nothing here touches an existing class. */
+
+:root {
+  --cs-custard: #FFEBA0;
+  --cs-cream: #FFFBEF;
+  --cs-outline: 3px solid var(--black);
+  --cs-pink: #FF79A6;
+  --cs-pink-hover: #FF6A9C;
+  --cs-pink-soft: #FFE2EC;
+  --cs-teal: #46DEC9;
+  --cs-ink-soft: #5B5346;
+  --cs-focus: #1D4ED8;
+}
+
+/* ===== PAGE SHELL ===== */
+.cps-page {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  overflow-x: clip;
+}
+
+/* The custard canvas and the cream spotlight behind the heading. Fixed, so a
+   long page keeps the same framing as it scrolls; the bottom settles to
+   --warm-base, the colour the document shows on overscroll. */
+.cps-glow {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-color: var(--cs-custard);
+  background-image:
+    radial-gradient(ellipse 46% 34% at 50% 14%,
+      rgba(255, 251, 236, 0.96) 0%,
+      rgba(255, 251, 236, 0.80) 26%,
+      rgba(255, 251, 236, 0.48) 50%,
+      rgba(255, 251, 236, 0.18) 74%,
+      rgba(255, 251, 236, 0) 100%),
+    radial-gradient(ellipse 80% 70% at 50% 40%,
+      rgba(255, 244, 196, 0.85) 0%,
+      rgba(255, 244, 196, 0.45) 55%,
+      rgba(255, 244, 196, 0) 100%);
+}
+
+.cps-decor {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+.cps-piece {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+  user-select: none;
+}
+.cps-sprinkle { height: auto; }
+.cps-star svg { display: block; width: 100%; height: auto; filter: drop-shadow(0 3px 0 rgba(160, 110, 0, 0.18)); }
+.cps-dot {
+  border-radius: 50%;
+  box-shadow: 0 3px 4px rgba(120, 60, 0, 0.16);
+}
+.cps-dot-pink { background: radial-gradient(circle at 34% 30%, #FFB3CB 0 14%, #FF5C8D 42%, #E0306A 100%); }
+.cps-dot-teal { background: radial-gradient(circle at 34% 30%, #B8FFF2 0 14%, #2DD4BF 42%, #0F9488 100%); }
+
+@media (min-width: 1100px) { .cps-piece.cps-dt { display: block; } }
+@media (min-width: 600px) and (max-width: 1099px) { .cps-piece.cps-tb { display: block; } }
+@media (max-width: 599px) { .cps-piece.cps-ph { display: block; } }
+
+/* ===== SITE HEADER ===== */
+.sh-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-areas: "nav logo tools";
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 74px;
+  padding: 8px 16px;
+  background: var(--cs-cream);
+  border: var(--cs-outline);
+  border-radius: 24px;
+  box-shadow: 0 3px 0 rgba(26, 26, 26, 0.10);
+}
+.sh-nav {
+  grid-area: nav;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.sh-logo {
+  grid-area: logo;
+  display: block;
+  width: auto;
+  height: 64px;
+  max-width: 150px;
+  object-fit: contain;
+}
+.sh-tools {
+  grid-area: tools;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sh-tools-start,
+.sh-tools-end {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sh-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--black);
+  font-family: 'Fredoka One', cursive;
+  font-size: 16px;
+  line-height: 1;
+  padding: 11px 16px;
+  min-height: 42px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sh-link:hover { background: var(--cs-pink-soft); }
+.sh-link.is-current { background: var(--cs-pink); }
+.sh-link.is-current:hover { background: var(--cs-pink-hover); }
+
+.sh-icon-btn {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2.5px solid var(--black);
+  background: var(--cs-cream);
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sh-icon-btn:hover { background: #fff; }
+.sh-admin img { width: 22px !important; height: 22px !important; }
+
+.sh-account {
+  appearance: none;
+  border: 2.5px solid var(--black);
+  background: var(--cs-cream);
+  color: var(--black);
+  font-family: 'Fredoka One', cursive;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 16px;
+  min-height: 42px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sh-account:hover { background: #fff; }
+.sh-account.is-signed-in { background: #E9D5FF; }
+
+/* Under 900px one row can't hold the links, the logo and the controls
+   without crowding, so: controls either side of the logo, links below. */
+@media (max-width: 899px) {
+  .sh-bar {
+    grid-template-areas:
+      "start logo end"
+      "nav   nav  nav";
+    row-gap: 6px;
+    column-gap: 8px;
+    padding: 8px 10px 8px;
+    border-radius: 22px;
+  }
+  .sh-tools { display: contents; }
+  .sh-tools-start { grid-area: start; justify-self: start; }
+  .sh-tools-end { grid-area: end; justify-self: end; }
+  .sh-logo { height: 54px; max-width: 128px; }
+  .sh-nav {
+    justify-content: space-between;
+    border-top: 2px dashed rgba(26, 26, 26, 0.16);
+    padding-top: 6px;
+  }
+  .sh-link { flex: 1 1 0; padding: 10px 8px; font-size: 15px; }
+}
+@media (max-width: 380px) {
+  .sh-logo { height: 44px; max-width: 108px; }
+  .sh-link { font-size: 14px; padding: 10px 4px; }
+  .sh-icon-btn { width: 40px; height: 40px; font-size: 17px; }
+  .sh-account { padding: 0 12px; font-size: 14px; max-width: 104px; }
+}
+
+/* ===== CANDY CONTROLS =====
+   Outlined, flat-filled controls: a pink action button, a teal score badge
+   and cream filter pills. */
+.candy-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 20px 0 18px;
+  border: 2.5px solid var(--black);
+  border-radius: 999px;
+  background: var(--cs-pink);
+  color: var(--black);
+  font-family: 'Fredoka One', cursive;
+  font-size: 18px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 3px 0 var(--black);
+  transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease;
+}
+.candy-btn:hover { background: var(--cs-pink-hover); }
+.candy-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--black); }
+.candy-btn-icon { width: 15px; height: 15px; flex-shrink: 0; }
+
+.candy-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px 0 12px;
+  border: 2.5px solid var(--black);
+  border-radius: 999px;
+  background: var(--cs-teal);
+  color: var(--black);
+  font-family: 'Fredoka One', cursive;
+  font-size: 18px;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.candy-badge-check {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--black);
+  color: var(--cs-teal);
+  flex-shrink: 0;
+}
+.candy-badge-check svg { width: 13px; height: 13px; display: block; }
+button.candy-badge {
+  appearance: none;
+  cursor: pointer;
+  box-shadow: 0 3px 0 var(--black);
+  transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease;
+}
+button.candy-badge:hover { background: #38D3BE; }
+button.candy-badge:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--black); }
+
+.candy-pill {
+  appearance: none;
+  min-height: 42px;
+  padding: 0 18px;
+  border: 2.5px solid var(--black);
+  border-radius: 999px;
+  background: var(--cs-cream);
+  color: var(--black);
+  font-family: 'Fredoka One', cursive;
+  font-size: 15px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.candy-pill:hover { background: #fff; }
+.candy-pill[aria-pressed="true"] { background: var(--cs-pink); }
+
+.candy-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.candy-search svg {
+  position: absolute;
+  left: 16px;
+  width: 19px;
+  height: 19px;
+  pointer-events: none;
+  color: var(--black);
+}
+.candy-search input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 16px 0 44px;
+  border: 2.5px solid var(--black);
+  border-radius: 999px;
+  background: var(--cs-cream);
+  color: var(--black);
+  font-family: 'Nunito', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+.candy-search input::placeholder { color: #7C7466; opacity: 1; }
+
+/* Focus is always obvious: a blue ring that reads on cream, custard, pink
+   and teal alike. */
+.cps-page :focus-visible {
+  outline: 3px solid var(--cs-focus);
+  outline-offset: 3px;
+}
+.cps-page input:focus-visible { outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .candy-btn,
+  button.candy-badge { transition: none; }
+  .candy-btn:active,
+  button.candy-badge:active { transform: none; }
+}

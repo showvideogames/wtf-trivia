@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, use
 import { createClient } from "@supabase/supabase-js";
 import "./home.css";
 import "./game.css";
+import "./site.css";
 import "./archive.css";
 import "./results.css";
 import "./backdrop.css";
@@ -16,6 +17,9 @@ import ResultsCopyButton from "./ResultsCopyButton.jsx";
 import { CrowdPanel, CrowdTiles } from "./ResultsCrowd.jsx";
 import ResultsNerdMode from "./ResultsNerdMode.jsx";
 import ResultsScore from "./ResultsScore.jsx";
+import CandyPageShell from "./CandyPageShell.jsx";
+import SiteHeader from "./SiteHeader.jsx";
+import { ARCHIVE_FILTERS, archivePuzzles, filterArchive } from "./archiveList.js";
 import { histogramBuckets } from "./scoreHistogram.js";
 import { StudioContext, paletteColor } from "./admin/StudioContext.js";
 import { localDateFromISO } from "./admin/adminDates.js";
@@ -122,8 +126,8 @@ const styles = `
 
   /* ===== WARM SPOTLIGHT BACKDROP (CandyBackdrop "landing" preset) =====
      Two fixed layers behind all content, so no existing element needed
-     restyling. Both are inert decoration. Used by the homepage, Archive,
-     Results and the loading screen; the other presets swap in the quieter
+     restyling. Both are inert decoration. Used by the homepage,
+     Results and the loading screen (Archive has its own, CandyPageShell); the other presets swap in the quieter
      gameplay glow and edge shapes from game.css. */
 
   /* Layer 1: the graded background itself.
@@ -2347,8 +2351,8 @@ const ADMIN_DECOR_TB = [
 // ---- SHARED CANDY BACKDROP ----
 // Every full-page screen draws its background with this one component. A
 // preset picks the layers:
-//   landing: warm spotlight + wrapped candies and sprinkles (Home, Archive,
-//            Results, Loading). Its markup is exactly what Home always had.
+//   landing: warm spotlight + wrapped candies and sprinkles (Home,
+//            Results, Loading; Archive uses CandyPageShell). Its markup is exactly what Home always had.
 //   game:    the quieter gameplay spotlight, the large rounded edge shapes
 //            and a sparser sprinkle set (Gameplay, Stats, Account, the
 //            connection-error page).
@@ -3465,7 +3469,7 @@ function StatsScreen({stats,onNav}){
 // ---- REUSABLE INTERNAL-PAGE HEADER ----
 // Logo centred between two button clusters, same proven grid approach as the
 // gameplay header (equal side tracks so neither can crowd the logo out of
-// legibility at 360px). Used by Archive and Results. Admin only ever appears behind the existing
+// legibility at 360px). Used by Results (Archive now uses SiteHeader). Admin only ever appears behind the existing
 // SHOW_ADMIN_LINK flag -- this header never shows it unconditionally.
 function PageHeader({sound,onBack,onHelp,player,onAccount,onAdmin}){
   const signedIn = player && !player.isGuest;
@@ -3502,94 +3506,134 @@ function PageHeader({sound,onBack,onHelp,player,onAccount,onAdmin}){
 
 // ---- ARCHIVE ----
 
-// The card artwork. Mirrors HomePuzzleArt's fallback logic (a headerImage, or
-// a split of the two category images when there isn't one) but with its own
-// sizing: `contain` inside a fixed 3:2 frame rather than home's `cover`,
-// because the real header images range from roughly 5:4 to 3:1 in their
-// native proportions (checked against all 15 published puzzles), and 3:2
-// both matches the single most common ratio exactly and, with `contain`,
-// never has to crop the rest -- an outlier just letterboxes instead of
-// losing a subject off the edge.
-function ArchiveCardArt({game,eager}){
-  const loading = eager?"eager":"lazy";
-  if(game.headerImage){
-    return(
-      <div className="ah-art">
-        <img src={game.headerImage} alt={game.themeTitle} className="ah-art-img"
-             loading={loading} decoding="async"
-             onError={e=>{e.currentTarget.style.display="none";}}/>
-      </div>
-    );
-  }
-  const colA = PALETTE.find(p=>p.id===(game.categoryAColor||"teal"))||PALETTE[0];
-  const colB = PALETTE.find(p=>p.id===(game.categoryBColor||"pink"))||PALETTE[1];
-  return(
-    <div className="ah-art ah-art-split" role="img" aria-label={game.themeTitle}>
-      <div className="ah-art-half" style={{background:colA.mid}}>
-        {game.categoryAImage ? <img src={game.categoryAImage} alt="" loading={loading}/> : <span>{game.categoryA}</span>}
-      </div>
-      <div className="ah-art-half" style={{background:colB.mid}}>
-        {game.categoryBImage ? <img src={game.categoryBImage} alt="" loading={loading}/> : <span>{game.categoryB}</span>}
-      </div>
-    </div>
-  );
-}
-
 function archiveDateLabel(date){
   return new Date(date+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
 }
 
-// Not a button: today's entry has never navigated anywhere from Archive (the
-// player plays today's puzzle from Home), and that is preserved exactly --
-// this card is informational only, so it isn't given fake interactive
-// semantics for an activation that does nothing.
-function ArchiveTodayCard({game,record}){
+// One half of a card's artwork: the category's own candy image on the
+// category's colour, `contain`ed so the whole piece stays visible. With no
+// usable image (or one that fails to load) the category name stands in.
+function ArchiveArtHalf({name,image,color,loading}){
+  const src = usableMediaUrl(image);
+  const[failed,setFailed]=useState(false);
   return(
-    <div className="ah-card ah-today" aria-label={`Today's puzzle: ${game.themeTitle}`}>
-      <span className="ah-today-badge">Today</span>
-      <ArchiveCardArt game={game} eager/>
-      <div className="ah-card-body">
-        <div className="ah-card-title">{game.themeTitle}</div>
-        {record?.completed&&(
-          <div className="ah-card-foot">
-            <span className={`ah-score-pill${record.score===record.totalQuestions?" perfect":""}`}>{record.score}/{record.totalQuestions}</span>
-          </div>
-        )}
-      </div>
+    <div className="arc-half" style={{background:color.mid}}>
+      {src&&!failed
+        ? <img src={src} alt={name||""} loading={loading} decoding="async" onError={()=>setFailed(true)}/>
+        : <span className={color.isDark?"arc-half-name":"arc-half-name on-light"}>{name}</span>}
     </div>
   );
 }
 
-// The whole card is a single <button>: no separate Replay control to miss,
-// no nested interactive elements, and a real focusable, keyboard-operable
-// control for free. canReplay preserves the exact existing rule; a retired
-// puzzle (shown only to players who played it) keeps its score but can't be
-// replayed.
-function ArchivePastCard({game,record,onReplay,eager}){
-  const retired = game.status==="retired";
-  const canReplay = !retired && game.questions?.length>0;
+// The card artwork is always the two category images, A on the left and B
+// on the right, even when the puzzle also has a wide header image: that one
+// stays Home's featured artwork.
+function ArchiveCardArt({game,eager}){
+  const loading = eager?"eager":"lazy";
+  const colA = PALETTE.find(p=>p.id===(game.categoryAColor||"teal"))||PALETTE[0];
+  const colB = PALETTE.find(p=>p.id===(game.categoryBColor||"pink"))||PALETTE[1];
   return(
-    <button type="button" className="ah-card" onClick={onReplay} disabled={!canReplay}>
-      <ArchiveCardArt game={game} eager={eager}/>
-      <div className="ah-card-body">
-        <div className="ah-card-date">{archiveDateLabel(game.date)}</div>
-        <div className="ah-card-title">{game.themeTitle}</div>
-        <div className="ah-card-foot">
-          {record?.completed&&(
-            <span className={`ah-score-pill${record.score===record.totalQuestions?" perfect":""}`}>{record.score}/{record.totalQuestions}</span>
-          )}
-          {canReplay&&<span className="ah-play-again">Play again →</span>}
-          {retired&&<span className="ah-play-again">Retired</span>}
-        </div>
-      </div>
-    </button>
+    <div className="arc-art">
+      <ArchiveArtHalf name={game.categoryA} image={game.categoryAImage} color={colA} loading={loading}/>
+      <ArchiveArtHalf name={game.categoryB} image={game.categoryBImage} color={colB} loading={loading}/>
+    </div>
   );
 }
 
-function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onAdmin}){
+function PlayGlyph(){
+  return(
+    <svg className="candy-btn-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path d="M4 2.4v11.2a.9.9 0 001.37.77l9-5.6a.9.9 0 000-1.54l-9-5.6A.9.9 0 004 2.4z" fill="currentColor"/>
+    </svg>
+  );
+}
+function CheckGlyph(){
+  return(
+    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path d="M3.2 8.4l3 3 6.6-6.6" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+function TitleFlourish({side}){
+  return(
+    <span className={side==="right"?"arc-flourish arc-flourish-r":"arc-flourish"} aria-hidden="true">
+      <svg viewBox="0 0 30 36" focusable="false">
+        <path d="M9 4.5l11 11.5M5 29l15-2.5" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round"/>
+      </svg>
+    </span>
+  );
+}
+function SearchGlyph(){
+  return(
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" strokeWidth="2.8"/>
+      <path d="M15.5 15.5l5 5" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+// What each card offers is the Archive's existing rule, unchanged:
+//   - today's puzzle is played from here exactly as from Home (a normal,
+//     recorded play), and once finished it just shows the score;
+//   - a past puzzle replays (not recorded), finished or not;
+//   - a retired puzzle (listed only for players who played it) keeps its
+//     score but can't be replayed.
+// The button is the real control. A click anywhere else on the card does
+// the same thing, unless the player was selecting text.
+function ArchiveCard({game,record,isToday,onAction,eager}){
+  const done = Boolean(record?.completed);
+  const retired = game.status==="retired";
+  const canReplay = !retired && game.questions?.length>0;
+  const action = isToday ? (done?null:"play") : (canReplay ? (done?"replay":"play") : null);
+  const resume = isToday && !done && record?.answers?.length>0;
+  const score = done ? `${record.score} / ${record.totalQuestions}` : null;
+  const run = ()=>onAction(game);
+  const onCardClick = e=>{
+    if(!action || e.target.closest("button")) return;
+    if(window.getSelection?.()?.toString()) return;
+    run();
+  };
+  return(
+    <li className={`arc-card${action?" is-actionable":""}${retired?" is-retired":""}`} onClick={onCardClick}>
+      <ArchiveCardArt game={game} eager={eager}/>
+      <div className="arc-foot">
+        <div className="arc-text">
+          <h2 className="arc-card-title">{game.themeTitle}</h2>
+          <div className="arc-meta">
+            <time dateTime={game.date}>{archiveDateLabel(game.date)}</time>
+            {isToday&&<span className="arc-tag">Today</span>}
+            {retired&&<span className="arc-tag arc-tag-quiet">Retired</span>}
+          </div>
+        </div>
+        {action==="play"&&(
+          <button type="button" className="candy-btn arc-action" onClick={run}
+                  aria-label={`${resume?"Resume":"Play"}: ${game.themeTitle}`}>
+            <PlayGlyph/>{resume?"Resume":"Play"}
+          </button>
+        )}
+        {done&&action==="replay"&&(
+          <button type="button" className="candy-badge arc-action" onClick={run} title="Play again"
+                  aria-label={`Completed, ${record.score} out of ${record.totalQuestions}. Play again: ${game.themeTitle}`}>
+            <span className="candy-badge-check"><CheckGlyph/></span>{score}
+          </button>
+        )}
+        {done&&action!=="replay"&&(
+          <span className="candy-badge arc-action">
+            <span className="candy-badge-check"><CheckGlyph/></span>
+            <span className="arc-sr-only">Completed, score </span>{score}
+          </span>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onPlayToday,onAdmin}){
   const today=getLocalGameDay();
   const[records,setRecords]=useState({});
   const[showHelp,setShowHelp]=useState(false);
+  const[query,setQuery]=useState("");
+  const[filter,setFilter]=useState("all");
 
   // One request for all of this player's plays, keyed by puzzle id, so a
   // score stays on its puzzle whatever day the puzzle is scheduled for.
@@ -3600,34 +3644,87 @@ function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onAdmin}){
     return ()=>{cancelled = true;};
   },[playerId, games.length]);
 
-  // Published puzzles, plus retired ones this player has a result for.
-  // Only a published puzzle can be today's.
-  const sorted=games
-    .filter(g=>g.status==="published"||(g.status==="retired"&&records[g.id]))
-    .sort((a,b)=>b.date.localeCompare(a.date));
-  const todayGame = sorted.find(g=>g.date===today&&g.status==="published");
-  const pastGames = sorted.filter(g=>g!==todayGame);
+  // Inclusion and order are archivePuzzles' (unchanged rules); search and
+  // the filter pills only narrow what's already loaded.
+  const {puzzles,todayGame} = archivePuzzles(games, records, today);
+  const shown = filterArchive(puzzles, records, {query, filter});
+  const narrowed = query.trim()!=="" || filter!=="all";
+  const signedIn = player && !player.isGuest;
+  const toTop = ()=>{
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({top:0, behavior:reduce?"auto":"smooth"});
+  };
+  const showAll = ()=>{ setQuery(""); setFilter("all"); };
 
   return(
-    <div className="ah-wrap">
-      <LandingBackdrop/>
-      <PageHeader sound={sound} onBack={()=>onNav("home")} onHelp={()=>setShowHelp(true)} player={player} onAccount={()=>onNav("account")} onAdmin={onAdmin}/>
-      <div className="ah-title-row">
-        <h1 className="ah-title">Archive</h1>
-        <p className="ah-sub">Every theme so far. Pick one and play!</p>
-      </div>
-      {sorted.length===0?(
-        <div className="ah-empty">No games yet!</div>
-      ):(
-        <div className="ah-grid">
-          {todayGame&&<ArchiveTodayCard game={todayGame} record={records[todayGame.id]}/>}
-          {pastGames.map((g,i)=>(
-            <ArchivePastCard key={g.id} game={g} record={records[g.id]} onReplay={()=>onReplay(g)} eager={!todayGame&&i===0}/>
-          ))}
+    <CandyPageShell>
+      <div className="arc-inner">
+        <SiteHeader
+          current="archive"
+          nav={[
+            {id:"play", label:"Play", onClick:()=>onNav("home")},
+            {id:"archive", label:"Archive", onClick:toTop},
+            {id:"help", label:"How to Play", onClick:()=>setShowHelp(true)},
+          ]}
+          sound={sound}
+          account={{
+            signedIn,
+            label: signedIn?formatAccountLabel(player.email):"Sign in",
+            title: signedIn?(player.email||"Account"):"Sign in",
+            onClick: ()=>onNav("account"),
+          }}
+          admin={SHOW_ADMIN_LINK&&onAdmin ? {onClick:onAdmin, icon:<FI name="gear" size={22}/>} : null}
+        />
+
+        <div className="arc-head">
+          <h1 className="arc-title"><TitleFlourish/>Puzzle Archive<TitleFlourish side="right"/></h1>
+          <p className="arc-sub">Every flavor of nonsense, all in one place.</p>
         </div>
-      )}
+
+        {puzzles.length>0&&(
+          <div className="arc-tools">
+            <label className="candy-search">
+              <span className="arc-sr-only">Search puzzles</span>
+              <SearchGlyph/>
+              <input type="search" value={query} onChange={e=>setQuery(e.target.value)}
+                     placeholder="Search puzzles…" autoComplete="off" spellCheck="false"/>
+            </label>
+            <div className="arc-filters" role="group" aria-label="Show puzzles">
+              {ARCHIVE_FILTERS.map(f=>(
+                <button key={f.id} type="button" className="candy-pill"
+                        aria-pressed={filter===f.id} onClick={()=>setFilter(f.id)}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <p className="arc-sr-only" role="status">
+          {narrowed?`Showing ${shown.length} of ${puzzles.length} puzzles`:""}
+        </p>
+
+        {puzzles.length===0?(
+          <div className="arc-empty"><p className="arc-empty-title">No puzzles yet!</p></div>
+        ):shown.length===0?(
+          <div className="arc-empty">
+            <p className="arc-empty-title">
+              {query.trim()
+                ? <>No {filter==="all"?"":filter+" "}puzzles match &ldquo;{query.trim()}&rdquo;.</>
+                : filter==="completed" ? "No completed puzzles yet." : "You've played every puzzle!"}
+            </p>
+            <button type="button" className="candy-pill" onClick={showAll}>Show all puzzles</button>
+          </div>
+        ):(
+          <ul className="arc-grid">
+            {shown.map((g,i)=>(
+              <ArchiveCard key={g.id} game={g} record={records[g.id]} isToday={g===todayGame}
+                           onAction={g===todayGame?onPlayToday:onReplay} eager={i<4}/>
+            ))}
+          </ul>
+        )}
+      </div>
       {showHelp&&<HomeHelp game={todayGame} onClose={()=>setShowHelp(false)}/>}
-    </div>
+    </CandyPageShell>
   );
 }
 
@@ -4371,7 +4468,7 @@ export default function WhatTheFudgeTrivia(){
   // is never shown, resumed or shared as today's.
   const todayRecord = gameRecord && todayGame && gameRecord.puzzleId===todayGame.id ? gameRecord : null;
   const isGameplay = view==="game"||view==="replay";
-  // Results carries its own warm backdrop and PageHeader, like Archive.
+  // Results carries its own warm backdrop and PageHeader, like Archive (CandyPageShell + SiteHeader).
   const isResults = view==="score"||view==="replay-score";
   // Stats and Account: the older shared header, over the gameplay backdrop.
   const usesSharedHeader = view!=="home"&&view!=="archive"&&!isGameplay&&!isResults;
@@ -4736,6 +4833,7 @@ export default function WhatTheFudgeTrivia(){
               sound={sound}
               onNav={setView}
               onReplay={handleReplay}
+              onPlayToday={handlePlay}
               onAdmin={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}
             />
           )}

@@ -321,7 +321,50 @@ export function demoGames() {
     categoryBImage: null,
     questions: longLabelQuestions(),
   };
-  return [{ ...demoGame(), ...todayOverrides() }, older, longLabels];
+  return [{ ...demoGame(), ...todayOverrides() }, older, longLabels, ...archiveDemoGames()];
+}
+
+// Set localStorage "wtf-dev-archive" to "full" for a fuller Archive: a dozen
+// past puzzles with candy-style category art in square, wide and tall
+// proportions (to check nothing is cropped), one with a missing image, one
+// retired, and a very long title. Off by default so every other screen keeps
+// its usual three demo puzzles.
+function archiveDemoGames() {
+  let mode = null;
+  try { mode = localStorage.getItem("wtf-dev-archive"); } catch { /* ignore */ }
+  if (mode !== "full") return [];
+  // Emoji on a transparent canvas, like the real cut-out candy art.
+  const art = (emoji, w = 120, h = 120) => svg(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">
+  <rect x="1" y="1" width="${w - 2}" height="${h - 2}" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="2" stroke-dasharray="6 5"/>
+  <text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" font-size="${Math.min(w, h) * 0.72}">${emoji}</text>
+</svg>`);
+  const rows = [
+    ["arc-dnd", 3, "Dungeons & Dragons Monster OR Real Animal?", "D&D Monster", "Real Animal", "purple", "green", art("🐙"), art("🧸")],
+    ["arc-selfhelp", 6, "Best Selling Self-Help Book OR AI Made Up One?", "Self-Help Book", "AI Made Up", "yellow", "blue", art("📚", 160, 100), art("🤖")],
+    ["arc-alien", 9, "Alien Species OR World City?", "Alien Species", "World City", "orange", "purple", art("👽"), art("🏙️", 100, 150)],
+    ["arc-music", 12, "Musical Instrument OR Silly Disguise?", "Musical Instrument", "Silly Disguise", "rose", "blue", art("🎸", 170, 100), art("🎭")],
+    ["arc-puppet", 15, "Puppet OR Singer?", "Puppet", "Singer", "green", "yellow", art("🧦", 100, 150), art("🎤")],
+    ["arc-dino", 18, "Cartoon Creature OR Dinosaur?", "Cartoon Creature", "Dinosaur", "blue", "pink", art("🦎"), art("🦖")],
+    ["arc-snack", 21, "Mystery Snack OR Household Object?", "Mystery Snack", "Household Object", "purple", "teal", art("🍩"), art("🧻")],
+    ["arc-missing", 24, "Cheese OR Font?", "Cheese", "Font", "amber", "sky", art("🧀"), null],
+    ["arc-long", 27, "Obscure Nineteenth-Century Patent Medicine OR Extremely Specific Modern Wellness Influencer Supplement Brand?", "Patent Medicine", "Wellness Supplement", "red", "lime", art("🧪", 100, 160), art("💊", 180, 100)],
+    ["arc-retired", 30, "Planet OR Pokémon?", "Planet", "Pokémon", "sky", "orange", art("🪐"), art("⚡"), "retired"],
+  ];
+  return rows.map(([id, ago, themeTitle, categoryA, categoryB, categoryAColor, categoryBColor, categoryAImage, categoryBImage, status = "published"]) => ({
+    ...demoGame(),
+    id,
+    date: daysAgoKey(ago),
+    themeTitle,
+    categoryA,
+    categoryB,
+    categoryAColor,
+    categoryBColor,
+    categoryAImage,
+    categoryBImage,
+    status,
+    questions: archiveQuestions(),
+  }));
 }
 
 // Set localStorage "wtf-dev-today" to a JSON object to override fields of
