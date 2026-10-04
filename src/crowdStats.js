@@ -20,7 +20,7 @@
    counted twice.
    ============================================================ */
 
-import { buildResultsShareText, strictlyBetterPercent } from "./share.js";
+import { buildImageShareText, buildResultsShareText, strictlyBetterPercent } from "./share.js";
 
 // Waits before the 2nd and 3rd read after the save. Three reads at most,
 // ~1.3s of waiting.
@@ -111,6 +111,15 @@ export function crowdBeatPercent(stats, score, { saved = true } = {}) {
 // The one share text for a finished game, used by Results and Home alike.
 // Its "Beat N%" is the Results hero's own number for today's saved result.
 export function shareTextFor(game, record, crowd) {
+  return shareTextsFor(game, record, crowd).text;
+}
+
+// Both share texts from one "Beat N%": `text`, the full text, and
+// `imageText`, the short text sent alongside the Home & Share poster.
+export function shareTextsFor(game, record, crowd) {
   const beatPercent = crowdBeatPercent(crowdStatsFor(crowd, record), record?.score);
-  return buildResultsShareText({ game, record, beatPercent });
+  return {
+    text: buildResultsShareText({ game, record, beatPercent }),
+    imageText: buildImageShareText({ record, beatPercent }),
+  };
 }

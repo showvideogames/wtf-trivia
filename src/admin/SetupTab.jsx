@@ -1,3 +1,4 @@
+import { useState } from "react";
 import ColorSwatches from "./ColorSwatches.jsx";
 import DatePicker from "./DatePicker.jsx";
 import Icon from "./Icon.jsx";
@@ -104,7 +105,7 @@ function CategoryCard({side, game, set, trackImage}){
 }
 
 // The category split on its own, drawn by the Home screen's artwork
-// component with the header left out, so a header upload never replaces it.
+// component with the artwork left out, so an artwork upload never replaces it.
 function CategoryMatchup({game}){
   const {HomeArt, palette} = useStudio();
   const colorA = paletteColor(palette, game.categoryAColor||"teal", 0);
@@ -141,28 +142,59 @@ function CategoryAppearance({game, set, trackImage}){
   );
 }
 
-// The optional header image plus a small preview of it. Players don't see
-// header artwork (Home and Archive show the category matchup); it appears
-// only in Admin, as the editor header thumbnail and on Preview's start card.
+// The square preview of the artwork, shown whole as Home shows it (never
+// cropped). It notes, without blocking anything, when the image isn't
+// square or is smaller than the recommended minimum.
+function ArtworkPreview({src, title}){
+  const[size,setSize]=useState(null); // {src, w, h} once the image loads
+  const[broken,setBroken]=useState(null);
+  const loaded = size&&size.src===src ? size : null;
+  const notSquare = loaded && loaded.w!==loaded.h;
+  const small = loaded && Math.min(loaded.w,loaded.h)<1200;
+  return(
+    <>
+      <div className="ps-art-square">
+        {broken===src
+          ? <div className="ps-media-broken">This image couldn&rsquo;t be loaded.</div>
+          : <img src={src} alt={title} onLoad={e=>setSize({src, w:e.currentTarget.naturalWidth, h:e.currentTarget.naturalHeight})} onError={()=>setBroken(src)}/>}
+      </div>
+      {loaded&&(
+        <div className={`ps-art-size${notSquare||small?" is-warn":""}`}>
+          {loaded.w}&times;{loaded.h}
+          {notSquare&&" · Not square: shown whole with space around it"}
+          {!notSquare&&small&&" · Smaller than the 1200×1200 minimum"}
+        </div>
+      )}
+    </>
+  );
+}
+
+// The puzzle's Home & Share artwork: a square poster that is Home's
+// centrepiece and the image a phone's share sheet sends with the result.
+// Stored in the existing headerImage field.
 function Artwork({game, set, trackImage}){
-  const {HomeArt} = useStudio();
   return(
     <section className="ps-panel ps-card" aria-labelledby="ps-artwork-title">
-      <CardHead icon="image" title={<span id="ps-artwork-title">Header artwork</span>} sub="An optional wide image saved with this puzzle. It appears only here in Admin: as the editor's header thumbnail and on the Preview start card."/>
+      <CardHead icon="image" title={<span id="ps-artwork-title">Home &amp; Share artwork</span>} sub="Upload a square image used as the centerpiece on Home and attached when players share their result."/>
       <div className="ps-artwork">
-        <ImageField label="Header image" value={game.headerImage||""} onChange={v=>set("headerImage",v)} preset="header"
-                    onBusyChange={trackImage("headerImage")} fieldId="img-field-headerImage" layout="wide"/>
+        <div className="ps-artwork-field">
+          <ImageField label="Artwork" value={game.headerImage||""} onChange={v=>set("headerImage",v)} preset="header"
+                      onBusyChange={trackImage("headerImage")} fieldId="img-field-headerImage" layout="square"/>
+          <ul className="ps-art-guide" aria-label="Artwork guidelines">
+            <li>Square, 1:1</li>
+            <li>Recommended: 1600&times;1600 PNG or JPG</li>
+            <li>Minimum: 1200&times;1200</li>
+            <li>Keep important text and subjects away from the outer edges</li>
+          </ul>
+        </div>
         <div className="ps-home-preview">
           <div className="ps-label">Preview</div>
           {game.headerImage?(
-            <div className="ps-home-mini">
-              <HomeArt game={game}/>
-              <div className="ps-home-mini-title">{game.themeTitle||"Untitled puzzle"}</div>
-            </div>
+            <ArtworkPreview src={game.headerImage} title={game.themeTitle||"Untitled puzzle"}/>
           ):(
             <div className="ps-home-empty">
-              <strong>No header artwork uploaded yet.</strong>
-              <span>It&rsquo;s optional and only shows in Admin.</span>
+              <strong>No artwork uploaded yet.</strong>
+              <span>Home shows the category matchup instead, and shares send text only.</span>
             </div>
           )}
         </div>

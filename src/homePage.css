@@ -168,6 +168,47 @@
   fill: var(--black);
 }
 
+/* ===== HOME & SHARE POSTER =====
+   A true square holding the puzzle's own poster whole: a square upload fills
+   it exactly; an older wide or tall image is `contain`ed on cream, never
+   cropped or stretched. Its side is the smaller of the column's width, a
+   cap, and the height left once everything else that must stay on screen
+   (header, heading, primary action) is accounted for (--hm-reserve, per
+   state and screen size below). The actions under it share its width, but
+   never get narrower than a comfortable button. */
+.hm-main:has(> .hm-artwork) {
+  /* Measured: ~190px above the poster (header, heading), then Play ~106px,
+     the progress line ~30px more, or the score panel down to See my
+     results ~204px, plus a little air at the bottom. */
+  --hm-reserve: 340px;
+  --hm-art: min(100%, 680px, max(200px, 100svh - var(--hm-reserve)));
+  --hm-hero-w: min(100%, max(var(--hm-art), 480px));
+}
+.hm-main:has(> .hm-artwork):has(.hm-progress) { --hm-reserve: 370px; }
+.hm-main:has(> .hm-artwork):has(.hm-done) { --hm-reserve: 430px; }
+.hm-artwork {
+  position: relative;
+  width: var(--hm-art);
+  aspect-ratio: 1 / 1;
+  margin-top: 18px;
+  overflow: hidden;
+  border: 3px solid var(--black);
+  border-radius: 26px;
+  background: var(--cs-cream);
+  box-shadow: 0 6px 0 var(--black);
+}
+/* The narrower column still fits Stats and Archive side by side. */
+.hm-main:has(> .hm-artwork) .hm-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Positioned, so the image's own proportions can never resize the square. */
+.hm-artwork img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 /* ===== PRIMARY ACTION ===== */
 .hm-cta {
   width: var(--hm-hero-w);
@@ -461,6 +502,11 @@
   .hm-name.is-short { font-size: max(18px, 7cqi); }
   .hm-name.is-long { font-size: max(15px, 4.8cqi); }
   .hm-name.is-xlong { font-size: max(13px, 3.7cqi); }
+  /* Phones: ~180px above the poster, Play ~76px, See my results ~200px. */
+  .hm-main:has(> .hm-artwork) { --hm-reserve: 280px; }
+  .hm-main:has(> .hm-artwork):has(.hm-progress) { --hm-reserve: 310px; }
+  .hm-main:has(> .hm-artwork):has(.hm-done) { --hm-reserve: 400px; }
+  .hm-artwork { margin-top: 14px; border-radius: 22px; box-shadow: 0 5px 0 var(--black); }
   .hm-cta { margin-top: 18px; }
   .hm-play { min-height: 70px; border-radius: 20px; font-size: clamp(21px, 6.4vw, 26px); box-shadow: 0 5px 0 var(--black); }
   .hm-play-ghost { min-height: 70px; border-radius: 20px; }

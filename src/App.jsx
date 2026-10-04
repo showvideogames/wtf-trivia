@@ -10,9 +10,9 @@ import "./backdrop.css";
 import "./admin/studio.css";
 import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from "./mediaPreloader.js";
 import { archivePuzzleImages, describeImageWarning, failureReason, imageName, isWarningResolved } from "./admin/publishImages.js";
-import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor } from "./crowdStats.js";
+import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor, shareTextsFor } from "./crowdStats.js";
 import { gameToRow, rowToGame } from "./gameRow.js";
-import { copyText, shareOrCopy } from "./homeShare.js";
+import { copyText, prepareShareImage, puzzleArtworkUrl, shareResult } from "./homeShare.js";
 import { answerWriteFilter, saveAnswerThenSync } from "./answerSync.js";
 import SharePreview from "./SharePreview.jsx";
 import ResultsCopyButton from "./ResultsCopyButton.jsx";
@@ -22,7 +22,7 @@ import ResultsScore from "./ResultsScore.jsx";
 import CandyPageShell from "./CandyPageShell.jsx";
 import SiteHeader from "./SiteHeader.jsx";
 import CategoryArtImage from "./CategoryArtImage.jsx";
-import { HomeBigButton, HomeCandyArt, HomeDonePanel, HomeFoot, HomeHeader, HomeHeading, HomeLinks, HomeMatchup, HomePage } from "./Home.jsx";
+import { HomeBigButton, HomeCandyArt, HomeDonePanel, HomeFoot, HomeHeader, HomeHeading, HomeHero, HomeLinks, HomePage } from "./Home.jsx";
 import { ARCHIVE_FILTERS, archivePuzzles, archiveTopicCounts, filterArchive, sortArchive, sortAvailable } from "./archiveList.js";
 import { emptyFavorites, toggleFavorite } from "./archiveFavorites.js";
 import ArchiveTopicFilter from "./ArchiveTopicFilter.jsx";
@@ -2695,10 +2695,10 @@ function RevealMedia({question, placeholder}){
 const SHOW_ADMIN_LINK = import.meta.env.DEV || import.meta.env.VITE_SHOW_ADMIN_LINK === "true";
 
 
-// The wide puzzle artwork. Uses the existing `headerImage` field, which the
-// admin editor already labels "shown on home screen & archive". When a puzzle
-// has no header image we fall back to a split of the two category images that
-// the same puzzle already stores, so nothing new is required of the content.
+// Admin's older artwork preview (Puzzle Studio's HomeArt): the stored
+// `headerImage`, else a split of the two category images. The Studio's
+// category matchup preview passes no headerImage, so it always shows the
+// split; players see the Home & Share artwork through Home.jsx instead.
 function HomePuzzleArt({game}){
   if(game.headerImage){
     return <img src={game.headerImage} alt={game.themeTitle} className="hp-art"
@@ -2733,9 +2733,9 @@ function HomeHelp({game,onClose}){
   );
 }
 
-// Home: today's matchup, then one big action -- Play (or Keep going! for a
-// game in progress), or, once today is finished, the score panel with See
-// my results and Share. Stats and Archive sit underneath. With no puzzle
+// Home: today's Home & Share poster (or, without one, the category matchup),
+// then one big action -- Play (or Keep going! for a game in progress), or,
+// once today is finished, the score panel with See my results and Share. Stats and Archive sit underneath. With no puzzle
 // scheduled today it points at the Archive instead. `game` is null then.
 function HomeScreen({game,gameRecord,stats,player,sound,onPlay,onNav,onAdmin,onShare}){
   const[showHelp,setShowHelp]=useState(false);
@@ -2744,6 +2744,9 @@ function HomeScreen({game,gameRecord,stats,player,sound,onPlay,onNav,onAdmin,onS
   const done = Boolean(gameRecord?.completed);
   const inProgress = Boolean(gameRecord && !gameRecord.completed && answered>0);
   const signedIn = player && !player.isGuest;
+  const artworkUrl = game ? puzzleArtworkUrl(game) : null;
+  // Once today is finished, have the poster ready for a phone's share sheet.
+  useEffect(()=>{ if(done&&artworkUrl) prepareShareImage(artworkUrl, navigator); },[done,artworkUrl]);
   const toTop = ()=>{
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     window.scrollTo({top:0, behavior:reduce?"auto":"smooth"});
@@ -2772,7 +2775,7 @@ function HomeScreen({game,gameRecord,stats,player,sound,onPlay,onNav,onAdmin,onS
       {game?(
         <>
           <HomeHeading eyebrow={<>Today&rsquo;s puzzle</>} title={game.themeTitle}/>
-          <HomeMatchup game={game} colors={categoryColors(game)}/>
+          <HomeHero game={game} colors={categoryColors(game)} artworkUrl={artworkUrl}/>
           {done?(
             <HomeDonePanel score={gameRecord.score} total={gameRecord.totalQuestions}
               message={scoreMsg(gameRecord.score, gameRecord.totalQuestions||1)}
@@ -4819,11 +4822,13 @@ export default function WhatTheFudgeTrivia(){
     setCrowd({puzzleId, score:finalRec.score, ...result});
   };
 
-  // Share today's result from the homepage: the same text Results copies.
-  // Resolves to shareOrCopy's outcome; HomeScreen shows the feedback.
+  // Share today's result from the homepage: the same full text Results
+  // copies, or on phones the puzzle's poster plus the short image text.
+  // Resolves to shareResult's outcome; HomeScreen shows the feedback.
   const handleShareToday = async() => {
     if(!todayRecord?.completed) return null;
-    return shareOrCopy(shareTextFor(todayGame, todayRecord, crowd), navigator);
+    const { text, imageText } = shareTextsFor(todayGame, todayRecord, crowd);
+    return shareResult({ text, imageText, imageUrl: puzzleArtworkUrl(todayGame) }, navigator);
   };
 
   // Replay

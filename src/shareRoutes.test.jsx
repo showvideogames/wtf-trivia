@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import SharePreview from "./SharePreview.jsx";
-import { shareTextFor } from "./crowdStats.js";
-import { copyText, shareOrCopy } from "./homeShare.js";
+import { shareTextFor, shareTextsFor } from "./crowdStats.js";
+import { copyText, shareOrCopy, shareResult } from "./homeShare.js";
 
 // Every share route must carry the one formatter's string, character for
 // character: the Results preview and copy button, Home's desktop copy, the
@@ -83,6 +83,58 @@ describe("all share routes use the formatter's exact string", () => {
     const game = { categoryAShareName: "A <very> long & \"quoted\" label that's going to wrap on phones 🤩🎬", categoryBShareName: "B" };
     const text = shareTextFor(game, RECORD, CROWD);
     expect(previewText(text)).toBe(text);
+  });
+});
+
+describe("the short text sent with the poster", () => {
+  // 8 questions, 5 right; 100 finishers: 67 below 5, 6 at 5 (you included), 27 above.
+  const record8 = { puzzleId: "g-zep", date: "2026-10-04", score: 5, totalQuestions: 8, completed: true,
+    answers: [..."11010110"].map((c, i) => ({ questionIndex: i, correct: c === "1" })) };
+  const crowd8 = { status: "ready", puzzleId: "g-zep", score: 5, stats: { finishedPlayers: 100, scoreHistogram: { 3: 67, 5: 6, 7: 27 } } };
+  const zep = { categoryA: "Led Zeppelin", categoryB: "My Little Pony", categoryAShareName: "Led Zeppelin 🎸", categoryBShareName: "My Little Pony 🦄" };
+
+  it("is exactly the circles, the score with Beat N%, and the domain", () => {
+    const { imageText } = shareTextsFor(zep, record8, crowd8);
+    expect(imageText).toBe("🟢🟢🔴🟢🔴🟢🟢🔴\n5/8 • Beat 67% of players\nwhatthefudge.gg");
+  });
+
+  it("has no header, divider, category name, emoji label or OR", () => {
+    const { imageText } = shareTextsFor(zep, record8, crowd8);
+    for (const part of ["What The Fudge Trivia", "🍬", "━", "Led Zeppelin", "My Little Pony", "🎸", "🦄", "OR"]) {
+      expect(imageText).not.toContain(part);
+    }
+    expect(imageText.split("\n")).toHaveLength(3);
+  });
+
+  it("keeps only the score on its middle line without a valid percentage", () => {
+    for (const crowd of [null, { ...crowd8, stats: { finishedPlayers: 1, scoreHistogram: { 5: 1 } } }]) {
+      expect(shareTextsFor(zep, record8, crowd).imageText).toBe("🟢🟢🔴🟢🔴🟢🟢🔴\n5/8\nwhatthefudge.gg");
+    }
+  });
+
+  it("is the full text's last three lines, from the same result", () => {
+    for (const crowd of [crowd8, null]) {
+      const { text, imageText } = shareTextsFor(zep, record8, crowd);
+      expect(text).toBe(shareTextFor(zep, record8, crowd));
+      expect(text.split("\n")).toHaveLength(9);
+      expect(text.split("\n").slice(6).join("\n")).toBe(imageText);
+    }
+  });
+
+  it("leaves the text-only share sheet, the desktop copy and the clipboard fallback on the full text", async () => {
+    const { text, imageText } = shareTextsFor(GAME, RECORD, CROWD);
+    expect(text).toBe(EXPECTED);
+    const poster = { text, imageText, imageUrl: "https://x.test/poster.png" };
+    const noFile = vi.fn().mockResolvedValue({ ok: false });
+    const textOnly = nav(IPHONE, vi.fn().mockResolvedValue(undefined));
+    const desktop = nav(WINDOWS, vi.fn());
+    const fallback = nav(IPHONE, vi.fn().mockRejectedValue(Object.assign(new Error("x"), { name: "NotAllowedError" })));
+    expect(await shareResult(poster, textOnly, { fetchImpl: noFile })).toBe("shared");
+    expect(await shareResult(poster, desktop, { fetchImpl: noFile })).toBe("copied");
+    expect(await shareResult(poster, fallback, { fetchImpl: noFile })).toBe("copied");
+    expect(textOnly.share.mock.calls[0][0]).toEqual({ text: EXPECTED });
+    expect(desktop.clipboard.writeText.mock.calls[0][0]).toBe(EXPECTED);
+    expect(fallback.clipboard.writeText.mock.calls[0][0]).toBe(EXPECTED);
   });
 });
 

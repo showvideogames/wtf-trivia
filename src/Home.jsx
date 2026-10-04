@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import CandyPageShell from "./CandyPageShell.jsx";
 import SiteHeader from "./SiteHeader.jsx";
 import CategoryArtImage from "./CategoryArtImage.jsx";
+import { shareFeedback } from "./homeShare.js";
 
 // ---- HOME ----
 // The category-first Home page, built on the Archive's custard shell and
@@ -113,6 +114,30 @@ export function HomeMatchup({ game, colors }) {
   );
 }
 
+// The puzzle's square Home & Share poster, whole: a 1:1 image fills the
+// square, anything else is `contain`ed inside it, never cropped or
+// stretched. The poster carries its own categories and OR, so nothing is
+// drawn over it. With no poster, or one that fails to load, `fallback`
+// (the category matchup) shows instead of a broken image.
+export function HomeArtwork({ src, alt, fallback }) {
+  const [failedSrc, setFailedSrc] = useState(null);
+  if (!src || failedSrc === src) return fallback;
+  return (
+    <div className="hm-artwork">
+      <img src={src} alt={alt} decoding="async" onError={() => setFailedSrc(src)}/>
+    </div>
+  );
+}
+
+// Today's centrepiece: the Home & Share poster when the puzzle has one,
+// otherwise the category matchup.
+export function HomeHero({ game, colors, artworkUrl }) {
+  return (
+    <HomeArtwork src={artworkUrl} alt={`${game.categoryA} or ${game.categoryB}`}
+      fallback={<HomeMatchup game={game} colors={colors}/>}/>
+  );
+}
+
 // The one big yellow-to-orange action.
 export function HomeBigButton({ children, onClick, describedBy }) {
   return (
@@ -155,7 +180,7 @@ function ShareGlyph() {
 }
 
 // Today is finished: the real score, the Results copy for it, See my results
-// and the existing Home Share (onShare resolves to shareOrCopy's outcome).
+// and the existing Home Share (onShare resolves to shareResult's outcome).
 // No replay from here.
 export function HomeDonePanel({ score, total, message, onResults, onShare }) {
   // Share feedback: "copied" flips the button label for a moment; "failed"
@@ -170,11 +195,9 @@ export function HomeDonePanel({ score, total, message, onResults, onShare }) {
     clearTimeout(copiedTimer.current);
     setShareStatus(null);
     try {
-      const outcome = await onShare();
-      if (outcome === "copied") {
-        setShareStatus("copied");
-        copiedTimer.current = setTimeout(() => setShareStatus(null), 2000);
-      } else if (outcome === "failed") setShareStatus("failed");
+      const status = shareFeedback(await onShare());
+      setShareStatus(status);
+      if (status === "copied") copiedTimer.current = setTimeout(() => setShareStatus(null), 2000);
     } finally { shareBusy.current = false; }
   };
   return (
