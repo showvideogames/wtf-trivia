@@ -11,6 +11,8 @@
    layer is used instead. It never talks to any database.
    ============================================================ */
 
+import { answerWriteApplies } from "../answerSync.js";
+
 const svg = (markup) =>
   `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup.replace(/\s+/g, " ").trim())}`;
 
@@ -425,6 +427,25 @@ export const devPlayer = {
   createdAt: new Date().toISOString(),
 };
 
+// Set localStorage "wtf-dev-player" to "signed-in" to review the signed-in
+// header and Home (a made-up address; nothing is authenticated).
+export function devCurrentPlayer() {
+  let mode = null;
+  try { mode = localStorage.getItem("wtf-dev-player"); } catch { /* ignore */ }
+  return mode === "signed-in" ? { ...devPlayer, email: "player@example.test", isGuest: false } : devPlayer;
+}
+
+// Set localStorage "wtf-dev-boot" to "slow" (a 4s load), "hang" (never
+// finishes, to hold the loading page) or "fail" (every load fails, to show
+// the boot error page).
+export async function devBootCheck() {
+  let mode = null;
+  try { mode = localStorage.getItem("wtf-dev-boot"); } catch { /* ignore */ }
+  if (mode === "fail") throw new Error("Simulated load failure (wtf-dev-boot=fail)");
+  if (mode === "slow") await new Promise((r) => setTimeout(r, 4000));
+  if (mode === "hang") await new Promise(() => {});
+}
+
 export function devGetRecord(puzzleId) {
   return readJSON(RECORD_KEY, {})[puzzleId] || null;
 }
@@ -452,11 +473,14 @@ export function devInitRecord(game) {
   return all[game.id];
 }
 
+// The live save's rule (see answerSync.js): it lands only on an unfinished
+// record holding fewer answers. Returns whether it landed.
 export function devRecordAnswer(puzzleId, answers, score) {
   const all = readJSON(RECORD_KEY, {});
-  if (!all[puzzleId]) return;
+  if (!answerWriteApplies(all[puzzleId], answers)) return false;
   all[puzzleId] = { ...all[puzzleId], answers, score, currentIndex: answers.length };
   writeJSON(RECORD_KEY, all);
+  return true;
 }
 
 // Set localStorage "wtf-dev-complete" to "fail" (the save is rejected) or

@@ -141,19 +141,19 @@ function CategoryAppearance({game, set, trackImage}){
   );
 }
 
-// The header image plus a small Home card preview drawn by the Home screen's
-// own artwork component. Without a header, Home and Archive fall back to the
-// category split, which the matchup preview above already shows.
+// The optional header image plus a small preview of it. Players don't see
+// header artwork (Home and Archive show the category matchup); it appears
+// only in Admin, as the editor header thumbnail and on Preview's start card.
 function Artwork({game, set, trackImage}){
   const {HomeArt} = useStudio();
   return(
     <section className="ps-panel ps-card" aria-labelledby="ps-artwork-title">
-      <CardHead icon="image" title={<span id="ps-artwork-title">Home &amp; Archive artwork</span>} sub="The wide image shown on the Home screen and in the Archive."/>
+      <CardHead icon="image" title={<span id="ps-artwork-title">Header artwork</span>} sub="An optional wide image saved with this puzzle. It appears only here in Admin: as the editor's header thumbnail and on the Preview start card."/>
       <div className="ps-artwork">
         <ImageField label="Header image" value={game.headerImage||""} onChange={v=>set("headerImage",v)} preset="header"
                     onBusyChange={trackImage("headerImage")} fieldId="img-field-headerImage" layout="wide"/>
         <div className="ps-home-preview">
-          <div className="ps-label">Preview (Home &amp; Archive)</div>
+          <div className="ps-label">Preview</div>
           {game.headerImage?(
             <div className="ps-home-mini">
               <HomeArt game={game}/>
@@ -162,7 +162,7 @@ function Artwork({game, set, trackImage}){
           ):(
             <div className="ps-home-empty">
               <strong>No header artwork uploaded yet.</strong>
-              <span>Home and Archive will use the category artwork shown above.</span>
+              <span>It&rsquo;s optional and only shows in Admin.</span>
             </div>
           )}
         </div>

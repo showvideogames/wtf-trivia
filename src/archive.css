@@ -612,17 +612,11 @@
    At 100% zoom the Archive should read like the owner's preferred 80%
    view: a ~976px column, cards ~476px wide with ~238px of artwork, and a
    slimmer header, heading and controls. Real sizes, never zoom or
-   transforms. Scoped to the Archive (the site header is shared later), and
-   only from 900px, so phones and tablets keep their layout. Controls stay
+   transforms. Scoped to the Archive (the slimmer site header now lives in
+   site.css, shared with Home), and only from 900px, so phones and tablets keep their layout. Controls stay
    at least 38px tall. */
 @media (min-width: 900px) {
   .arc-inner { max-width: 1024px; padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: 60px; }
-
-  .arc-inner .sh-bar { min-height: 62px; padding: 6px 14px; gap: 12px; border-radius: 20px; }
-  .arc-inner .sh-logo { height: 52px; max-width: 120px; }
-  .arc-inner .sh-link { font-size: 15px; min-height: 38px; padding: 9px 14px; }
-  .arc-inner .sh-icon-btn { width: 38px; height: 38px; font-size: 17px; }
-  .arc-inner .sh-account { min-height: 38px; padding: 0 14px; font-size: 14px; }
 
   .arc-head { margin-top: 20px; }
   .arc-title { gap: 13px; font-size: clamp(40px, 3.4vw, 52px); }
