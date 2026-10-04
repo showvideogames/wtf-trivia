@@ -102,7 +102,7 @@ export function isWarningResolved(game, failure) {
 
 /** What to call a failed image in a sentence. */
 export function imageName(failure, game) {
-  if (failure.kind === "header") return "The header image";
+  if (failure.kind === "header") return "The Home & Share artwork";
   if (failure.kind === "category") {
     const cat = failure.slot === "A" ? game?.categoryA : game?.categoryB;
     return `The Category ${failure.slot} image${cat ? ` (${cat})` : ""}`;

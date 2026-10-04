@@ -162,7 +162,7 @@ describe("warnings", () => {
     expect(describeImageWarning([f()], g, "Saved").title).toBe("Saved with 1 image warning");
   });
   it("names header, category and untitled question images", () => {
-    expect(imageName({ kind: "header" }, g)).toBe("The header image");
+    expect(imageName({ kind: "header" }, g)).toBe("The Home & Share artwork");
     expect(imageName({ kind: "category", slot: "B" }, g)).toBe("The Category B image (Not)");
     expect(imageName({ kind: "question", itemText: "  ", questionIndex: 4 }, g)).toBe("“Question 5”");
   });

@@ -38,10 +38,10 @@ export const PROFILES = {
     minLongEdge: 960,
     smallLongEdge: 600,
   },
-  // Home (cover, 2.05:1 phone / 2.75:1 desktop, up to 840 x 305 CSS px) and
-  // the Archive "today" card (contain, 3:2, up to 960 x 640 CSS px).
+  // Home & Share artwork (the headerImage field): a square poster, shown
+  // whole on Home (up to 680 x 680 CSS px) and sent as the share image.
   header: {
-    label: "header image",
+    label: "Home & Share artwork",
     maxWidth: 1800,
     maxHeight: 1800,
     targetBytes: 500 * KB,

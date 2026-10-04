@@ -11,12 +11,19 @@ import { normalizeTags } from "./topics.js";
 // when the puzzle has any, or when its row came back with a tags column (so
 // removing the last tag saves []). An untagged puzzle saves exactly as
 // before on a database that hasn't run the migration yet.
+//
+// Category subtitles (supabase/category_subtitles.sql) are the optional
+// second line under each name in the gameplay matchup banner ("Song").
+// Same rule as share names: sent when the puzzle has one, or when its row
+// came back with the columns (so clearing one saves null).
 function trimmedShareName(value){
   return typeof value==="string" && value.trim() ? value.trim() : null;
 }
 export function gameToRow(g){
   const shareA = trimmedShareName(g.categoryAShareName);
   const shareB = trimmedShareName(g.categoryBShareName);
+  const subA = trimmedShareName(g.categoryASubtitle);
+  const subB = trimmedShareName(g.categoryBSubtitle);
   const tags = normalizeTags(g.tags);
   return {
     id: g.id,
@@ -32,6 +39,7 @@ export function gameToRow(g){
     status: g.status,
     questions: g.questions||[],
     ...(shareA||shareB||g.shareNameColumns ? {category_a_share_name:shareA, category_b_share_name:shareB} : {}),
+    ...(subA||subB||g.subtitleColumns ? {category_a_subtitle:subA, category_b_subtitle:subB} : {}),
     ...(tags.length||g.tagsColumn ? {tags} : {})
   };
 }
@@ -50,6 +58,9 @@ export function rowToGame(r){
     categoryAShareName: r.category_a_share_name||"",
     categoryBShareName: r.category_b_share_name||"",
     shareNameColumns: "category_a_share_name" in r,
+    categoryASubtitle: r.category_a_subtitle||"",
+    categoryBSubtitle: r.category_b_subtitle||"",
+    subtitleColumns: "category_a_subtitle" in r,
     tags: normalizeTags(r.tags),
     tagsColumn: "tags" in r,
     status: r.status,

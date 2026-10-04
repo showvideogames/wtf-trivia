@@ -1,53 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import CandyPageShell from "./CandyPageShell.jsx";
-import SiteHeader from "./SiteHeader.jsx";
 import CategoryArtImage from "./CategoryArtImage.jsx";
+import { shareFeedback } from "./homeShare.js";
 
 // ---- HOME ----
-// The category-first Home page, built on the Archive's custard shell and
-// cream site header. The daily matchup is the star, the Play button is the
-// one big action, and everything else supports those two. App.jsx keeps the
-// data and behaviour (start/resume, results, share, navigation); these are
-// the presentational pieces, plus the loading and error pages, which reuse
-// the same shell and header so the finished page doesn't jump.
+// The category-first Home page, built on the Archive's custard shell. The
+// daily poster is the star, the Play button is the one big action, and
+// everything else supports those two. App.jsx keeps the data and behaviour
+// (start/resume, results, share, navigation) and draws the shared
+// PlayerHeader above every screen; these are the presentational pieces, plus
+// the loading and error pages, which reuse the same shell so the finished
+// page doesn't jump.
 
-// The page frame: shell, the shared header, then the centred hero column.
-// `pending` (loading and error) keeps the header's geometry but makes it
-// inert, since there is nothing behind its links yet.
-export function HomePage({ header, pending = false, children }) {
+// The page frame: shell, then the centred hero column.
+export function HomePage({ children }) {
   return (
     <CandyPageShell className="hm-page">
       <div className="hm-inner">
-        {pending
-          ? <div className="hm-header-pending" inert>{header}</div>
-          : header}
         <main className="hm-main">{children}</main>
       </div>
     </CandyPageShell>
-  );
-}
-
-// The shared SiteHeader with Home's links: Play (this page), Archive and
-// How to Play, then sound, the dev-only Admin gear and the account control.
-export function HomeHeader({ player, sound, onPlay, onArchive, onHelp, onAccount, admin, accountLabel }) {
-  const signedIn = Boolean(player && !player.isGuest);
-  return (
-    <SiteHeader
-      current="play"
-      nav={[
-        { id: "play", label: "Play", onClick: onPlay },
-        { id: "archive", label: "Archive", onClick: onArchive },
-        { id: "help", label: "How to Play", onClick: onHelp },
-      ]}
-      sound={sound}
-      account={{
-        signedIn,
-        label: signedIn ? accountLabel : "Sign in",
-        title: signedIn ? (player.email || "Account") : "Sign in",
-        onClick: onAccount,
-      }}
-      admin={admin}
-    />
   );
 }
 
@@ -113,6 +85,37 @@ export function HomeMatchup({ game, colors }) {
   );
 }
 
+// Today's heading and centrepiece. With a Home & Share poster, the poster is
+// the star and already prints the categories and OR, so the title isn't
+// repeated above it: the small eyebrow is the page's h1 and the puzzle's
+// title is the poster's alt text, announced once. The poster is shown
+// whole: a 1:1 image fills the square, anything else is `contain`ed inside
+// it, never cropped or stretched, with nothing drawn over it. With no
+// poster, or one that fails to load, the visible title and the category
+// matchup show instead of a broken image.
+export function HomeHero({ game, colors, artworkUrl, eyebrow }) {
+  const [failedSrc, setFailedSrc] = useState(null);
+  if (!artworkUrl || failedSrc === artworkUrl) {
+    return (
+      <>
+        <HomeHeading eyebrow={eyebrow} title={game.themeTitle}/>
+        <HomeMatchup game={game} colors={colors}/>
+      </>
+    );
+  }
+  const alt = game.themeTitle?.trim() || `${game.categoryA} or ${game.categoryB}`;
+  return (
+    <>
+      <div className="hm-heading">
+        <h1 className="hm-eyebrow">{eyebrow}</h1>
+      </div>
+      <div className="hm-artwork">
+        <img src={artworkUrl} alt={alt} decoding="async" onError={() => setFailedSrc(artworkUrl)}/>
+      </div>
+    </>
+  );
+}
+
 // The one big yellow-to-orange action.
 export function HomeBigButton({ children, onClick, describedBy }) {
   return (
@@ -155,7 +158,7 @@ function ShareGlyph() {
 }
 
 // Today is finished: the real score, the Results copy for it, See my results
-// and the existing Home Share (onShare resolves to shareOrCopy's outcome).
+// and the existing Home Share (onShare resolves to shareResult's outcome).
 // No replay from here.
 export function HomeDonePanel({ score, total, message, onResults, onShare }) {
   // Share feedback: "copied" flips the button label for a moment; "failed"
@@ -170,11 +173,9 @@ export function HomeDonePanel({ score, total, message, onResults, onShare }) {
     clearTimeout(copiedTimer.current);
     setShareStatus(null);
     try {
-      const outcome = await onShare();
-      if (outcome === "copied") {
-        setShareStatus("copied");
-        copiedTimer.current = setTimeout(() => setShareStatus(null), 2000);
-      } else if (outcome === "failed") setShareStatus("failed");
+      const status = shareFeedback(await onShare());
+      setShareStatus(status);
+      if (status === "copied") copiedTimer.current = setTimeout(() => setShareStatus(null), 2000);
     } finally { shareBusy.current = false; }
   };
   return (

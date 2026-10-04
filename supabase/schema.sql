@@ -36,6 +36,8 @@ create table if not exists public.games (
   header_image text,
   category_a_share_name text,
   category_b_share_name text,
+  category_a_subtitle text,
+  category_b_subtitle text,
   tags text[] not null default '{}'::text[],
   status text not null default 'draft',
   questions jsonb not null default '[]'::jsonb,

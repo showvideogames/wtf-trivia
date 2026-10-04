@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, useId } from "react";
+import { Fragment, useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, useId } from "react";
 import { createClient } from "@supabase/supabase-js";
 import "./home.css";
 import "./game.css";
@@ -10,9 +10,13 @@ import "./backdrop.css";
 import "./admin/studio.css";
 import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from "./mediaPreloader.js";
 import { archivePuzzleImages, describeImageWarning, failureReason, imageName, isWarningResolved } from "./admin/publishImages.js";
-import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor } from "./crowdStats.js";
+import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor, shareTextsFor } from "./crowdStats.js";
 import { gameToRow, rowToGame } from "./gameRow.js";
-import { copyText, shareOrCopy } from "./homeShare.js";
+import { copyText, prepareShareImage, puzzleArtworkUrl, shareResult } from "./homeShare.js";
+import { normalizeShareLabel } from "./share.js";
+import PlayerHeader from "./PlayerHeader.jsx";
+import GameProgress from "./GameProgress.jsx";
+import { PlayerChromeContext } from "./playerChrome.js";
 import { answerWriteFilter, saveAnswerThenSync } from "./answerSync.js";
 import SharePreview from "./SharePreview.jsx";
 import ResultsCopyButton from "./ResultsCopyButton.jsx";
@@ -20,9 +24,8 @@ import { CrowdPanel, CrowdTiles } from "./ResultsCrowd.jsx";
 import ResultsNerdMode from "./ResultsNerdMode.jsx";
 import ResultsScore from "./ResultsScore.jsx";
 import CandyPageShell from "./CandyPageShell.jsx";
-import SiteHeader from "./SiteHeader.jsx";
 import CategoryArtImage from "./CategoryArtImage.jsx";
-import { HomeBigButton, HomeCandyArt, HomeDonePanel, HomeFoot, HomeHeader, HomeHeading, HomeLinks, HomeMatchup, HomePage } from "./Home.jsx";
+import { HomeBigButton, HomeCandyArt, HomeDonePanel, HomeFoot, HomeHeading, HomeHero, HomeLinks, HomePage } from "./Home.jsx";
 import { ARCHIVE_FILTERS, archivePuzzles, archiveTopicCounts, filterArchive, sortArchive, sortAvailable } from "./archiveList.js";
 import { emptyFavorites, toggleFavorite } from "./archiveFavorites.js";
 import ArchiveTopicFilter from "./ArchiveTopicFilter.jsx";
@@ -228,12 +231,13 @@ const styles = `
     align-items: center;
   }
 
-  /* Gameplay is a fixed game screen on phones, never a scrolling page: a hard
-     dynamic-viewport height (not the min-height every other screen uses) is
-     what lets the flex chain below actually shrink content to fit, instead of
-     only ever growing to fill it. Desktop/tablet keep the ordinary flow. */
+  /* The reveal is one fixed screen on phones: a hard dynamic-viewport height
+     (not the min-height every other screen uses) is what lets the flex chain
+     in game.css shrink the reveal media to fit, so Next stays on screen. The
+     question phase has fixed-size parts and simply scrolls on a very short
+     phone. Desktop/tablet keep the ordinary flow. */
   @media (max-width: 599px) {
-    .app.gp-fullscreen {
+    .app.gp-fullscreen:has(.gp-wrap.gp-r) {
       height: 100dvh;
       min-height: 100dvh;
     }
@@ -1944,12 +1948,13 @@ async function dbSaveGame(game){
     const confirmed = Array.isArray(saved) && saved.some(r=>r.id===row.id && r.date===row.date && r.status===row.status);
     if(!confirmed) throw new Error("The database didn't confirm the save.");
   }
-  // A save that carried share names (or tags) proves the columns exist, so
-  // later saves from this editor always send them (clearing a name then
-  // saves null, and removing the last tag saves []).
+  // A save that carried share names, subtitles or tags proves the columns
+  // exist, so later saves from this editor always send them (clearing a name
+  // then saves null, and removing the last tag saves []).
   const saved = {
     ...uploaded,
     ...("category_a_share_name" in row ? {shareNameColumns:true} : {}),
+    ...("category_a_subtitle" in row ? {subtitleColumns:true} : {}),
     ...("tags" in row ? {tagsColumn:true} : {})
   };
   return { game: saved, imageFailures: failures };
@@ -1961,6 +1966,7 @@ function describeSaveError(e){
   const status = msg.match(/Supabase error (\d{3})/)?.[1];
   if(status==="401"||status==="403") return "the database refused the change (permission denied).";
   if(msg.includes("_share_name")) return "the database doesn't have the share-name columns yet (supabase/share_names.sql). Clear both share names to save without them.";
+  if(msg.includes("_subtitle")) return "the database doesn't have the category subtitle columns yet (supabase/category_subtitles.sql). Clear both subtitles to save without them.";
   if(msg.includes("'tags' column")) return "the database doesn't have the topic tags column yet (supabase/puzzle_tags.sql). Deselect every topic to save without it.";
   if(msg.includes("games_one_published_per_date")) return "another published puzzle already has that date. Pick another day.";
   if(msg.includes("game_records_puzzle_id_fkey")) return "players have already played this puzzle, so it can't be deleted. Retire it instead.";
@@ -2695,10 +2701,10 @@ function RevealMedia({question, placeholder}){
 const SHOW_ADMIN_LINK = import.meta.env.DEV || import.meta.env.VITE_SHOW_ADMIN_LINK === "true";
 
 
-// The wide puzzle artwork. Uses the existing `headerImage` field, which the
-// admin editor already labels "shown on home screen & archive". When a puzzle
-// has no header image we fall back to a split of the two category images that
-// the same puzzle already stores, so nothing new is required of the content.
+// Admin's older artwork preview (Puzzle Studio's HomeArt): the stored
+// `headerImage`, else a split of the two category images. The Studio's
+// category matchup preview passes no headerImage, so it always shows the
+// split; players see the Home & Share artwork through Home.jsx instead.
 function HomePuzzleArt({game}){
   if(game.headerImage){
     return <img src={game.headerImage} alt={game.themeTitle} className="hp-art"
@@ -2733,27 +2739,21 @@ function HomeHelp({game,onClose}){
   );
 }
 
-// Home: today's matchup, then one big action -- Play (or Keep going! for a
-// game in progress), or, once today is finished, the score panel with See
-// my results and Share. Stats and Archive sit underneath. With no puzzle
-// scheduled today it points at the Archive instead. `game` is null then.
-function HomeScreen({game,gameRecord,stats,player,sound,onPlay,onNav,onAdmin,onShare}){
-  const[showHelp,setShowHelp]=useState(false);
+// Home: today's Home & Share poster (or, without one, the category matchup),
+// then one big action -- Play (or Keep going! for a game in progress), or,
+// once today is finished, the score panel with See my results and Share.
+// Stats and Archive sit underneath. With no puzzle scheduled today it points
+// at the Archive instead. `game` is null then. The header is App's shared
+// PlayerHeader.
+function HomeScreen({game,gameRecord,stats,player,onPlay,onNav,onHelp,onShare}){
   const answered = gameRecord?.answers?.length||0;
   const total = gameRecord?.totalQuestions||game?.questions.length||0;
   const done = Boolean(gameRecord?.completed);
   const inProgress = Boolean(gameRecord && !gameRecord.completed && answered>0);
   const signedIn = player && !player.isGuest;
-  const toTop = ()=>{
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    window.scrollTo({top:0, behavior:reduce?"auto":"smooth"});
-  };
-  const header = (
-    <HomeHeader player={player} sound={sound} accountLabel={formatAccountLabel(player?.email)}
-      onPlay={toTop} onArchive={()=>onNav("archive")} onHelp={()=>setShowHelp(true)}
-      onAccount={()=>onNav("account")}
-      admin={SHOW_ADMIN_LINK&&onAdmin ? {onClick:onAdmin, icon:<FI name="gear" size={22}/>} : null}/>
-  );
+  const artworkUrl = game ? puzzleArtworkUrl(game) : null;
+  // Once today is finished, have the poster ready for a phone's share sheet.
+  useEffect(()=>{ if(done&&artworkUrl) prepareShareImage(artworkUrl, navigator); },[done,artworkUrl]);
   const links = [
     {id:"stats", label:"Stats", tone:"teal", icon:<FI name="chart" size={30}/>, onClick:()=>onNav("stats")},
     {id:"archive", label:"Archive", tone:"orange", icon:<FI name="cal" size={30}/>, onClick:()=>onNav("archive")},
@@ -2768,11 +2768,10 @@ function HomeScreen({game,gameRecord,stats,player,sound,onPlay,onNav,onAdmin,onS
   );
 
   return(
-    <HomePage header={header}>
+    <HomePage>
       {game?(
         <>
-          <HomeHeading eyebrow={<>Today&rsquo;s puzzle</>} title={game.themeTitle}/>
-          <HomeMatchup game={game} colors={categoryColors(game)}/>
+          <HomeHero game={game} colors={categoryColors(game)} artworkUrl={artworkUrl} eyebrow={<>Today&rsquo;s puzzle</>}/>
           {done?(
             <HomeDonePanel score={gameRecord.score} total={gameRecord.totalQuestions}
               message={scoreMsg(gameRecord.score, gameRecord.totalQuestions||1)}
@@ -2795,24 +2794,20 @@ function HomeScreen({game,gameRecord,stats,player,sound,onPlay,onNav,onAdmin,onS
           <div className="hm-cta">
             <HomeBigButton onClick={()=>onNav("archive")}>BROWSE THE ARCHIVE</HomeBigButton>
           </div>
-          <HomeLinks links={[{id:"help", label:"How to Play", tone:"cream", chevron:false, onClick:()=>setShowHelp(true)}]}/>
+          <HomeLinks links={[{id:"help", label:"How to Play", tone:"cream", chevron:false, onClick:onHelp}]}/>
         </>
       )}
       {foot}
-      {showHelp&&<HomeHelp game={game} onClose={()=>setShowHelp(false)}/>}
     </HomePage>
   );
 }
 
 // Boot loading and boot failure, drawn in Home's own frame (the app always
-// boots onto Home) so nothing jumps when the real page arrives. The header
-// keeps its shape but is inert: there's nothing behind its links yet.
-function HomeStatusHeader({sound}){
-  return <HomeHeader player={null} sound={sound} onPlay={()=>{}} onArchive={()=>{}} onHelp={()=>{}} onAccount={()=>{}}/>;
-}
-function HomeLoadingPage({sound}){
+// boots onto Home) so nothing jumps when the real page arrives. App draws
+// the shared header above them, inert: there's nothing behind its links yet.
+function HomeLoadingPage(){
   return(
-    <HomePage pending header={<HomeStatusHeader sound={sound}/>}>
+    <HomePage>
       <div className="hm-heading">
         <p className="hm-eyebrow">Today&rsquo;s puzzle</p>
         <p className="hm-title hm-title-quiet" role="status">Mixing today&rsquo;s trivia&hellip;</p>
@@ -2822,9 +2817,9 @@ function HomeLoadingPage({sound}){
     </HomePage>
   );
 }
-function HomeErrorPage({sound,detail,onRetry}){
+function HomeErrorPage({detail,onRetry}){
   return(
-    <HomePage pending header={<HomeStatusHeader sound={sound}/>}>
+    <HomePage>
       <HomeHeading eyebrow="Uh-oh" title="Something got scrambled."/>
       {detail&&<p className="hm-error-detail" role="alert">{detail}</p>}
       <HomeCandyArt/>
@@ -2838,54 +2833,70 @@ function HomeErrorPage({sound,detail,onRetry}){
 
 // ---- GAME ----
 
-// One compact row: Back at the left, the wordmark centred between the controls,
-// the player tools at the right. See .gp-hdr for why the wordmark is centred in
-// the gap rather than on the page.
-function GameHeader({player,sound,onBack,onHelp,onAccount}){
-  const signedIn = player && !player.isGuest;
-  return(
-    <header className="gp-hdr">
-      <div className="gp-hdr-left">
-        <button className="gp-back" onClick={onBack}>
-          <span className="gp-back-arrow" aria-hidden="true">←</span>
-          <span className="gp-back-txt">Back</span>
-        </button>
-        <button className="gp-sound" onClick={()=>sound.setMuted(m=>!m)}
-                aria-pressed={!sound.muted}
-                aria-label={sound.muted?"Turn sound on":"Turn sound off"}
-                title={sound.muted?"Turn sound on":"Turn sound off"}>
-          {sound.muted?"\u{1F507}":"\u{1F50A}"}
-        </button>
-      </div>
-      <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="gp-hdr-logo"/>
-      <div className="gp-hdr-right">
-        <button className="gp-help" onClick={onHelp} aria-label="How to play" title="How to play">?</button>
-        <button className={signedIn?"gp-signin gp-acct":"gp-signin"} onClick={onAccount}
-                title={signedIn?(player.email||"Account"):"Sign in"}>
-          {signedIn?formatAccountLabel(player.email):"Sign in"}
-        </button>
-      </div>
-    </header>
-  );
+// The puzzle's identity above the question: a small label, then one rounded
+// banner split between the two categories' saved colours, each name on its
+// own half with its optional subtitle as a second line ("Led Zeppelin" /
+// "Song"), and the yellow OR badge over the division. Every line is fitted
+// with FitText and all of them show the smallest fitted size, so a name and
+// its subtitle read as one two-line label, the halves always match, and only
+// a long name or subtitle makes them shrink.
+// Read as "Led Zeppelin Song or My Little Pony Song".
+// True while the media query matches; follows changes (rotation, resizing).
+function useMediaQuery(query){
+  const[matches,setMatches]=useState(()=>typeof window!=="undefined"&&window.matchMedia(query).matches);
+  useEffect(()=>{
+    const mq=window.matchMedia(query);
+    const onChange=()=>setMatches(mq.matches);
+    onChange();
+    mq.addEventListener("change",onChange);
+    return()=>mq.removeEventListener("change",onChange);
+  },[query]);
+  return matches;
 }
 
-// Progress rides on the clue card's top border rather than occupying a box of
-// its own. The balls are decoration only -- they carry no meaning a screen
-// reader could use -- so they are hidden from the accessibility tree and the
-// position is announced as text instead.
-function GameProgressDots({total,currentIndex}){
-  // Shrink the balls for unusually long puzzles so the row still fits across
-  // the card at 360px without wrapping into the clue text.
-  const size = total>16 ? 10 : total>12 ? 12 : 14;
+function GameMatchup({game,label}){
+  const id=useId();
+  // Size ceilings for the fitted text: the taller tablet/desktop banner
+  // (game.css, 600px and up) carries larger names.
+  const roomy=useMediaQuery("(min-width: 600px)");
+  const [colA,colB]=categoryColors(game);
+  const sides=[
+    {cat:"A",name:game.categoryA||"Category A",sub:normalizeShareLabel(game.categoryASubtitle),color:colA},
+    {cat:"B",name:game.categoryB||"Category B",sub:normalizeShareLabel(game.categoryBSubtitle),color:colB},
+  ];
+  const withSub=sides.some(x=>x.sub);
+  // A long name gets a taller banner with room for two lines above its
+  // subtitle, rather than shrinking to fit one.
+  const longName=withSub&&Math.max(...sides.map(x=>x.name.length))>18;
+  const[nameFit,setNameFit]=useState({});
+  const[subFit,setSubFit]=useState({});
+  const shared=(fit,cat,size)=>fit[cat]===size?fit:{...fit,[cat]:size};
+  // One size for every line of the banner: the smallest that any name or
+  // subtitle needs, so a subtitle reads as the second line of the same
+  // label rather than smaller supporting text, and the halves match.
+  const fits=[nameFit.A,nameFit.B,...(withSub?[subFit.A,subFit.B]:[])];
+  const lineSize=fits.every(Boolean)?Math.min(...fits):undefined;
   return(
-    <ol className="gp-dots" aria-hidden="true" style={{"--gp-dot-size":`${size}px`}}>
-      {Array.from({length:total}).map((_,i)=>{
-        let cls="gp-dot";
-        if(i<currentIndex)cls+=" done";
-        else if(i===currentIndex)cls+=" cur";
-        return <li key={i} className={cls}/>;
-      })}
-    </ol>
+    <section className="gp-mu" aria-labelledby={id}>
+      <p className="gp-mu-label" id={id}>{label}</p>
+      <div className={`gp-mu-bar${withSub?" has-sub":""}${longName?" is-long":""}`}>
+        {sides.map((x,i)=>(
+          <Fragment key={x.cat}>
+            {i===1&&<span className="gp-sr"> or </span>}
+            <div className={`gp-mu-half gp-mu-${x.cat.toLowerCase()}`}
+                 style={{"--mu-bg":x.color.mid,"--mu-edge":x.color.dark,"--mu-ink":x.color.isDark?"#fff":"var(--black)"}}>
+              <FitText className="gp-mu-name" min={11} max={roomy?26:20} oneLine={withSub&&!longName} buffer={2}
+                onFit={size=>setNameFit(f=>shared(f,x.cat,size))} forceSize={lineSize}>{x.name}</FitText>
+              {withSub&&(
+                <FitText className="gp-mu-sub" min={11} max={roomy?26:20} oneLine buffer={2}
+                  onFit={size=>setSubFit(f=>shared(f,x.cat,size))} forceSize={lineSize}>{x.sub||" "}</FitText>
+              )}
+            </div>
+          </Fragment>
+        ))}
+        <span className="gp-mu-or" aria-hidden="true">OR</span>
+      </div>
+    </section>
   );
 }
 
@@ -3058,14 +3069,28 @@ function GameRevealMedia({question}){
   );
 }
 
-function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,player,isReplay=false}){
+// An answer button's category art, contained in its band. A missing image,
+// or one that fails to load, gives way to `fallback` (the emoji) instead of
+// a broken-image icon. The button's own label names the category, so the
+// art is decorative to assistive tech.
+function AnswerArt({image,fallback}){
+  const src=usableMediaUrl(image);
+  const[failedSrc,setFailedSrc]=useState(null);
+  if(!src||failedSrc===src) return fallback;
+  return(
+    <div className="ans-box-img-wrap">
+      <img src={src} alt="" className="ans-box-img" onError={()=>setFailedSrc(src)}/>
+    </div>
+  );
+}
+
+function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=false}){
   const[rec,setRec]=useState(initRec);
   const[phase,setPhase]=useState(initRec.completed?"question":initRec.currentIndex>=game.questions.length?"question":"question");
   const[chosen,setChosen]=useState(null);
   const[animBtn,setAnimBtn]=useState(null);
   const[reaction,setReaction]=useState(null);
   const[combo,setCombo]=useState(0);
-  const[showHelp,setShowHelp]=useState(false);
   // Each answer label's own best-fit size; both buttons display the smaller.
   const[labelFit,setLabelFit]=useState({});
   const{play}=sound;
@@ -3159,14 +3184,9 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
   const correctLabel = cq.correctCategory==="A"?cq._catA:cq._catB;
 
   return(
-    <div className={`gp-wrap${phase==="question"?" gp-q":""}`}>
+    <div className={`gp-wrap${phase==="question"?" gp-q":phase==="reveal"?" gp-r":""}`}>
       <canvas ref={canvasRef} id="confetti-canvas" style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:9999}}/>
       {reaction&&<ReactionOverlay emoji={reaction}/>}
-
-      <GameHeader player={player} sound={sound}
-                  onBack={()=>onNav(isReplay?"archive":"home")}
-                  onHelp={()=>setShowHelp(true)}
-                  onAccount={()=>onNav("account")}/>
 
       {isReplay&&(
         <div className="gp-replay" role="status">
@@ -3174,17 +3194,13 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
         </div>
       )}
 
-      {game.themeTitle&&<div className="gp-theme">{game.themeTitle}</div>}
-
-      {/* Progress and clue share one card: the balls sit astride its top
-          border, so the pair no longer costs two stacked boxes of height. The
-          clue itself stays on screen in both states, so the reveal still shows
-          what was being asked about. */}
-      <div className="gp-clue">
-        <GameProgressDots total={qs.length} currentIndex={idx}/>
-        <span className="gp-sr">Question {Math.min(idx+1,qs.length)} of {qs.length}</span>
-        <div className={`gp-clue-text ${clueSizeClass(cq.itemText)}`}>{cq.itemText}</div>
-      </div>
+      {/* One connected stack above the choices or the reveal: the matchup,
+          the progress, then the question itself, set straight on the page.
+          It is identical in both phases, so nothing moves or shrinks when the
+          player answers. The question is the screen's heading. */}
+      <GameMatchup game={game} label={isReplay?<>The matchup</>:<>Today&rsquo;s matchup</>}/>
+      <GameProgress total={qs.length} currentIndex={idx}/>
+      <h1 className={`gp-clue-text ${clueSizeClass(cq.itemText)}`}>{cq.itemText}</h1>
 
       {phase==="question"&&(
         <div className="gp-qmod">
@@ -3217,15 +3233,11 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
                     borderColor:color.dark
                   }}
                   onClick={()=>!animBtn&&handleAnswerClick(cat)}>
-                  {img ? (
-                    <div className="ans-box-img-wrap">
-                      <img src={img} alt={label} className="ans-box-img"/>
-                    </div>
-                  ) : (
+                  <AnswerArt image={img} fallback={
                     <div className="ans-box-img-placeholder" style={{background:`linear-gradient(160deg,${color.light} 0%,${color.mid} 100%)`}}>
                       {cat==="A"?"🎲":"🎬"}
                     </div>
-                  )}
+                  }/>
                   <FitText className="ans-box-label" min={14} max={labelMax} buffer={4}
                     onFit={size=>setLabelFit(f=>f[cat]===size?f:{...f,[cat]:size})}
                     forceSize={labelFit.A&&labelFit.B?Math.min(labelFit.A,labelFit.B):undefined}
@@ -3289,7 +3301,6 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,onNav,sound,pla
         </div>
       )}
 
-      {showHelp&&<HomeHelp game={game} onClose={()=>setShowHelp(false)}/>}
     </div>
   );
 }
@@ -3308,7 +3319,7 @@ function balancedPipColumns(count,maxPerRow){
 // the finished game is saved; see crowdStats.js), so "You beat N%" and the
 // share text use the same up-to-date numbers. Replays and Admin Preview pass
 // no crowd and read the puzzle's stats themselves.
-function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrome=false,player,onAccount,onAdmin}){
+function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrome=false}){
   const safeRecord = {
     themeTitle: gameRecord?.themeTitle||"Puzzle Results",
     score: Number.isFinite(gameRecord?.score) ? gameRecord.score : 0,
@@ -3477,7 +3488,6 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
   return(
     <div className="rs-wrap">
       <LandingBackdrop/>
-      <PageHeader sound={sound} onBack={()=>onNav("home")} player={player} onAccount={onAccount} onAdmin={onAdmin}/>
       {content}
     </div>
   );
@@ -3502,44 +3512,6 @@ function StatsScreen({stats,onNav}){
       </div>
       <div style={{marginTop:12}}><button className="btn-sm" onClick={()=>onNav("home")}>← Back</button></div>
     </div>
-  );
-}
-
-// ---- REUSABLE INTERNAL-PAGE HEADER ----
-// Logo centred between two button clusters, same proven grid approach as the
-// gameplay header (equal side tracks so neither can crowd the logo out of
-// legibility at 360px). Used by Results (Archive now uses SiteHeader). Admin only ever appears behind the existing
-// SHOW_ADMIN_LINK flag -- this header never shows it unconditionally.
-function PageHeader({sound,onBack,onHelp,player,onAccount,onAdmin}){
-  const signedIn = player && !player.isGuest;
-  return(
-    <header className="pgh-hdr">
-      <div className="pgh-hdr-left">
-        <button className="pgh-back" onClick={onBack} aria-label="Back to home">
-          <span className="pgh-back-arrow" aria-hidden="true">←</span>
-          <span className="pgh-back-txt">Home</span>
-        </button>
-        {sound&&<button className="pgh-sound" onClick={()=>sound.setMuted(m=>!m)}
-                aria-pressed={!sound.muted}
-                aria-label={sound.muted?"Turn sound on":"Turn sound off"}
-                title={sound.muted?"Turn sound on":"Turn sound off"}>
-          {sound.muted?"\u{1F507}":"\u{1F50A}"}
-        </button>}
-        {SHOW_ADMIN_LINK&&onAdmin&&(
-          <button className="pgh-admin" onClick={onAdmin} aria-label="Admin" title="Admin">
-            <FI name="gear" size={20}/>
-          </button>
-        )}
-      </div>
-      <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="pgh-logo"/>
-      <div className="pgh-hdr-right">
-        {onHelp&&<button className="pgh-help" onClick={onHelp} aria-label="How to play" title="How to play">?</button>}
-        <button className={signedIn?"pgh-signin pgh-acct":"pgh-signin"} onClick={onAccount}
-                title={signedIn?(player.email||"Account"):"Sign in"}>
-          {signedIn?formatAccountLabel(player.email):"Sign in"}
-        </button>
-      </div>
-    </header>
   );
 }
 
@@ -3664,10 +3636,9 @@ function ArchiveCard({game,record,isToday,onAction,eager,favorite}){
   );
 }
 
-function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onPlayToday,onAdmin}){
+function ArchiveScreen({games,playerId,onReplay,onPlayToday}){
   const today=getLocalGameDay();
   const[records,setRecords]=useState({});
-  const[showHelp,setShowHelp]=useState(false);
   const[query,setQuery]=useState("");
   const[filterChoice,setFilter]=useState("all");
   const[topicChoice,setTopicChoice]=useState("all");
@@ -3753,11 +3724,6 @@ function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onPlayToday,o
     disabled: !favoritesReady,
     onToggle: ()=>onToggleFavorite(g),
   });
-  const signedIn = player && !player.isGuest;
-  const toTop = ()=>{
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    window.scrollTo({top:0, behavior:reduce?"auto":"smooth"});
-  };
   const showAll = ()=>{ setQuery(""); setFilter("all"); setTopicChoice("all"); };
   const filterWord = filter==="all" ? "" : filter==="favorites" ? "favorite " : filter+" ";
   const topicWord = topicLabel ? topicLabel+" " : "";
@@ -3770,23 +3736,6 @@ function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onPlayToday,o
   return(
     <CandyPageShell>
       <div className="arc-inner">
-        <SiteHeader
-          current="archive"
-          nav={[
-            {id:"play", label:"Play", onClick:()=>onNav("home")},
-            {id:"archive", label:"Archive", onClick:toTop},
-            {id:"help", label:"How to Play", onClick:()=>setShowHelp(true)},
-          ]}
-          sound={sound}
-          account={{
-            signedIn,
-            label: signedIn?formatAccountLabel(player.email):"Sign in",
-            title: signedIn?(player.email||"Account"):"Sign in",
-            onClick: ()=>onNav("account"),
-          }}
-          admin={SHOW_ADMIN_LINK&&onAdmin ? {onClick:onAdmin, icon:<FI name="gear" size={22}/>} : null}
-        />
-
         <div className="arc-head">
           <h1 className="arc-title"><TitleFlourish/>Puzzle Archive<TitleFlourish side="right"/></h1>
           <p className="arc-sub">Every flavor of nonsense, all in one place.</p>
@@ -3855,7 +3804,6 @@ function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onPlayToday,o
           <button type="button" className="candy-pill arc-toast-btn" onClick={dismissFavoriteError}>OK</button>
         </div>
       )}
-      {showHelp&&<HomeHelp game={todayGame} onClose={()=>setShowHelp(false)}/>}
     </CandyPageShell>
   );
 }
@@ -4449,7 +4397,22 @@ function AdminPreview({game,onBack}){
   const dummySound={play:()=>{},muted:false,setMuted:()=>{}};
   const[pr,setPr]=useState(()=>newRecordFor(game));
   const[view,setView]=useState("home");
+  const[showHelp,setShowHelp]=useState(false);
   const onComplete=final=>{setPr(final);setView("score");};
+  // The player's own header, as every player screen shows it. Play returns
+  // to the preview's start card; Archive and Sign in have nothing to show in
+  // a preview, so they do nothing here.
+  const previewChrome={
+    current: view==="score" ? null : "play",
+    nav: [
+      {id:"play", label:"Play", onClick:()=>setView("home")},
+      {id:"archive", label:"Archive", onClick:()=>{}},
+      {id:"help", label:"How to Play", onClick:()=>setShowHelp(true)},
+    ],
+    sound: dummySound,
+    account: {signedIn:false, label:"Sign in", title:"Sign in (not available in Preview)", onClick:()=>{}},
+    admin: null,
+  };
   return(
     <div className="ps-shell adm-preview">
       <header className="ps-editor-head ps-preview-head">
@@ -4465,6 +4428,9 @@ function AdminPreview({game,onBack}){
       <div className="adm-preview-stage">
         <CandyBackdrop preset={view==="game"?"game":"landing"} contained/>
         <style>{styles}</style>
+        <PlayerChromeContext.Provider value={previewChrome}>
+          <PlayerHeader compact/>
+        </PlayerChromeContext.Provider>
         {view==="home"&&(
           <div className="card" style={{marginTop:8,overflow:"hidden",padding:0}}>
             {game.headerImage&&(
@@ -4481,8 +4447,9 @@ function AdminPreview({game,onBack}){
             </div>
           </div>
         )}
-        {view==="game"&&<GameScreen game={game} gameRecord={pr} onComplete={onComplete} onNav={()=>setView("home")} sound={dummySound} isReplay={true}/>}
+        {view==="game"&&<GameScreen game={game} gameRecord={pr} onComplete={onComplete} sound={dummySound} isReplay={true}/>}
         {view==="score"&&<ScoreScreen gameRecord={pr} game={game} onNav={()=>setView("home")} sound={dummySound} isReplay={true}/>}
+        {showHelp&&<HomeHelp game={game} onClose={()=>setShowHelp(false)}/>}
       </div>
     </div>
   );
@@ -4499,6 +4466,8 @@ export default function WhatTheFudgeTrivia(){
   const[replayGame,setReplayGame]=useState(null);
   const[replayRecord,setReplayRecord]=useState(null);
   const[toast,setToast]=useState(null);
+  // How to Play, opened from the shared header on any player screen.
+  const[showHelp,setShowHelp]=useState(false);
 
   // Supabase state
   const[games,setGames]=useState([]);
@@ -4602,10 +4571,10 @@ export default function WhatTheFudgeTrivia(){
   // is never shown, resumed or shared as today's.
   const todayRecord = gameRecord && todayGame && gameRecord.puzzleId===todayGame.id ? gameRecord : null;
   const isGameplay = view==="game"||view==="replay";
-  // Results carries its own warm backdrop and PageHeader, like Archive (CandyPageShell + SiteHeader).
+  // Results carries its own warm backdrop, like Archive (CandyPageShell).
   const isResults = view==="score"||view==="replay-score";
-  // Stats and Account: the older shared header, over the gameplay backdrop.
-  const usesSharedHeader = view!=="home"&&view!=="archive"&&!isGameplay&&!isResults;
+  // Stats and Account sit over the gameplay backdrop.
+  const usesGameBackdrop = view!=="home"&&view!=="archive"&&!isGameplay&&!isResults;
 
   // Home-idle preload: once the player is looking at Home with an unfinished
   // puzzle in front of them, quietly warm just the single image they'd see
@@ -4819,11 +4788,13 @@ export default function WhatTheFudgeTrivia(){
     setCrowd({puzzleId, score:finalRec.score, ...result});
   };
 
-  // Share today's result from the homepage: the same text Results copies.
-  // Resolves to shareOrCopy's outcome; HomeScreen shows the feedback.
+  // Share today's result from the homepage: the same full text Results
+  // copies, or on phones the puzzle's poster plus the short image text.
+  // Resolves to shareResult's outcome; HomeScreen shows the feedback.
   const handleShareToday = async() => {
     if(!todayRecord?.completed) return null;
-    return shareOrCopy(shareTextFor(todayGame, todayRecord, crowd), navigator);
+    const { text, imageText } = shareTextsFor(todayGame, todayRecord, crowd);
+    return shareResult({ text, imageText, imageUrl: puzzleArtworkUrl(todayGame) }, navigator);
   };
 
   // Replay
@@ -4834,22 +4805,50 @@ export default function WhatTheFudgeTrivia(){
     setView("replay");
   };
 
-  // Loading and boot failure: Home's own frame (see HomeLoadingPage).
-  // Try again reloads the page, as before.
-  if(loading) return(
-    <>
-      <style>{styles}</style>
-      <div className="app"><div className="main"><HomeLoadingPage sound={sound}/></div></div>
-    </>
-  );
+  // The shared header every player screen shows (PlayerHeader.jsx): Play
+  // (Home, where a game in progress resumes), Archive and How to Play, then
+  // sound, the dev-only Admin gear and the account control. A current link
+  // pressed again scrolls back to the top. Leaving a game goes through here.
+  const signedIn = Boolean(player && !player.isGuest);
+  const openAdmin = ()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");};
+  const toTop = ()=>{
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({top:0, behavior:reduce?"auto":"smooth"});
+  };
+  const goTo = target=>{ if(view===target) toTop(); else { sound.play("click"); setView(target); } };
+  const playerChrome = {
+    // Nothing is marked current during a game, so Play reads as the way back
+    // to Home (where the game in progress resumes), not as "you are here".
+    current: view==="home" ? "play" : view==="archive" ? "archive" : null,
+    nav: [
+      {id:"play", label:"Play", onClick:()=>goTo("home")},
+      {id:"archive", label:"Archive", onClick:()=>goTo("archive")},
+      {id:"help", label:"How to Play", onClick:()=>setShowHelp(true)},
+    ],
+    sound,
+    account: {
+      signedIn,
+      label: signedIn ? formatAccountLabel(player.email) : "Sign in",
+      title: signedIn ? (player.email||"Account") : "Sign in",
+      onClick: ()=>setView("account"),
+    },
+    admin: SHOW_ADMIN_LINK ? {onClick:openAdmin, icon:<FI name="gear" size={22}/>} : null,
+  };
 
-  if(error) return(
-    <>
+  // Loading and boot failure: Home's own frame (see HomeLoadingPage), under
+  // the same header, inert. Try again reloads the page, as before.
+  if(loading||error) return(
+    <PlayerChromeContext.Provider value={playerChrome}>
       <style>{styles}</style>
-      <div className="app"><div className="main">
-        <HomeErrorPage sound={sound} detail={error} onRetry={()=>window.location.reload()}/>
-      </div></div>
-    </>
+      <div className="app">
+        <PlayerHeader pending/>
+        <div className="main">
+          {loading
+            ? <HomeLoadingPage/>
+            : <HomeErrorPage detail={error} onRetry={()=>window.location.reload()}/>}
+        </div>
+      </div>
+    </PlayerChromeContext.Provider>
   );
 
   // Admin branch
@@ -4861,38 +4860,20 @@ export default function WhatTheFudgeTrivia(){
 
   // Player app
   return(
-    <>
+    <PlayerChromeContext.Provider value={playerChrome}>
       <style>{styles}</style>
-      <div className={`app${usesSharedHeader?" cbd-page":""}${isGameplay?" gp-fullscreen":""}`}>
-        {(isGameplay||usesSharedHeader)&&<GameBackdrop/>}
-        {/* Gameplay, Archive and Results each carry their own public header (logo,
-            sound, help, account) and backdrop. Every other screen keeps the
-            existing shared header unchanged. */}
-        {usesSharedHeader&&<div className="hdr">
-          <div className="logo">
-            <div className="logo-line1"><span className="logo-what">What The</span></div>
-            <div className="logo-line2"><span className="logo-fudge">Fudge</span><span className="logo-emoji">🍬</span></div>
-            <div className="logo-line3">Trivia</div>
-          </div>
-          <div className="nav-row">
-            <button className="sound-btn" onClick={()=>sound.setMuted(m=>!m)} title={sound.muted?"Unmute":"Mute"}>
-              {sound.muted?"🔇":"🔊"}
-            </button>
-            <button className="nav-btn" style={{background:"linear-gradient(180deg,#5EEAD4,#2DD4BF 60%,#0F9488)",color:"var(--black)",borderColor:"var(--teal-dark)",boxShadow:"0 3px 0 var(--teal-dark)"}} onClick={()=>setView("home")}>Home</button>
-            <button className="nav-btn" title={player?.isGuest?"Sign In":(player?.email||"Account")} style={{background:player?.isGuest?"linear-gradient(180deg,#FFF176,#FFE347 60%,#E6C800)":"linear-gradient(180deg,#C084FC,#A855F7 60%,#7E22CE)",color:player?.isGuest?"var(--black)":"white",borderColor:player?.isGuest?"var(--yellow-dark)":"var(--purple-dark)",boxShadow:player?.isGuest?"0 3px 0 var(--yellow-dark)":"0 3px 0 var(--purple-dark)"}} onClick={()=>setView("account")}>
-              {player?.isGuest?"Sign In":formatAccountLabel(player?.email)}
-            </button>
-            <button className="nav-btn" style={{background:"linear-gradient(180deg,#FF85AA,#FF5C8D 60%,#CC3366)",color:"white",borderColor:"var(--pink-dark)",boxShadow:"0 3px 0 var(--pink-dark)"}} onClick={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}><FI name="gear" size={26} style={{marginRight:6}}/>Admin</button>
-          </div>
-        </div>}
+      <div className={`app${usesGameBackdrop?" cbd-page":""}${isGameplay?" gp-fullscreen":""}`}>
+        {(isGameplay||usesGameBackdrop)&&<GameBackdrop/>}
+        {/* One header for every player screen, never remounted between them,
+            so the bar and its logo never move. */}
+        <PlayerHeader/>
         <div className="main">
           {view==="home"&&(
             <HomeScreen game={todayGame} gameRecord={todayRecord} stats={stats}
               player={player}
-              sound={sound}
               onPlay={handlePlay}
               onNav={v=>{sound.play("click");setView(v);}}
-              onAdmin={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}
+              onHelp={()=>setShowHelp(true)}
               onShare={handleShareToday}
             />
           )}
@@ -4903,9 +4884,7 @@ export default function WhatTheFudgeTrivia(){
               gameRecord={todayRecord}
               onAnswer={handleAnswer}
               onComplete={handleComplete}
-              onNav={setView}
               sound={sound}
-              player={player}
             />
           )}
 
@@ -4915,17 +4894,13 @@ export default function WhatTheFudgeTrivia(){
               gameRecord={replayRecord}
               onAnswer={()=>{}}
               onComplete={final=>{setReplayRecord(final);setView("replay-score");}}
-              onNav={v=>{if(v==="archive")setView("archive");else setView(v);}}
               sound={sound}
-              player={player}
               isReplay={true}
             />
           )}
 
           {view==="score"&&todayRecord&&(
-            <ScoreScreen gameRecord={todayRecord} game={todayGame} crowd={crowd} onNav={setView} sound={sound}
-              withChrome player={player} onAccount={()=>setView("account")}
-              onAdmin={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}/>
+            <ScoreScreen gameRecord={todayRecord} game={todayGame} crowd={crowd} onNav={setView} sound={sound} withChrome/>
           )}
 
           {view==="replay-score"&&replayRecord&&(
@@ -4935,8 +4910,7 @@ export default function WhatTheFudgeTrivia(){
                 onNav={v=>{if(v==="archive")setView("archive");else setView(v);}}
                 sound={sound}
                 isReplay={true}
-                withChrome player={player} onAccount={()=>setView("account")}
-                onAdmin={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}
+                withChrome
             />
           )}
 
@@ -4947,18 +4921,15 @@ export default function WhatTheFudgeTrivia(){
             <ArchiveScreen
               games={games}
               playerId={player?.id}
-              player={player}
-              sound={sound}
-              onNav={setView}
               onReplay={handleReplay}
               onPlayToday={handlePlay}
-              onAdmin={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}
             />
           )}
         </div>
 
         {toast&&<Toast message={toast} onDone={()=>setToast(null)}/>}
+        {showHelp&&<HomeHelp game={view==="replay"?replayGame:todayGame} onClose={()=>setShowHelp(false)}/>}
       </div>
-    </>
+    </PlayerChromeContext.Provider>
   );
 }

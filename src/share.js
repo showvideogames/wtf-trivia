@@ -15,6 +15,10 @@
      🟢🟢🔴🔴🟢🟢🔴🔴🟢🟢🟢🟢
      8/12 • Beat 77% of players
      whatthefudge.gg
+
+   When a phone's share sheet sends the puzzle's Home & Share poster
+   with it, the poster already shows the header and both categories, so
+   the text alongside it is only the last three lines (the image text).
    ============================================================ */
 
 export const SHARE_HEADER = "What The Fudge Trivia 🍬";
@@ -73,16 +77,24 @@ export function strictlyBetterPercent(histogram, score, { includesPlayer = true 
 // number from 0 to 99. Anything else means no percentage is shown.
 const isBeatPercent = (value) => Number.isInteger(value) && value >= 0 && value <= 99;
 
-// The full share text. `record` is the finished game record (score,
-// totalQuestions, answers in question order: one circle per saved answer);
-// `game` supplies the share names and category names; `beatPercent` is
-// the Results hero's already-validated "Beat N%" (crowdBeatPercent), or null
-// when there is no honest comparison, which leaves the score line bare.
-export function buildResultsShareText({ game, record, beatPercent = null }) {
+// The result itself, the part both texts share: one circle per saved answer
+// (`record.answers`, in question order) and the score line, with "Beat N%"
+// only when `beatPercent` is the Results hero's already-validated number
+// (crowdBeatPercent), else the bare score.
+function shareResultLines(record, beatPercent) {
   const score = Number.isFinite(record?.score) ? record.score : 0;
   const total = Number.isFinite(record?.totalQuestions) ? record.totalQuestions : 0;
   const answers = Array.isArray(record?.answers) ? record.answers : [];
   const circles = answers.map((a) => (a?.correct ? "🟢" : "🔴")).join("");
+  const scoreLine = isBeatPercent(beatPercent) ? `${score}/${total} • Beat ${beatPercent}% of players` : `${score}/${total}`;
+  return [circles, scoreLine];
+}
+
+// The full share text: everything shared without the poster (Results'
+// preview and copy, Home's desktop copy, the text-only share sheet and the
+// clipboard fallback). `record` is the finished game record, `game`
+// supplies the share names and category names, `beatPercent` as above.
+export function buildResultsShareText({ game, record, beatPercent = null }) {
   return [
     SHARE_HEADER,
     SHARE_DIVIDER,
@@ -90,8 +102,14 @@ export function buildResultsShareText({ game, record, beatPercent = null }) {
     SHARE_OR,
     shareCategoryName(game?.categoryBShareName, game?.categoryB, "Category B"),
     SHARE_DIVIDER,
-    circles,
-    isBeatPercent(beatPercent) ? `${score}/${total} • Beat ${beatPercent}% of players` : `${score}/${total}`,
+    ...shareResultLines(record, beatPercent),
     SHARE_DOMAIN,
   ].join("\n");
+}
+
+// The image text: what goes with the poster in the share sheet. The same
+// circles and score line as the full text, then the domain; no header,
+// dividers, categories or OR, which the poster already shows.
+export function buildImageShareText({ record, beatPercent = null }) {
+  return [...shareResultLines(record, beatPercent), SHARE_DOMAIN].join("\n");
 }
