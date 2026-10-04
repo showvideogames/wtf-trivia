@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { archivePuzzles, filterArchive, matchesArchiveSearch } from "./archiveList.js";
+import { archivePuzzles, archiveTopicCounts, filterArchive, matchesArchiveSearch } from "./archiveList.js";
 
 const g = (id, date, extra = {}) => ({
   id,
@@ -87,5 +87,124 @@ describe("filterArchive", () => {
 
   it("combines search with the filter", () => {
     expect(filterArchive(puzzles, records, { filter: "unplayed", query: "title c" }).map((p) => p.id)).toEqual(["c"]);
+  });
+});
+
+describe("matchesArchiveSearch: topics and accents", () => {
+  const pokemon = g("p", "2026-01-01", { themeTitle: "Planet OR Pokémon?", categoryA: "Planet", categoryB: "Pokémon" });
+  const plain = g("q", "2026-01-01", { themeTitle: "Pokemon or Digimon?", categoryA: "Pokemon", categoryB: "Digimon" });
+
+  it("matches a topic label", () => {
+    const tagged = g("t", "2026-01-01", { themeTitle: "Puppet or Singer?", tags: ["music", "words_language"] });
+    expect(matchesArchiveSearch(tagged, "music")).toBe(true);
+    expect(matchesArchiveSearch(tagged, "words & language")).toBe(true);
+    expect(matchesArchiveSearch(tagged, "language puppet")).toBe(true);
+    expect(matchesArchiveSearch(tagged, "gaming")).toBe(false);
+  });
+
+  it("never matches a topic id or a topic the puzzle doesn't have", () => {
+    const tagged = g("t", "2026-01-01", { tags: ["board_games"] });
+    expect(matchesArchiveSearch(tagged, "board_games")).toBe(false);
+    expect(matchesArchiveSearch(tagged, "board games")).toBe(true);
+  });
+
+  it("finds Pokémon when searching Pokemon", () => {
+    expect(matchesArchiveSearch(pokemon, "Pokemon")).toBe(true);
+  });
+
+  it("finds Pokemon when searching Pokémon", () => {
+    expect(matchesArchiveSearch(plain, "Pokémon")).toBe(true);
+  });
+
+  it("ignores case on accented text either way", () => {
+    expect(matchesArchiveSearch(pokemon, "POKEMON")).toBe(true);
+    expect(matchesArchiveSearch(pokemon, "POKÉMON")).toBe(true);
+    expect(matchesArchiveSearch(plain, "pOkÉmOn")).toBe(true);
+  });
+
+  it("treats an old puzzle without a tags property as untagged", () => {
+    const old = { id: "o", date: "2026-01-01", status: "published", themeTitle: "Cheese OR Font?", categoryA: "Cheese", categoryB: "Font" };
+    expect(matchesArchiveSearch(old, "cheese font")).toBe(true);
+    expect(matchesArchiveSearch(old, "food")).toBe(false);
+  });
+});
+
+describe("archive topic filter", () => {
+  // tags: a music+gaming, b music, c gaming+food, d untagged, e old (no tags property)
+  const puzzles = [
+    g("a", "2026-01-05", { themeTitle: "Video Game Composer or Pop Star?", tags: ["music", "gaming"] }),
+    g("b", "2026-01-04", { themeTitle: "Opera or Pasta?", tags: ["music"] }),
+    g("c", "2026-01-03", { themeTitle: "Mario Food or Real Food?", tags: ["gaming", "food"] }),
+    g("d", "2026-01-02", { tags: [] }),
+    { id: "e", date: "2026-01-01", status: "published", themeTitle: "Title e", categoryA: "Ae", categoryB: "Be" },
+  ];
+  const records = { a: { completed: true }, c: { completed: false, answers: [{}] } };
+  const ids = (list) => list.map((p) => p.id);
+
+  it("counts every used topic, in the topic list order", () => {
+    expect(archiveTopicCounts(puzzles).map((t) => [t.id, t.count])).toEqual([
+      ["music", 2],
+      ["gaming", 2],
+      ["food", 1],
+    ]);
+  });
+
+  it("counts a multiply tagged puzzle once under each of its topics", () => {
+    const counts = archiveTopicCounts([puzzles[0]]);
+    expect(counts.map((t) => [t.id, t.count])).toEqual([["music", 1], ["gaming", 1]]);
+    // so the topic totals can exceed the number of puzzles
+    expect(archiveTopicCounts(puzzles).reduce((n, t) => n + t.count, 0)).toBe(5);
+  });
+
+  it("omits topics no puzzle uses", () => {
+    const used = archiveTopicCounts(puzzles).map((t) => t.id);
+    expect(used).not.toContain("sports");
+    expect(used).toHaveLength(3);
+    expect(archiveTopicCounts([puzzles[3], puzzles[4]])).toEqual([]);
+  });
+
+  it("gives labels and emoji for the menu", () => {
+    expect(archiveTopicCounts(puzzles)[0]).toMatchObject({ id: "music", label: "Music", emoji: "🎵", count: 2 });
+  });
+
+  it("All topics covers the whole Archive, so its total is the puzzle count", () => {
+    const { puzzles: list } = archivePuzzles(puzzles, {}, "2026-01-05");
+    expect(filterArchive(list, {}, { topic: "all" })).toHaveLength(puzzles.length);
+  });
+
+  it("selecting a topic returns only puzzles carrying it", () => {
+    expect(ids(filterArchive(puzzles, records, { topic: "music" }))).toEqual(["a", "b"]);
+    expect(ids(filterArchive(puzzles, records, { topic: "food" }))).toEqual(["c"]);
+  });
+
+  it("combines the topic with search", () => {
+    expect(ids(filterArchive(puzzles, records, { topic: "music", query: "pasta" }))).toEqual(["b"]);
+    expect(ids(filterArchive(puzzles, records, { topic: "gaming", query: "food" }))).toEqual(["c"]);
+    expect(ids(filterArchive(puzzles, records, { topic: "food", query: "opera" }))).toEqual([]);
+  });
+
+  it("combines the topic with All / Unplayed / Completed", () => {
+    expect(ids(filterArchive(puzzles, records, { topic: "gaming", filter: "all" }))).toEqual(["a", "c"]);
+    expect(ids(filterArchive(puzzles, records, { topic: "gaming", filter: "completed" }))).toEqual(["a"]);
+    expect(ids(filterArchive(puzzles, records, { topic: "gaming", filter: "unplayed" }))).toEqual(["c"]);
+    expect(ids(filterArchive(puzzles, records, { topic: "music", filter: "unplayed", query: "opera" }))).toEqual(["b"]);
+  });
+
+  it("clearing the topic restores every qualifying puzzle", () => {
+    const narrowed = filterArchive(puzzles, records, { topic: "food" });
+    expect(narrowed).toHaveLength(1);
+    expect(ids(filterArchive(puzzles, records, { topic: "all" }))).toEqual(["a", "b", "c", "d", "e"]);
+    expect(ids(filterArchive(puzzles, records))).toEqual(["a", "b", "c", "d", "e"]);
+  });
+
+  it("keeps old puzzles with no tags visible under All topics only", () => {
+    expect(ids(filterArchive(puzzles, records, { topic: "all" }))).toContain("e");
+    expect(ids(filterArchive(puzzles, records, { topic: "music" }))).not.toContain("e");
+  });
+
+  it("topic counts ignore search and filters, because they come from the whole Archive", () => {
+    const before = archiveTopicCounts(puzzles);
+    filterArchive(puzzles, records, { topic: "music", query: "pasta", filter: "unplayed" });
+    expect(archiveTopicCounts(puzzles)).toEqual(before);
   });
 });

@@ -409,6 +409,50 @@
 .ps-swatch.on { box-shadow: 0 0 0 3px var(--ps-ink), 0 2px 0 var(--sw-dark); }
 .ps-swatch .ps-icon { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.55)); stroke-width: 3; }
 
+
+/* Topics: toggle pills. Off = white with a hollow ring; on = teal fill, dark
+   outline and a filled check, so the state never relies on colour alone. */
+.ps-topics { display: flex; flex-wrap: wrap; gap: 10px; }
+.ps-topic {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 42px;
+  max-width: 100%;
+  padding: 0 16px 0 10px;
+  border: 1.5px solid var(--ps-line-strong);
+  border-radius: 999px;
+  background: var(--ps-field);
+  color: var(--ps-ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.15;
+  cursor: pointer;
+  transition: transform .1s, background-color .1s, border-color .1s;
+}
+.ps-topic:hover { border-color: var(--ps-teal-ink); background: var(--ps-teal-wash); }
+.ps-topic:active { transform: translateY(1px); }
+.ps-topic-check {
+  display: grid; place-items: center;
+  width: 20px; height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--ps-line-strong);
+  background: #fff;
+}
+.ps-topic-emoji { font-size: 18px; line-height: 1; }
+.ps-topic-label { min-width: 0; overflow-wrap: anywhere; }
+.ps-topic.on {
+  border: 2px solid var(--ps-ink);
+  padding: 0 15.5px 0 9.5px;
+  background: var(--ps-teal);
+  box-shadow: 0 2px 0 var(--ps-ink);
+}
+.ps-topic.on:hover { background: #22C5B0; }
+.ps-topic.on .ps-topic-check { border-color: var(--ps-ink); background: var(--ps-ink); color: #fff; }
+.ps-topic.on .ps-topic-check .ps-icon { stroke-width: 3.5; }
+.ps-topics-count { margin-top: 12px; font-size: 13.5px; font-weight: 700; color: var(--ps-ink-3); }
+@media (prefers-reduced-motion: reduce) { .ps-topic { transition: none; } .ps-topic:active { transform: none; } }
+
 .ps-artwork { display: grid; grid-template-columns: 1fr minmax(260px, 340px); gap: 28px; align-items: start; }
 .ps-home-preview { padding-left: 28px; border-left: 1px solid var(--ps-line); }
 .ps-home-mini {
@@ -886,6 +930,9 @@ span.ps-qrow-main { cursor: default; }
   .ps-media-row .ps-media-thumb { width: 100%; max-width: 320px; }
   .ps-media-stack .ps-media-thumb { width: 100%; max-width: 200px; }
   .ps-swatch { width: 38px; height: 38px; }
+  .ps-topics { gap: 8px; }
+  .ps-topic { min-height: 44px; font-size: 14.5px; padding: 0 13px 0 9px; gap: 7px; }
+  .ps-topic.on { padding: 0 12.5px 0 8.5px; }
   .ps-danger { padding: 14px; }
 
   .ps-qlist { padding: 12px 10px 10px; border-radius: 18px; }

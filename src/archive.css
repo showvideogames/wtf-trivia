@@ -223,6 +223,69 @@
   gap: 8px;
 }
 
+
+/* Topic menu: a native select dressed as a cream candy pill, pink while a
+   topic is chosen, with a round × beside it back to All topics. */
+.arc-topic {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.arc-topic-field {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+.arc-topic-select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-width: 0;
+  max-width: 260px;
+  min-height: 42px;
+  padding: 0 40px 0 18px;
+  border: 2.5px solid var(--black);
+  border-radius: 999px;
+  background: var(--cs-cream);
+  color: var(--black);
+  font-family: 'Fredoka One', cursive;
+  font-size: 15px;
+  line-height: 1;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.arc-topic-select:hover { background: #fff; }
+.arc-topic.is-active .arc-topic-select { background: var(--cs-pink); }
+.arc-topic.is-active .arc-topic-select:hover { background: var(--cs-pink-hover); }
+.arc-topic-select option { font-family: 'Nunito', sans-serif; font-weight: 700; background: #fff; color: var(--black); }
+.arc-topic-chevron {
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  pointer-events: none;
+  color: var(--black);
+}
+.arc-topic-clear {
+  appearance: none;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 2.5px solid var(--black);
+  border-radius: 50%;
+  background: var(--cs-cream);
+  color: var(--black);
+  cursor: pointer;
+}
+.arc-topic-clear:hover { background: #fff; }
+.arc-topic-clear svg { width: 16px; height: 16px; display: block; }
+
 .arc-sr-only {
   position: absolute;
   width: 1px;
@@ -406,6 +469,9 @@
   .arc-tools .candy-search { width: 100%; }
   .arc-filters { width: 100%; }
   .arc-filters .candy-pill { flex: 1 1 0; padding: 0 8px; }
+  .arc-topic { width: 100%; }
+  .arc-topic-field { flex: 1 1 auto; }
+  .arc-topic-select { max-width: none; }
   .arc-grid { gap: 18px; }
   .arc-card { border-radius: 20px; }
   .arc-foot { gap: 10px; padding: 12px 12px 13px 15px; }
