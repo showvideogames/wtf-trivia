@@ -455,6 +455,57 @@
   overflow-wrap: break-word;
 }
 
+/* ===== DESKTOP DENSITY =====
+   At 100% zoom the Archive should read like the owner's preferred 80%
+   view: a ~976px column, cards ~476px wide with ~238px of artwork, and a
+   slimmer header, heading and controls. Real sizes, never zoom or
+   transforms. Scoped to the Archive (the site header is shared later), and
+   only from 900px, so phones and tablets keep their layout. Controls stay
+   at least 38px tall. */
+@media (min-width: 900px) {
+  .arc-inner { max-width: 1024px; padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: 60px; }
+
+  .arc-inner .sh-bar { min-height: 62px; padding: 6px 14px; gap: 12px; border-radius: 20px; }
+  .arc-inner .sh-logo { height: 52px; max-width: 120px; }
+  .arc-inner .sh-link { font-size: 15px; min-height: 38px; padding: 9px 14px; }
+  .arc-inner .sh-icon-btn { width: 38px; height: 38px; font-size: 17px; }
+  .arc-inner .sh-account { min-height: 38px; padding: 0 14px; font-size: 14px; }
+
+  .arc-head { margin-top: 20px; }
+  .arc-title { gap: 13px; font-size: clamp(40px, 3.4vw, 52px); }
+  .arc-sub { margin-top: 6px; font-size: 17px; }
+
+  .arc-tools { margin: 20px auto 24px; gap: 10px 12px; }
+  .arc-tools .candy-search { width: 272px; }
+  .arc-tools .candy-search input { min-height: 40px; padding-left: 40px; font-size: 15px; }
+  .arc-tools .candy-search svg { left: 14px; width: 17px; height: 17px; }
+  .arc-filters { gap: 7px; }
+  .arc-tools .candy-pill { min-height: 38px; padding: 0 15px; font-size: 14px; }
+  .arc-topic-select { min-height: 38px; padding: 0 36px 0 15px; font-size: 14px; }
+  .arc-topic-chevron { right: 13px; width: 14px; height: 14px; margin-top: -7px; }
+  .arc-topic-clear { width: 38px; height: 38px; }
+  .arc-topic-clear svg { width: 14px; height: 14px; }
+
+  .arc-empty { border-radius: 20px; padding: 22px 20px; }
+  .arc-empty-title { font-size: 18px; }
+}
+@media (min-width: 960px) {
+  .arc-grid { gap: 24px; max-width: none; }
+  .arc-card { border-radius: 20px; }
+  .arc-half-name { font-size: 18px; }
+  .arc-foot { gap: 12px; padding: 11px 13px 12px 16px; }
+  .arc-card-title { font-size: 17px; }
+  .arc-meta { margin-top: 3px; font-size: 13px; }
+  .arc-tag { font-size: 11px; padding: 1px 8px 2px; }
+  .arc-action.candy-btn,
+  .arc-action.candy-badge { min-height: 38px; font-size: 15px; gap: 7px; }
+  .arc-action.candy-btn { padding: 0 15px 0 13px; }
+  .arc-action.candy-badge { padding: 0 14px 0 9px; }
+  .arc-action .candy-btn-icon { width: 13px; height: 13px; }
+  .arc-action .candy-badge-check { width: 19px; height: 19px; }
+  .arc-action .candy-badge-check svg { width: 11px; height: 11px; }
+}
+
 /* ===== TABLET + PHONE ===== */
 @media (max-width: 899px) {
   .arc-inner { padding-left: 16px; padding-right: 16px; }
