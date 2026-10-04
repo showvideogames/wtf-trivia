@@ -1,176 +1,23 @@
 /* ================= ARCHIVE =================
-   The Archive page (`arc-` classes), plus the older reusable `pgh-`
-   internal-page header, which Results still uses. The custard page shell,
-   the cream site header and the candy controls live in site.css. Nothing
-   here reaches gameplay, Results' own layout, Stats, Sign in, Admin or the
+   The Archive page (`arc-` classes). The custard page shell, the shared
+   player header and the candy controls live in site.css. Nothing here
+   reaches gameplay, Results' own layout, Stats, Sign in, Admin or the
    homepage. */
 
-/* ===== REUSABLE PAGE HEADER =====
-   Same grid approach as the gameplay header: two independent side tracks so
-   the centred logo can never be crowded out at 360px, whichever side ends up
-   with more controls. */
-.pgh-hdr {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 4px;
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: max(10px, env(safe-area-inset-top)) 0 11px;
-}
-.pgh-hdr-left,
-.pgh-hdr-right {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-.pgh-hdr-left { justify-self: start; }
-.pgh-hdr-right { justify-self: end; }
-.pgh-logo {
-  display: block;
-  justify-self: center;
-  min-width: 0;
-  width: auto;
-  height: auto;
-  max-width: 112px;
-  max-height: 51px;
-}
-
-.pgh-back,
-.pgh-sound,
-.pgh-help,
-.pgh-signin,
-.pgh-admin {
-  min-height: 40px;
-  cursor: pointer;
-  font-family: 'Fredoka One', cursive;
-  flex-shrink: 0;
-}
-
-/* Icon-only by default: with Sound and (when the flag allows it) Admin
-   sharing this same track, a text pill here is what pushes the other two
-   into the logo at every width below desktop. The label comes back once
-   there is genuinely room for it, at 600px and up. */
-.pgh-back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: var(--white);
-  border: 2.5px solid var(--black);
-  box-shadow: 3px 3px 0 var(--black);
-  border-radius: 50%;
-  padding: 0;
-  font-size: 16px;
-  color: var(--black);
-  white-space: nowrap;
-}
-.pgh-back:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--black); }
-.pgh-back-arrow { font-size: 1.05em; line-height: 1; }
-.pgh-back-txt { display: none; }
-
-.pgh-sound {
-  background: none;
-  border: 0;
-  padding: 3px;
-  line-height: 0;
-  display: grid;
-  place-items: center;
-  min-width: 36px;
-  font-size: 20px;
-}
-
-.pgh-help,
-.pgh-admin {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  border: 2.5px solid var(--black);
-  box-shadow: 0 3px 0 var(--black);
-  font-size: 18px;
-  color: var(--black);
-  display: grid;
-  place-items: center;
-  padding: 0;
-}
-.pgh-help { background: linear-gradient(180deg, #fff176, #ffe347 60%, #e6c800); }
-.pgh-admin { background: linear-gradient(180deg, #FF85AA, #FF5C8D 60%, #CC3366); border-color: var(--pink-dark); box-shadow: 0 3px 0 var(--pink-dark); }
-
-.pgh-signin {
-  white-space: nowrap;
-  background: linear-gradient(180deg, #fff176, #ffe347 60%, #e6c800);
-  border: 2.5px solid var(--black);
-  box-shadow: 0 3px 0 var(--black);
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 13px;
-  color: var(--black);
-  max-width: 76px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.pgh-signin.pgh-acct {
-  background: linear-gradient(180deg, #c084fc, #a855f7 60%, #7e22ce);
-  color: #fff;
-}
-.pgh-help:active,
-.pgh-admin:active,
-.pgh-signin:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--black); }
-
-.pgh-hdr :focus-visible {
-  outline: 3px solid #1D4ED8;
-  outline-offset: 3px;
-  border-radius: 6px;
-}
-
-@media (min-width: 600px) {
-  .pgh-hdr { padding: 14px 0 16px; gap: 12px; }
-  .pgh-logo { max-width: 150px; max-height: 62px; }
-  .pgh-hdr-right { gap: 9px; }
-  /* Room for the label again at this width, even with three controls on
-     the left track. */
-  .pgh-back {
-    width: auto;
-    height: auto;
-    min-height: 44px;
-    border-radius: 999px;
-    padding: 9px 18px;
-    font-size: 16px;
-    gap: 6px;
-  }
-  .pgh-back-txt { display: inline; }
-  .pgh-help,
-  .pgh-admin { width: 44px; height: 44px; font-size: 21px; }
-  .pgh-signin { padding: 9px 18px; font-size: 16px; min-height: 44px; max-width: 150px; }
-  .pgh-sound { font-size: 25px; min-width: 44px; }
-}
-
-@media (max-width: 380px) {
-  .pgh-hdr { gap: 4px; }
-  .pgh-hdr-left,
-  .pgh-hdr-right { gap: 3px; }
-  .pgh-logo { max-width: 100px; max-height: 46px; }
-  .pgh-back { width: 36px; height: 36px; font-size: 15px; }
-  .pgh-signin { padding: 6px 10px; font-size: 12px; max-width: 76px; }
-  .pgh-help,
-  .pgh-admin { width: 36px; height: 36px; font-size: 17px; }
-  .pgh-sound { font-size: 19px; min-width: 34px; padding: 2px; }
-}
-
 /* ===== ARCHIVE PAGE =====
-   Built on the custard page shell and site header (site.css). */
+   Built on the custard page shell (site.css), under the shared header. */
 .main:has(> .cps-page) {
   max-width: none;
   padding: 0;
 }
+/* The shell fills what the header leaves, rather than a whole extra screen. */
+.main > .cps-page { flex: 1 0 auto; min-height: 0; }
 
 .arc-inner {
   width: 100%;
   max-width: 1232px;
   margin: 0 auto;
-  padding: max(14px, env(safe-area-inset-top)) 24px 72px;
+  padding: 0 24px 72px;
 }
 
 /* ===== HEADING ===== */
@@ -616,7 +463,7 @@
    site.css, shared with Home), and only from 900px, so phones and tablets keep their layout. Controls stay
    at least 38px tall. */
 @media (min-width: 900px) {
-  .arc-inner { max-width: 1024px; padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: 60px; }
+  .arc-inner { max-width: 1024px; padding-bottom: 60px; }
 
   .arc-head { margin-top: 20px; }
   .arc-title { gap: 13px; font-size: clamp(40px, 3.4vw, 52px); }

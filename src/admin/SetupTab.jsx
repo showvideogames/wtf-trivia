@@ -28,6 +28,7 @@ function TextField({id, label, value, placeholder, onChange, hint}){
   );
 }
 
+const SUBTITLE_HINT = "Optional. A second line under the name in the gameplay matchup banner, e.g. Song. Leave blank for none.";
 const SHARE_HINT = "Optional. Only changes the copied Results text, emoji included. Leave blank to use the category name.";
 
 function PuzzleBasics({game, set, games}){
@@ -39,6 +40,10 @@ function PuzzleBasics({game, set, games}){
         <TextField id="ps-theme" label="Theme title" value={game.themeTitle} placeholder="Board Game or Nicolas Cage Movie?" onChange={v=>set("themeTitle",v)}/>
         <TextField id="ps-cat-a" label="Category A" value={game.categoryA} placeholder="Board Game" onChange={v=>set("categoryA",v)}/>
         <TextField id="ps-cat-b" label="Category B" value={game.categoryB} placeholder="Nicolas Cage Movie" onChange={v=>set("categoryB",v)}/>
+        <TextField id="ps-sub-a" label="Category A subtitle" value={game.categoryASubtitle} placeholder="e.g. Song"
+                   onChange={v=>set("categoryASubtitle",v)} hint={SUBTITLE_HINT}/>
+        <TextField id="ps-sub-b" label="Category B subtitle" value={game.categoryBSubtitle} placeholder="e.g. Song"
+                   onChange={v=>set("categoryBSubtitle",v)} hint={SUBTITLE_HINT}/>
         {/* Placeholders show the fallback a blank share name uses. */}
         <TextField id="share-name-a" label="Share name for Category A" value={game.categoryAShareName} placeholder={game.categoryA||"Same as Category A"}
                    onChange={v=>set("categoryAShareName",v)} hint={SHARE_HINT}/>

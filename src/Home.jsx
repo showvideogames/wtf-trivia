@@ -1,54 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import CandyPageShell from "./CandyPageShell.jsx";
-import SiteHeader from "./SiteHeader.jsx";
 import CategoryArtImage from "./CategoryArtImage.jsx";
 import { shareFeedback } from "./homeShare.js";
 
 // ---- HOME ----
-// The category-first Home page, built on the Archive's custard shell and
-// cream site header. The daily matchup is the star, the Play button is the
-// one big action, and everything else supports those two. App.jsx keeps the
-// data and behaviour (start/resume, results, share, navigation); these are
-// the presentational pieces, plus the loading and error pages, which reuse
-// the same shell and header so the finished page doesn't jump.
+// The category-first Home page, built on the Archive's custard shell. The
+// daily poster is the star, the Play button is the one big action, and
+// everything else supports those two. App.jsx keeps the data and behaviour
+// (start/resume, results, share, navigation) and draws the shared
+// PlayerHeader above every screen; these are the presentational pieces, plus
+// the loading and error pages, which reuse the same shell so the finished
+// page doesn't jump.
 
-// The page frame: shell, the shared header, then the centred hero column.
-// `pending` (loading and error) keeps the header's geometry but makes it
-// inert, since there is nothing behind its links yet.
-export function HomePage({ header, pending = false, children }) {
+// The page frame: shell, then the centred hero column.
+export function HomePage({ children }) {
   return (
     <CandyPageShell className="hm-page">
       <div className="hm-inner">
-        {pending
-          ? <div className="hm-header-pending" inert>{header}</div>
-          : header}
         <main className="hm-main">{children}</main>
       </div>
     </CandyPageShell>
-  );
-}
-
-// The shared SiteHeader with Home's links: Play (this page), Archive and
-// How to Play, then sound, the dev-only Admin gear and the account control.
-export function HomeHeader({ player, sound, onPlay, onArchive, onHelp, onAccount, admin, accountLabel }) {
-  const signedIn = Boolean(player && !player.isGuest);
-  return (
-    <SiteHeader
-      current="play"
-      nav={[
-        { id: "play", label: "Play", onClick: onPlay },
-        { id: "archive", label: "Archive", onClick: onArchive },
-        { id: "help", label: "How to Play", onClick: onHelp },
-      ]}
-      sound={sound}
-      account={{
-        signedIn,
-        label: signedIn ? accountLabel : "Sign in",
-        title: signedIn ? (player.email || "Account") : "Sign in",
-        onClick: onAccount,
-      }}
-      admin={admin}
-    />
   );
 }
 

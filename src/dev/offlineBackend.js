@@ -635,6 +635,10 @@ export function devSaveGameRow(row) {
   if (mode === "no-share-columns" && ("category_a_share_name" in row || "category_b_share_name" in row)) {
     throw new Error(`Supabase error 400: {"code":"PGRST204","message":"Could not find the 'category_a_share_name' column of 'games' in the schema cache"}`);
   }
+  // "no-subtitle-columns" does the same for supabase/category_subtitles.sql.
+  if (mode === "no-subtitle-columns" && ("category_a_subtitle" in row || "category_b_subtitle" in row)) {
+    throw new Error(`Supabase error 400: {"code":"PGRST204","message":"Could not find the 'category_a_subtitle' column of 'games' in the schema cache"}`);
+  }
   // "no-tags-column" does the same for supabase/puzzle_tags.sql.
   if (mode === "no-tags-column" && "tags" in row) {
     throw new Error(`Supabase error 400: {"code":"PGRST204","message":"Could not find the 'tags' column of 'games' in the schema cache"}`);

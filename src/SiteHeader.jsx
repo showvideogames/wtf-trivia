@@ -6,7 +6,7 @@ import { useEffect, useId, useRef, useState } from "react";
 // dev flag allows it, Sign in / account) on the right. Under 900px it stays
 // one compact row: a menu button on the left holding the page links (and
 // the dev Admin entry), the logo centred, sound and a compact account
-// button on the right. Archive and Home use it.
+// button on the right. Every player screen shows it, through PlayerHeader.
 //
 //   nav:     [{id, label, onClick}] -- real destinations or actions only
 //   current: id of the link for the page being shown (pink, aria-current)
