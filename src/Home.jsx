@@ -114,27 +114,34 @@ export function HomeMatchup({ game, colors }) {
   );
 }
 
-// The puzzle's square Home & Share poster, whole: a 1:1 image fills the
-// square, anything else is `contain`ed inside it, never cropped or
-// stretched. The poster carries its own categories and OR, so nothing is
-// drawn over it. With no poster, or one that fails to load, `fallback`
-// (the category matchup) shows instead of a broken image.
-export function HomeArtwork({ src, alt, fallback }) {
+// Today's heading and centrepiece. With a Home & Share poster, the poster is
+// the star and already prints the categories and OR, so the title isn't
+// repeated above it: the small eyebrow is the page's h1 and the puzzle's
+// title is the poster's alt text, announced once. The poster is shown
+// whole: a 1:1 image fills the square, anything else is `contain`ed inside
+// it, never cropped or stretched, with nothing drawn over it. With no
+// poster, or one that fails to load, the visible title and the category
+// matchup show instead of a broken image.
+export function HomeHero({ game, colors, artworkUrl, eyebrow }) {
   const [failedSrc, setFailedSrc] = useState(null);
-  if (!src || failedSrc === src) return fallback;
+  if (!artworkUrl || failedSrc === artworkUrl) {
+    return (
+      <>
+        <HomeHeading eyebrow={eyebrow} title={game.themeTitle}/>
+        <HomeMatchup game={game} colors={colors}/>
+      </>
+    );
+  }
+  const alt = game.themeTitle?.trim() || `${game.categoryA} or ${game.categoryB}`;
   return (
-    <div className="hm-artwork">
-      <img src={src} alt={alt} decoding="async" onError={() => setFailedSrc(src)}/>
-    </div>
-  );
-}
-
-// Today's centrepiece: the Home & Share poster when the puzzle has one,
-// otherwise the category matchup.
-export function HomeHero({ game, colors, artworkUrl }) {
-  return (
-    <HomeArtwork src={artworkUrl} alt={`${game.categoryA} or ${game.categoryB}`}
-      fallback={<HomeMatchup game={game} colors={colors}/>}/>
+    <>
+      <div className="hm-heading">
+        <h1 className="hm-eyebrow">{eyebrow}</h1>
+      </div>
+      <div className="hm-artwork">
+        <img src={artworkUrl} alt={alt} decoding="async" onError={() => setFailedSrc(artworkUrl)}/>
+      </div>
+    </>
   );
 }
 

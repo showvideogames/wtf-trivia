@@ -2774,8 +2774,7 @@ function HomeScreen({game,gameRecord,stats,player,sound,onPlay,onNav,onAdmin,onS
     <HomePage header={header}>
       {game?(
         <>
-          <HomeHeading eyebrow={<>Today&rsquo;s puzzle</>} title={game.themeTitle}/>
-          <HomeHero game={game} colors={categoryColors(game)} artworkUrl={artworkUrl}/>
+          <HomeHero game={game} colors={categoryColors(game)} artworkUrl={artworkUrl} eyebrow={<>Today&rsquo;s puzzle</>}/>
           {done?(
             <HomeDonePanel score={gameRecord.score} total={gameRecord.totalQuestions}
               message={scoreMsg(gameRecord.score, gameRecord.totalQuestions||1)}

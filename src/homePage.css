@@ -12,6 +12,17 @@
   padding: max(12px, env(safe-area-inset-top)) 24px 48px;
 }
 
+/* Home's header logo, about 17% larger than the shared header's. Negative
+   block margins let it grow into the bar's own padding, so the bar keeps its
+   height; the side tracks stay equal, so it stays centred. */
+.hm-page .sh-bar .sh-logo { height: 63px; max-width: 150px; margin-block: -4.5px; }
+@media (min-width: 900px) {
+  .hm-page .sh-bar .sh-logo { height: 61px; max-width: 142px; }
+}
+@media (max-width: 380px) {
+  .hm-page .sh-bar .sh-logo { height: 51px; max-width: 126px; margin-block: -3.5px; }
+}
+
 /* The hero column: everything centred under the header. */
 .hm-main {
   display: flex;
@@ -31,6 +42,7 @@
 .hm-eyebrow {
   margin: 0;
   font-family: 'Fredoka One', cursive;
+  font-weight: 400; /* also the page's h1 above a poster */
   font-size: 15px;
   line-height: 1.2;
   letter-spacing: 0.12em;
