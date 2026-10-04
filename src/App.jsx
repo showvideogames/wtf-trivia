@@ -2836,9 +2836,10 @@ function HomeErrorPage({detail,onRetry}){
 // The puzzle's identity above the question: a small label, then one rounded
 // banner split between the two categories' saved colours, each name on its
 // own half with its optional subtitle as a second line ("Led Zeppelin" /
-// "Song"), and the yellow OR badge over the division. Names and subtitles
-// fit their halves with FitText, and both halves show the smaller of the two
-// fitted sizes, so the pair always matches and only a long name shrinks.
+// "Song"), and the yellow OR badge over the division. Every line is fitted
+// with FitText and all of them show the smallest fitted size, so a name and
+// its subtitle read as one two-line label, the halves always match, and only
+// a long name or subtitle makes them shrink.
 // Read as "Led Zeppelin Song or My Little Pony Song".
 // True while the media query matches; follows changes (rotation, resizing).
 function useMediaQuery(query){
@@ -2870,8 +2871,11 @@ function GameMatchup({game,label}){
   const[nameFit,setNameFit]=useState({});
   const[subFit,setSubFit]=useState({});
   const shared=(fit,cat,size)=>fit[cat]===size?fit:{...fit,[cat]:size};
-  const nameSize=nameFit.A&&nameFit.B?Math.min(nameFit.A,nameFit.B):undefined;
-  const subSize=subFit.A&&subFit.B?Math.min(subFit.A,subFit.B):undefined;
+  // One size for every line of the banner: the smallest that any name or
+  // subtitle needs, so a subtitle reads as the second line of the same
+  // label rather than smaller supporting text, and the halves match.
+  const fits=[nameFit.A,nameFit.B,...(withSub?[subFit.A,subFit.B]:[])];
+  const lineSize=fits.every(Boolean)?Math.min(...fits):undefined;
   return(
     <section className="gp-mu" aria-labelledby={id}>
       <p className="gp-mu-label" id={id}>{label}</p>
@@ -2882,10 +2886,10 @@ function GameMatchup({game,label}){
             <div className={`gp-mu-half gp-mu-${x.cat.toLowerCase()}`}
                  style={{"--mu-bg":x.color.mid,"--mu-edge":x.color.dark,"--mu-ink":x.color.isDark?"#fff":"var(--black)"}}>
               <FitText className="gp-mu-name" min={11} max={roomy?26:20} oneLine={withSub&&!longName} buffer={2}
-                onFit={size=>setNameFit(f=>shared(f,x.cat,size))} forceSize={nameSize}>{x.name}</FitText>
+                onFit={size=>setNameFit(f=>shared(f,x.cat,size))} forceSize={lineSize}>{x.name}</FitText>
               {withSub&&(
-                <FitText className="gp-mu-sub" min={10} max={roomy?22:18} oneLine buffer={2}
-                  onFit={size=>setSubFit(f=>shared(f,x.cat,size))} forceSize={subSize}>{x.sub||" "}</FitText>
+                <FitText className="gp-mu-sub" min={11} max={roomy?26:20} oneLine buffer={2}
+                  onFit={size=>setSubFit(f=>shared(f,x.cat,size))} forceSize={lineSize}>{x.sub||" "}</FitText>
               )}
             </div>
           </Fragment>

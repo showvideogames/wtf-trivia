@@ -244,11 +244,13 @@
 .gp-mu-half .fit-text-box { text-shadow: 0 2px 0 rgba(0, 0, 0, 0.22); }
 .gp-mu-half[style*="var(--black)"] .fit-text-box { text-shadow: none; }
 .gp-mu-name { height: 100%; }
-.gp-mu-bar.has-sub .gp-mu-name { height: 26px; flex: none; }
-.gp-mu-sub { height: 22px; flex: none; }
+/* With a subtitle, the name and subtitle lines get equal boxes, so the one
+   shared size fits both. */
+.gp-mu-bar.has-sub .gp-mu-name { height: 24px; flex: none; }
+.gp-mu-sub { height: 24px; flex: none; }
 /* A long name with a subtitle: two lines for the name, then the subtitle. */
 .gp-mu-bar.is-long { height: 80px; }
-.gp-mu-bar.has-sub.is-long .gp-mu-name { height: 46px; }
+.gp-mu-bar.has-sub.is-long .gp-mu-name { height: 44px; }
 .gp-mu-or {
   position: absolute;
   left: 50%;
@@ -1212,10 +1214,10 @@
   .gp-mu-bar { height: 72px; border-radius: 24px; }
   .gp-mu-half { padding: 4px 32px 4px 16px; }
   .gp-mu-b { padding: 4px 16px 4px 32px; }
-  .gp-mu-bar.has-sub .gp-mu-name { height: 32px; }
-  .gp-mu-sub { height: 26px; }
+  .gp-mu-bar.has-sub .gp-mu-name { height: 29px; }
+  .gp-mu-sub { height: 29px; }
   .gp-mu-bar.is-long { height: 94px; }
-  .gp-mu-bar.has-sub.is-long .gp-mu-name { height: 54px; }
+  .gp-mu-bar.has-sub.is-long .gp-mu-name { height: 51px; }
   .gp-mu-or { width: 50px; height: 50px; font-size: 19px; }
   .gp-progress { margin-top: 16px; gap: 8px; }
   .gp-qpill { font-size: 14px; padding: 4px 16px 3px; }
