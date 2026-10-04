@@ -13,6 +13,7 @@ import { archivePuzzleImages, describeImageWarning, failureReason, imageName, is
 import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor } from "./crowdStats.js";
 import { gameToRow, rowToGame } from "./gameRow.js";
 import { copyText, shareOrCopy } from "./homeShare.js";
+import { saveAnswerThenSync } from "./answerSync.js";
 import SharePreview from "./SharePreview.jsx";
 import ResultsCopyButton from "./ResultsCopyButton.jsx";
 import { CrowdPanel, CrowdTiles } from "./ResultsCrowd.jsx";
@@ -4774,13 +4775,15 @@ export default function WhatTheFudgeTrivia(){
   // Record an answer mid-game
   const handleAnswer = async(puzzleId, answers, score) => {
     if(!player) return;
-    // Keep App's copy of today's record in step, so going back to Home
-    // mid-game shows "N of M answered" / Keep going! straight away.
+    // Once the save succeeds, App's copy of today's record catches up, so
+    // going back to Home mid-game shows "N of M answered" / Keep going!
+    // straight away. A failed save leaves it alone (see answerSync.js).
     // GameScreen reads its record only when it mounts, so this doesn't
     // touch the game in progress.
-    setGameRecord(r=>r && r.puzzleId===puzzleId && !r.completed
-      ? {...r, answers, score, currentIndex:answers.length} : r);
-    try { await dbRecordAnswer(player.id, puzzleId, answers, score); } catch(e){}
+    await saveAnswerThenSync({
+      save: ()=>dbRecordAnswer(player.id, puzzleId, answers, score),
+      setRecord: setGameRecord, puzzleId, answers, score,
+    });
   };
 
   // Complete game
