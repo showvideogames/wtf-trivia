@@ -638,3 +638,72 @@ export function devMergeSavedGames(games, rowToGame) {
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
+
+/* ---- Archive favorites + difficulty (offline preview only) ----
+   This browser's favorites live in localStorage "wtf-dev-favorites"; other
+   players' favorites are a fixed demo crowd, so totals and Most liked have
+   something to show. localStorage "wtf-dev-fav" rehearses failures:
+     "fail-save"   every heart save is rejected (after 0.6s)
+     "slow"        every heart save takes 1.5s
+     "fail-mine"   this player's favorites can't be loaded
+     "fail-counts" the favorite totals can't be loaded
+   localStorage "wtf-dev-puzzle-stats" = "fail" makes the Hardest/Easiest
+   stats fail to load. */
+const FAVORITES_KEY = "wtf-dev-favorites";
+const DEMO_OTHER_FAVORITES = { "demo-yesterday": 4, "arc-dnd": 4, "arc-music": 9, "arc-dino": 2, "arc-retired": 1, "arc-snack": 4 };
+
+function favMode() {
+  try { return localStorage.getItem("wtf-dev-fav"); } catch { return null; }
+}
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export async function devGetFavorites() {
+  await pause(150);
+  if (favMode() === "fail-mine") throw new Error("Simulated favorites failure (wtf-dev-fav=fail-mine)");
+  return new Set(readJSON(FAVORITES_KEY, []));
+}
+
+export async function devFavoriteCounts() {
+  await pause(200);
+  if (favMode() === "fail-counts") throw new Error("Simulated counts failure (wtf-dev-fav=fail-counts)");
+  const counts = { ...DEMO_OTHER_FAVORITES };
+  for (const id of readJSON(FAVORITES_KEY, [])) counts[id] = (counts[id] || 0) + 1;
+  return counts;
+}
+
+// Like set_puzzle_favorite: adding twice or removing twice changes nothing;
+// resolves to the puzzle's new total.
+export async function devSetFavorite(puzzleId, favorite) {
+  const mode = favMode();
+  await pause(mode === "slow" ? 1500 : mode === "fail-save" ? 600 : 120);
+  if (mode === "fail-save") throw new Error("Simulated save failure (wtf-dev-fav=fail-save)");
+  const mine = new Set(readJSON(FAVORITES_KEY, []));
+  if (favorite) mine.add(puzzleId);
+  else mine.delete(puzzleId);
+  writeJSON(FAVORITES_KEY, [...mine]);
+  return (DEMO_OTHER_FAVORITES[puzzleId] || 0) + (mine.has(puzzleId) ? 1 : 0);
+}
+
+// Aggregate stats like puzzle_stats, chosen so Hardest/Easiest show the
+// normalized formula at work: puzzles of different lengths, one below the
+// 5-play minimum, one with impossible numbers and some with none at all.
+const DEMO_PUZZLE_STATS = {
+  "demo-today": { totalFinished: 40, totalScore: 200, totalQuestions: 8 },        // 62.5%
+  "demo-yesterday": { totalFinished: 20, totalScore: 70, totalQuestions: 5 },     // 70%
+  "demo-long-labels": { totalFinished: 10, totalScore: 30, totalQuestions: 8 },   // 37.5%
+  "arc-dnd": { totalFinished: 12, totalScore: 48, totalQuestions: 5 },            // 80%
+  "arc-selfhelp": { totalFinished: 4, totalScore: 4, totalQuestions: 5 },         // too few plays
+  "arc-alien": { totalFinished: 8, totalScore: 18, totalQuestions: 5 },           // 45%
+  "arc-music": { totalFinished: 30, totalScore: 135, totalQuestions: 5 },         // 90%
+  "arc-puppet": { totalFinished: 6, totalScore: 99, totalQuestions: 5 },          // impossible
+  "arc-dino": { totalFinished: 9, totalScore: 27, totalQuestions: 5 },            // 60%
+  "arc-snack": { totalFinished: 0, totalScore: 0, totalQuestions: 0 },            // empty
+};
+
+export async function devArchiveStats() {
+  await pause(250);
+  let mode = null;
+  try { mode = localStorage.getItem("wtf-dev-puzzle-stats"); } catch { /* ignore */ }
+  if (mode === "fail") throw new Error("Simulated stats failure (wtf-dev-puzzle-stats=fail)");
+  return JSON.parse(JSON.stringify(DEMO_PUZZLE_STATS));
+}

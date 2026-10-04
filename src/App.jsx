@@ -19,8 +19,11 @@ import ResultsNerdMode from "./ResultsNerdMode.jsx";
 import ResultsScore from "./ResultsScore.jsx";
 import CandyPageShell from "./CandyPageShell.jsx";
 import SiteHeader from "./SiteHeader.jsx";
-import { ARCHIVE_FILTERS, archivePuzzles, archiveTopicCounts, filterArchive } from "./archiveList.js";
+import { ARCHIVE_FILTERS, archivePuzzles, archiveTopicCounts, filterArchive, sortArchive, sortAvailable } from "./archiveList.js";
+import { emptyFavorites, toggleFavorite } from "./archiveFavorites.js";
 import ArchiveTopicFilter from "./ArchiveTopicFilter.jsx";
+import ArchiveSortMenu from "./ArchiveSortMenu.jsx";
+import ArchiveFavoriteButton from "./ArchiveFavoriteButton.jsx";
 import { normalizeEditorDraft, restoreEditorDraft } from "./admin/editorDraft.js";
 import { histogramBuckets } from "./scoreHistogram.js";
 import { StudioContext, paletteColor } from "./admin/StudioContext.js";
@@ -46,6 +49,10 @@ import {
   devSaveGameRow,
   devDeleteGameRow,
   devMergeSavedGames,
+  devGetFavorites,
+  devFavoriteCounts,
+  devSetFavorite,
+  devArchiveStats,
 } from "./dev/offlineBackend.js";
 
 // ============================================================
@@ -2113,6 +2120,57 @@ async function dbGetPuzzleCommunityStats(puzzleId, userScore){
   }
 }
 
+// ===== DB FUNCTIONS — ARCHIVE FAVORITES + DIFFICULTY =====
+// Favorites belong to the signed-in player (guests sign in anonymously), like
+// plays. The Archive never waits on these: each has a bounded wait, and a
+// failure only switches off what needs it (see ArchiveScreen).
+const ARCHIVE_DATA_TIMEOUT_MS = 8000;
+const FAVORITE_SAVE_TIMEOUT_MS = 10000;
+// This player's favorite puzzle ids (a Set). Throws when it can't tell.
+async function dbGetMyFavorites(playerId){
+  if(OFFLINE_PREVIEW) return devGetFavorites();
+  const rows = await withTimeout(
+    sbFetch(`/rest/v1/puzzle_favorites?player_id=eq.${playerId}&select=puzzle_id`),
+    ARCHIVE_DATA_TIMEOUT_MS, "Favorites took too long to load."
+  );
+  return new Set((rows||[]).map(r=>r.puzzle_id));
+}
+// Every puzzle's favorite total, { [puzzleId]: n }; puzzles nobody has
+// favorited have no row (0).
+async function dbGetFavoriteCounts(){
+  if(OFFLINE_PREVIEW) return devFavoriteCounts();
+  const rows = await withTimeout(
+    sbFetch("/rest/v1/puzzle_favorite_counts?select=puzzle_id,favorite_count"),
+    ARCHIVE_DATA_TIMEOUT_MS, "Favorite counts took too long to load."
+  );
+  return Object.fromEntries((rows||[]).map(r=>[r.puzzle_id, Number(r.favorite_count)||0]));
+}
+// Adds or removes this player's favorite (adding twice or removing twice
+// changes nothing) and resolves to the puzzle's new total.
+async function dbSetFavorite(puzzleId, favorite){
+  if(OFFLINE_PREVIEW) return devSetFavorite(puzzleId, favorite);
+  const total = await withTimeout(
+    sbFetch("/rest/v1/rpc/set_puzzle_favorite", {
+      method:"POST",
+      body: JSON.stringify({target_puzzle_id:puzzleId, favorite})
+    }),
+    FAVORITE_SAVE_TIMEOUT_MS, "Saving the favorite took too long."
+  );
+  return Number(total);
+}
+// Aggregate community stats for Hardest/Easiest (no individual plays):
+// { [puzzleId]: { totalFinished, totalScore, totalQuestions } }.
+async function dbGetArchiveStats(){
+  if(OFFLINE_PREVIEW) return devArchiveStats();
+  const rows = await withTimeout(
+    sbFetch("/rest/v1/puzzle_stats?select=puzzle_id,total_finished,total_score,total_questions"),
+    ARCHIVE_DATA_TIMEOUT_MS, "Puzzle stats took too long to load."
+  );
+  return Object.fromEntries((rows||[]).map(r=>[r.puzzle_id, {
+    totalFinished: r.total_finished, totalScore: r.total_score, totalQuestions: r.total_questions
+  }]));
+}
+
 // ===== DB FUNCTIONS — STATS =====
 async function dbGetStats(playerId){
   if(OFFLINE_PREVIEW) return devGetStats();
@@ -3577,8 +3635,9 @@ function SearchGlyph(){
 //   - a retired puzzle (listed only for players who played it) keeps its
 //     score but can't be replayed.
 // The button is the real control. A click anywhere else on the card does
-// the same thing, unless the player was selecting text.
-function ArchiveCard({game,record,isToday,onAction,eager}){
+// the same thing, unless the player was selecting text. The heart (any
+// card, played or not, today's or retired) only ever toggles the favorite.
+function ArchiveCard({game,record,isToday,onAction,eager,favorite}){
   const done = Boolean(record?.completed);
   const retired = game.status==="retired";
   const canReplay = !retired && game.questions?.length>0;
@@ -3601,6 +3660,7 @@ function ArchiveCard({game,record,isToday,onAction,eager}){
             <time dateTime={game.date}>{archiveDateLabel(game.date)}</time>
             {isToday&&<span className="arc-tag">Today</span>}
             {retired&&<span className="arc-tag arc-tag-quiet">Retired</span>}
+            {favorite&&<ArchiveFavoriteButton title={game.themeTitle} {...favorite}/>}
           </div>
         </div>
         {action==="play"&&(
@@ -3631,8 +3691,22 @@ function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onPlayToday,o
   const[records,setRecords]=useState({});
   const[showHelp,setShowHelp]=useState(false);
   const[query,setQuery]=useState("");
-  const[filter,setFilter]=useState("all");
+  const[filterChoice,setFilter]=useState("all");
   const[topicChoice,setTopicChoice]=useState("all");
+  const[sortChoice,setSortChoice]=useState("newest");
+  // Favorites (see archiveFavorites.js). The ref is the source of truth for
+  // the toggle, so a second press before React re-renders is still seen
+  // as "in progress".
+  const[fav,setFavState]=useState(emptyFavorites);
+  const favRef=useRef(fav);
+  const setFav=useCallback(update=>{
+    favRef.current = typeof update==="function" ? update(favRef.current) : update;
+    setFavState(favRef.current);
+  },[]);
+  const[mineStatus,setMineStatus]=useState("loading");
+  const[mineAttempt,setMineAttempt]=useState(0);
+  const[countsStatus,setCountsStatus]=useState("loading");
+  const[puzzleStats,setPuzzleStats]=useState({status:"loading", data:null});
 
   // One request for all of this player's plays, keyed by puzzle id, so a
   // score stays on its puzzle whatever day the puzzle is scheduled for.
@@ -3643,25 +3717,77 @@ function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onPlayToday,o
     return ()=>{cancelled = true;};
   },[playerId, games.length]);
 
-  // Inclusion and order are archivePuzzles' (unchanged rules); search and
-  // the filter pills and the topic menu only narrow what's already loaded.
-  // Topic counts come from the whole Archive, so they hold still while
-  // searching or filtering. A chosen topic that no longer has puzzles (the
-  // list reloaded) quietly falls back to All topics.
+  // The rest loads alongside, never holding up the list: this player's
+  // favorites, every puzzle's favorite total, and the community stats
+  // behind Hardest/Easiest. Each failure only switches off what needs it.
+  useEffect(()=>{
+    if(!playerId) return;
+    let cancelled = false;
+    dbGetMyFavorites(playerId).then(
+      mine=>{ if(cancelled) return; setFav(s=>({...s, mine})); setMineStatus("ready"); },
+      ()=>{ if(!cancelled) setMineStatus("failed"); }
+    );
+    return ()=>{cancelled = true;};
+  },[playerId, mineAttempt, setFav]);
+  useEffect(()=>{
+    let cancelled = false;
+    dbGetFavoriteCounts().then(
+      counts=>{ if(cancelled) return; setFav(s=>({...s, counts})); setCountsStatus("ready"); },
+      ()=>{ if(!cancelled) setCountsStatus("failed"); }
+    );
+    dbGetArchiveStats().then(
+      data=>{ if(!cancelled) setPuzzleStats({status:"ready", data}); },
+      ()=>{ if(!cancelled) setPuzzleStats({status:"failed", data:null}); }
+    );
+    return ()=>{cancelled = true;};
+  },[setFav]);
+  const retryFavorites = ()=>{ setMineStatus("loading"); setMineAttempt(n=>n+1); };
+  const onToggleFavorite = game=>toggleFavorite({
+    puzzleId: game.id, title: game.themeTitle,
+    getState: ()=>favRef.current, setState: setFav, save: dbSetFavorite,
+  });
+  const dismissFavoriteError = ()=>setFav(s=>({...s, error:null}));
+
+  // Inclusion is archivePuzzles' (unchanged rules); search, the filter
+  // pills and the topic menu only narrow what's already loaded, and the
+  // Sort menu orders the result. Topic counts come from the whole Archive,
+  // so they hold still while searching, filtering or sorting. A chosen
+  // topic that no longer has puzzles (the list reloaded) quietly falls back
+  // to All topics; Favorites falls back to All if it becomes unavailable.
   const {puzzles,todayGame} = archivePuzzles(games, records, today);
   const topics = archiveTopicCounts(puzzles);
   const topic = topics.some(t=>t.id===topicChoice) ? topicChoice : "all";
   const topicLabel = topics.find(t=>t.id===topic)?.label;
-  const shown = filterArchive(puzzles, records, {query, filter, topic});
+  const favoritesReady = mineStatus==="ready" && Boolean(fav.mine);
+  const filter = filterChoice==="favorites"&&!favoritesReady ? "all" : filterChoice;
+  const sortData = {stats:puzzleStats.data, favoriteCounts:fav.counts};
+  const sortStatus = {hardest:puzzleStats.status, easiest:puzzleStats.status, liked:countsStatus};
+  const sort = sortAvailable(sortChoice, sortData) ? sortChoice : "newest";
+  const shown = sortArchive(
+    filterArchive(puzzles, records, {query, filter, topic, favorites:fav.mine}),
+    sort, {todayGame, ...sortData}
+  );
   const narrowed = query.trim()!=="" || filter!=="all" || topic!=="all";
+  const favoriteFor = g=>({
+    selected: Boolean(fav.mine?.has(g.id)),
+    count: fav.counts ? (fav.counts[g.id]||0) : null,
+    busy: fav.pending.has(g.id),
+    disabled: !favoritesReady,
+    onToggle: ()=>onToggleFavorite(g),
+  });
   const signedIn = player && !player.isGuest;
   const toTop = ()=>{
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     window.scrollTo({top:0, behavior:reduce?"auto":"smooth"});
   };
   const showAll = ()=>{ setQuery(""); setFilter("all"); setTopicChoice("all"); };
-  const filterWord = filter==="all" ? "" : filter+" ";
+  const filterWord = filter==="all" ? "" : filter==="favorites" ? "favorite " : filter+" ";
   const topicWord = topicLabel ? topicLabel+" " : "";
+  const emptyTitle = query.trim()
+    ? <>No {filterWord}{topicWord}puzzles match &ldquo;{query.trim()}&rdquo;.</>
+    : filter==="favorites"
+      ? (topicLabel ? `None of your favorites are ${topicLabel} puzzles yet.` : "No favorites yet. Tap the heart on any puzzle to keep it here.")
+      : filter==="completed" ? `No completed ${topicWord}puzzles yet.` : `You've played every ${topicWord}puzzle!`;
 
   return(
     <CandyPageShell>
@@ -3696,16 +3822,32 @@ function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onPlayToday,o
               <input type="search" value={query} onChange={e=>setQuery(e.target.value)}
                      placeholder="Search puzzles…" autoComplete="off" spellCheck="false"/>
             </label>
-            <div className="arc-filters" role="group" aria-label="Show puzzles">
-              {ARCHIVE_FILTERS.map(f=>(
-                <button key={f.id} type="button" className="candy-pill"
-                        aria-pressed={filter===f.id} onClick={()=>setFilter(f.id)}>
-                  {f.label}
-                </button>
-              ))}
+            <div className="arc-tools-row">
+              <div className="arc-filters" role="group" aria-label="Show puzzles">
+                {ARCHIVE_FILTERS.map(f=>{
+                  const off = f.id==="favorites" && !favoritesReady;
+                  return(
+                    <button key={f.id} type="button" className="candy-pill"
+                            aria-pressed={filter===f.id} aria-disabled={off||undefined}
+                            title={off?(mineStatus==="failed"?"Your favorites couldn't load":"Loading your favorites…"):undefined}
+                            onClick={()=>{ if(!off) setFilter(f.id); }}>
+                      {f.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="arc-menus">
+                {topics.length>0&&(
+                  <ArchiveTopicFilter topics={topics} total={puzzles.length} value={topic} onChange={setTopicChoice}/>
+                )}
+                <ArchiveSortMenu value={sort} onChange={setSortChoice} availability={sortStatus}/>
+              </div>
             </div>
-            {topics.length>0&&(
-              <ArchiveTopicFilter topics={topics} total={puzzles.length} value={topic} onChange={setTopicChoice}/>
+            {mineStatus==="failed"&&(
+              <p className="arc-notice" role="status">
+                Your favorites couldn't load, so hearts and the Favorites filter are paused.
+                <button type="button" className="arc-notice-btn" onClick={retryFavorites}>Try again</button>
+              </p>
             )}
           </div>
         )}
@@ -3717,22 +3859,24 @@ function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onPlayToday,o
           <div className="arc-empty"><p className="arc-empty-title">No puzzles yet!</p></div>
         ):shown.length===0?(
           <div className="arc-empty">
-            <p className="arc-empty-title">
-              {query.trim()
-                ? <>No {filterWord}{topicWord}puzzles match &ldquo;{query.trim()}&rdquo;.</>
-                : filter==="completed" ? `No completed ${topicWord}puzzles yet.` : `You've played every ${topicWord}puzzle!`}
-            </p>
+            <p className="arc-empty-title">{emptyTitle}</p>
             <button type="button" className="candy-pill" onClick={showAll}>Show all puzzles</button>
           </div>
         ):(
           <ul className="arc-grid">
             {shown.map((g,i)=>(
               <ArchiveCard key={g.id} game={g} record={records[g.id]} isToday={g===todayGame}
-                           onAction={g===todayGame?onPlayToday:onReplay} eager={i<4}/>
+                           onAction={g===todayGame?onPlayToday:onReplay} eager={i<4} favorite={favoriteFor(g)}/>
             ))}
           </ul>
         )}
       </div>
+      {fav.error&&(
+        <div className="arc-toast" role="alert">
+          <p className="arc-toast-msg">{fav.error.message}</p>
+          <button type="button" className="candy-pill arc-toast-btn" onClick={dismissFavoriteError}>OK</button>
+        </div>
+      )}
       {showHelp&&<HomeHelp game={todayGame} onClose={()=>setShowHelp(false)}/>}
     </CandyPageShell>
   );

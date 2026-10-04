@@ -9,9 +9,9 @@ export default function ArchiveTopicFilter({topics, total, value, onChange}){
   const active = value!=="all";
   const chosen = topics.find(t=>t.id===value);
   return(
-    <div className={`arc-topic${active?" is-active":""}`}>
+    <div className={`arc-select arc-topic${active?" is-active":""}`}>
+      <label className="arc-select-label" htmlFor="arc-topic-select">Topic</label>
       <div className="arc-topic-field">
-        <label className="arc-sr-only" htmlFor="arc-topic-select">Filter by topic</label>
         <select id="arc-topic-select" className="arc-topic-select" value={value} onChange={e=>onChange(e.target.value)}>
           <option value="all">All topics · {total}</option>
           {topics.map(t=>(

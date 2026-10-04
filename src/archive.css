@@ -208,30 +208,95 @@
   color: var(--black);
 }
 
-/* ===== SEARCH + FILTERS ===== */
+/* ===== SEARCH + FILTERS + MENUS =====
+   Search on its own full-width row; under it the status pills on the left
+   and the labelled Topic and Sort menus on the right, wrapping (never
+   shrinking) when the row runs out of room. */
 .arc-tools {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 12px 14px;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 1180px;
   margin: 24px auto 30px;
 }
-.arc-tools .candy-search { width: 340px; }
+.arc-tools .candy-search { width: 100%; }
+.arc-tools-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 18px;
+}
 .arc-filters {
   display: flex;
   gap: 8px;
 }
+.arc-filters .candy-pill[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.arc-filters .candy-pill[aria-disabled="true"]:hover { background: var(--cs-cream); }
+.arc-menus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+}
+.arc-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.arc-select-label {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 900;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--black);
+  white-space: nowrap;
+  cursor: pointer;
+}
+/* Sized to its chosen option, not its longest one, so "(loading…)" in the
+   list never makes the menu jump. */
+#arc-sort-select { width: 176px; }
+
+/* A load problem the player should know about. Stays until fixed. */
+.arc-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 0;
+  padding: 8px 8px 8px 14px;
+  border: 2px solid var(--black);
+  border-radius: 14px;
+  background: var(--cs-pink-soft);
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--black);
+}
+.arc-notice-btn {
+  appearance: none;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 2px solid var(--black);
+  border-radius: 999px;
+  background: var(--cs-cream);
+  color: var(--black);
+  font-family: 'Fredoka One', cursive;
+  font-size: 14px;
+  cursor: pointer;
+}
+.arc-notice-btn:hover { background: #fff; }
 
 
 /* Topic menu: a native select dressed as a cream candy pill, pink while a
    topic is chosen, with a round × beside it back to All topics. */
-.arc-topic {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
+.arc-topic { gap: 6px; }
+.arc-topic .arc-select-label { margin-right: 2px; }
 .arc-topic-field {
   position: relative;
   display: flex;
@@ -436,6 +501,94 @@
 .arc-tag-quiet { background: #EDE7DA; }
 .arc-action { flex-shrink: 0; }
 
+/* The favorite heart, after the date and tags: outlined, or filled pink
+   on a soft pink pill once favorited, the total beside it. Its hit area
+   reaches past the small pill (::before) so it is easy to tap without
+   crowding the card. */
+.arc-fav-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+.arc-fav {
+  position: relative;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  min-width: 46px;
+  padding: 0 10px 0 8px;
+  border: 2px solid var(--black);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--black);
+  font-family: 'Fredoka One', cursive;
+  font-size: 13px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color .12s ease, transform .12s ease;
+}
+.arc-fav::before {
+  content: "";
+  position: absolute;
+  inset: -8px -5px;
+}
+.arc-fav-heart {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+}
+.arc-fav:hover { background: var(--cs-pink-soft); }
+.arc-fav:active { transform: scale(0.93); }
+.arc-fav.is-on { background: var(--cs-pink-soft); }
+.arc-fav.is-on .arc-fav-heart { fill: var(--cs-pink); }
+.arc-fav.is-on:hover { background: #FFD0E0; }
+/* Saving: the new state shows straight away; the pill just dims a little
+   and ignores presses until the save settles. */
+.arc-fav.is-busy { cursor: progress; opacity: 0.65; }
+.arc-fav[aria-disabled="true"]:not(.is-busy) { cursor: not-allowed; opacity: 0.45; }
+.arc-fav[aria-disabled="true"]:hover { background: #fff; }
+.arc-fav.is-on[aria-disabled="true"]:hover { background: var(--cs-pink-soft); }
+.arc-fav[aria-disabled="true"]:active { transform: none; }
+
+/* ===== FAVORITE SAVE ERROR =====
+   Pinned to the bottom of the screen, so it's seen wherever the heart was,
+   and stays until the player dismisses it (or saves that heart). */
+.arc-toast {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(560px, calc(100% - 32px));
+  padding: 12px 12px 12px 18px;
+  transform: translateX(-50%);
+  background: var(--cs-cream);
+  border: var(--cs-outline);
+  border-left-width: 10px;
+  border-left-color: var(--cs-pink);
+  border-radius: 18px;
+  box-shadow: 0 4px 0 var(--black);
+}
+.arc-toast-msg {
+  flex: 1;
+  margin: 0;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--black);
+}
+.arc-toast-btn { flex-shrink: 0; min-width: 64px; }
+
 /* ===== EMPTY ===== */
 .arc-empty {
   max-width: 520px;
@@ -475,8 +628,9 @@
   .arc-title { gap: 13px; font-size: clamp(40px, 3.4vw, 52px); }
   .arc-sub { margin-top: 6px; font-size: 17px; }
 
-  .arc-tools { margin: 20px auto 24px; gap: 10px 12px; }
-  .arc-tools .candy-search { width: 272px; }
+  .arc-tools { margin: 20px auto 24px; gap: 12px; }
+  .arc-tools-row,
+  .arc-menus { gap: 10px 16px; }
   .arc-tools .candy-search input { min-height: 40px; padding-left: 40px; font-size: 15px; }
   .arc-tools .candy-search svg { left: 14px; width: 17px; height: 17px; }
   .arc-filters { gap: 7px; }
@@ -485,6 +639,8 @@
   .arc-topic-chevron { right: 13px; width: 14px; height: 14px; margin-top: -7px; }
   .arc-topic-clear { width: 38px; height: 38px; }
   .arc-topic-clear svg { width: 14px; height: 14px; }
+  .arc-select-label { font-size: 14px; }
+  #arc-sort-select { width: 164px; }
 
   .arc-empty { border-radius: 20px; padding: 22px 20px; }
   .arc-empty-title { font-size: 18px; }
@@ -517,12 +673,21 @@
   .arc-head { margin-top: 18px; }
   .arc-sub { margin-top: 6px; }
   .arc-tools { margin: 18px 0 20px; gap: 10px; }
-  .arc-tools .candy-search { width: 100%; }
-  .arc-filters { width: 100%; }
-  .arc-filters .candy-pill { flex: 1 1 0; padding: 0 8px; }
-  .arc-topic { width: 100%; }
-  .arc-topic-field { flex: 1 1 auto; }
-  .arc-topic-select { max-width: none; }
+  .arc-tools-row { gap: 12px; }
+  /* Four equal pills across; two by two on the narrowest phones. */
+  .arc-filters { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .arc-filters .candy-pill { padding: 0 4px; font-size: 14px; }
+  /* Topic and Sort side by side, each label above its menu. */
+  .arc-menus { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .arc-select { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 6px; }
+  .arc-select-label { grid-column: 1 / -1; font-size: 14px; }
+  .arc-topic .arc-select-label { margin-right: 0; }
+  .arc-topic-select,
+  #arc-sort-select { width: 100%; max-width: none; padding-left: 14px; padding-right: 34px; font-size: 14px; }
+  .arc-topic-chevron { right: 12px; }
+  .arc-meta { row-gap: 6px; }
+  .arc-toast { padding: 10px 10px 10px 14px; }
+  .arc-toast-msg { font-size: 14px; }
   .arc-grid { gap: 18px; }
   .arc-card { border-radius: 20px; }
   .arc-foot { gap: 10px; padding: 12px 12px 13px 15px; }
@@ -532,6 +697,9 @@
   .arc-action.candy-badge { min-height: 42px; font-size: 17px; }
   .arc-action.candy-btn { padding: 0 16px 0 14px; }
   .arc-action.candy-badge { padding: 0 14px 0 10px; }
+}
+@media (max-width: 359px) {
+  .arc-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 380px) {
   .arc-card-title { font-size: 17px; }

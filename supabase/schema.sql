@@ -17,6 +17,8 @@
 --     never touches its plays or stats.
 --   * one play per player per puzzle.
 --   * a puzzle with plays can't be deleted: retire it (status 'retired').
+--   * a player favorites a puzzle at most once (puzzle_favorites); each
+--     puzzle's total is kept in puzzle_favorite_counts by a trigger.
 -- ============================================================
 
 create extension if not exists pgcrypto;
@@ -423,6 +425,119 @@ with check (auth.uid() = player_id);
 drop policy if exists "puzzle stats are readable" on public.puzzle_stats;
 create policy "puzzle stats are readable"
 on public.puzzle_stats
+for select
+to anon, authenticated
+using (true);
+
+-- ===== Favorites (supabase/puzzle_favorites.sql) =====
+-- One row per (player, puzzle) a player favorited, plus each puzzle's total,
+-- kept exact by a trigger, so the Archive reads every count without seeing
+-- anyone's favorites.
+create table if not exists public.puzzle_favorites (
+  player_id uuid not null references public.players(id) on delete cascade,
+  puzzle_id text not null references public.games(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (player_id, puzzle_id)
+);
+
+create index if not exists puzzle_favorites_puzzle_idx
+  on public.puzzle_favorites (puzzle_id);
+
+create table if not exists public.puzzle_favorite_counts (
+  puzzle_id text primary key references public.games(id) on delete cascade,
+  favorite_count integer not null default 0 check (favorite_count >= 0),
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.puzzle_favorites_count()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    insert into public.puzzle_favorite_counts as c (puzzle_id, favorite_count, updated_at)
+    values (new.puzzle_id, 1, now())
+    on conflict (puzzle_id) do update
+      set favorite_count = c.favorite_count + 1, updated_at = now();
+    return null;
+  end if;
+  update public.puzzle_favorite_counts
+     set favorite_count = greatest(favorite_count - 1, 0), updated_at = now()
+   where puzzle_id = old.puzzle_id;
+  return null;
+end;
+$$;
+
+revoke execute on function public.puzzle_favorites_count() from public, anon, authenticated;
+
+drop trigger if exists puzzle_favorites_count on public.puzzle_favorites;
+create trigger puzzle_favorites_count
+after insert or delete on public.puzzle_favorites
+for each row
+execute function public.puzzle_favorites_count();
+
+-- The Archive's heart: adds or removes the caller's own favorite (runs as
+-- the caller, so the policies below apply) and returns the new count.
+create or replace function public.set_puzzle_favorite(target_puzzle_id text, favorite boolean)
+returns integer
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+  total integer;
+begin
+  if me is null then
+    raise exception 'Sign in (or play as a guest) to favorite puzzles.' using errcode = '42501';
+  end if;
+  if favorite then
+    insert into public.puzzle_favorites (player_id, puzzle_id)
+    values (me, target_puzzle_id)
+    on conflict (player_id, puzzle_id) do nothing;
+  else
+    delete from public.puzzle_favorites
+     where player_id = me and puzzle_id = target_puzzle_id;
+  end if;
+  select c.favorite_count into total
+    from public.puzzle_favorite_counts c
+   where c.puzzle_id = target_puzzle_id;
+  return coalesce(total, 0);
+end;
+$$;
+
+revoke execute on function public.set_puzzle_favorite(text, boolean) from public, anon;
+grant execute on function public.set_puzzle_favorite(text, boolean) to authenticated;
+
+alter table public.puzzle_favorites enable row level security;
+alter table public.puzzle_favorite_counts enable row level security;
+
+drop policy if exists "puzzle favorites own rows" on public.puzzle_favorites;
+create policy "puzzle favorites own rows"
+on public.puzzle_favorites
+for select
+to authenticated
+using (auth.uid() = player_id);
+
+drop policy if exists "puzzle favorites insert own rows" on public.puzzle_favorites;
+create policy "puzzle favorites insert own rows"
+on public.puzzle_favorites
+for insert
+to authenticated
+with check (auth.uid() = player_id);
+
+drop policy if exists "puzzle favorites delete own rows" on public.puzzle_favorites;
+create policy "puzzle favorites delete own rows"
+on public.puzzle_favorites
+for delete
+to authenticated
+using (auth.uid() = player_id);
+
+drop policy if exists "puzzle favorite counts are readable" on public.puzzle_favorite_counts;
+create policy "puzzle favorite counts are readable"
+on public.puzzle_favorite_counts
 for select
 to anon, authenticated
 using (true);
