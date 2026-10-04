@@ -351,6 +351,21 @@ function archiveDemoGames() {
     ["arc-long", 27, "Obscure Nineteenth-Century Patent Medicine OR Extremely Specific Modern Wellness Influencer Supplement Brand?", "Patent Medicine", "Wellness Supplement", "red", "lime", art("🧪", 100, 160), art("💊", 180, 100)],
     ["arc-retired", 30, "Planet OR Pokémon?", "Planet", "Pokémon", "sky", "orange", art("🪐"), art("⚡"), "retired"],
   ];
+  // Topic tags (ids from src/topics.js), so the Archive topic menu and tag
+  // search have something to show. The three everyday demo puzzles stay
+  // untagged, like puzzles saved before topics existed.
+  const tags = {
+    "arc-dnd": ["board_games", "animals"],
+    "arc-selfhelp": ["books"],
+    "arc-alien": ["space", "geography"],
+    "arc-music": ["music"],
+    "arc-puppet": ["music", "tv"],
+    "arc-dino": ["animals", "science", "tv"],
+    "arc-snack": ["food"],
+    "arc-missing": ["food", "words_language"],
+    "arc-long": ["history", "science"],
+    "arc-retired": ["space", "gaming"],
+  };
   return rows.map(([id, ago, themeTitle, categoryA, categoryB, categoryAColor, categoryBColor, categoryAImage, categoryBImage, status = "published"]) => ({
     ...demoGame(),
     id,
@@ -363,6 +378,7 @@ function archiveDemoGames() {
     categoryAImage,
     categoryBImage,
     status,
+    tags: tags[id] || [],
     questions: archiveQuestions(),
   }));
 }
@@ -594,6 +610,10 @@ export function devSaveGameRow(row) {
   // with the error PostgREST returns for an unknown column.
   if (mode === "no-share-columns" && ("category_a_share_name" in row || "category_b_share_name" in row)) {
     throw new Error(`Supabase error 400: {"code":"PGRST204","message":"Could not find the 'category_a_share_name' column of 'games' in the schema cache"}`);
+  }
+  // "no-tags-column" does the same for supabase/puzzle_tags.sql.
+  if (mode === "no-tags-column" && "tags" in row) {
+    throw new Error(`Supabase error 400: {"code":"PGRST204","message":"Could not find the 'tags' column of 'games' in the schema cache"}`);
   }
   savedGameRows.set(row.id, JSON.parse(JSON.stringify(row)));
 }

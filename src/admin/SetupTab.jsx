@@ -3,6 +3,7 @@ import DatePicker from "./DatePicker.jsx";
 import Icon from "./Icon.jsx";
 import ImageField from "./ImageField.jsx";
 import { paletteColor, useStudio } from "./StudioContext.js";
+import { TOPICS, normalizeTags, toggleTag } from "../topics.js";
 
 function CardHead({icon, title, sub}){
   return(
@@ -42,6 +43,34 @@ function PuzzleBasics({game, set, games}){
                    onChange={v=>set("categoryAShareName",v)} hint={SHARE_HINT}/>
         <TextField id="share-name-b" label="Share name for Category B" value={game.categoryBShareName} placeholder={game.categoryB||"Same as Category B"}
                    onChange={v=>set("categoryBShareName",v)} hint={SHARE_HINT}/>
+      </div>
+    </section>
+  );
+}
+
+// Topic tags from the shared list in src/topics.js. Toggle buttons
+// (aria-pressed) rather than checkboxes, so each reads as "Music, toggle
+// button, pressed". Optional: a puzzle may have none, one or many.
+function Topics({game, set}){
+  const tags = normalizeTags(game.tags);
+  return(
+    <section className="ps-panel ps-card" aria-labelledby="ps-topics-title">
+      <CardHead icon="tag" title={<span id="ps-topics-title">Topics</span>} sub={<span id="ps-topics-help">Select every topic that fits this puzzle.</span>}/>
+      <div className="ps-topics" role="group" aria-labelledby="ps-topics-title" aria-describedby="ps-topics-help">
+        {TOPICS.map(t=>{
+          const on = tags.includes(t.id);
+          return(
+            <button key={t.id} type="button" className={`ps-topic${on?" on":""}`} aria-pressed={on}
+                    onClick={()=>set("tags", current=>toggleTag(current, t.id))}>
+              <span className="ps-topic-check" aria-hidden="true">{on&&<Icon name="check" size={13}/>}</span>
+              <span className="ps-topic-emoji" aria-hidden="true">{t.emoji}</span>
+              <span className="ps-topic-label">{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="ps-topics-count" aria-live="polite">
+        {tags.length ? `${tags.length} selected` : "No topics selected yet. Topics are optional."}
       </div>
     </section>
   );
@@ -150,6 +179,7 @@ export default function SetupTab({game, set, games, trackImage, onDelete, onReti
   return(
     <div className="ps-setup">
       <PuzzleBasics game={game} set={set} games={games}/>
+      <Topics game={game} set={set}/>
       <CategoryAppearance game={game} set={set} trackImage={trackImage}/>
       <Artwork game={game} set={set} trackImage={trackImage}/>
       {onDelete&&(

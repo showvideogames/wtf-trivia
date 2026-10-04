@@ -19,7 +19,9 @@ import ResultsNerdMode from "./ResultsNerdMode.jsx";
 import ResultsScore from "./ResultsScore.jsx";
 import CandyPageShell from "./CandyPageShell.jsx";
 import SiteHeader from "./SiteHeader.jsx";
-import { ARCHIVE_FILTERS, archivePuzzles, filterArchive } from "./archiveList.js";
+import { ARCHIVE_FILTERS, archivePuzzles, archiveTopicCounts, filterArchive } from "./archiveList.js";
+import ArchiveTopicFilter from "./ArchiveTopicFilter.jsx";
+import { normalizeEditorDraft, restoreEditorDraft } from "./admin/editorDraft.js";
 import { histogramBuckets } from "./scoreHistogram.js";
 import { StudioContext, paletteColor } from "./admin/StudioContext.js";
 import { localDateFromISO } from "./admin/adminDates.js";
@@ -1929,9 +1931,14 @@ async function dbSaveGame(game){
     const confirmed = Array.isArray(saved) && saved.some(r=>r.id===row.id && r.date===row.date && r.status===row.status);
     if(!confirmed) throw new Error("The database didn't confirm the save.");
   }
-  // A save that carried share names proves the columns exist, so later saves
-  // from this editor always send them (clearing a name then saves null).
-  const saved = "category_a_share_name" in row ? {...uploaded, shareNameColumns:true} : uploaded;
+  // A save that carried share names (or tags) proves the columns exist, so
+  // later saves from this editor always send them (clearing a name then
+  // saves null, and removing the last tag saves []).
+  const saved = {
+    ...uploaded,
+    ...("category_a_share_name" in row ? {shareNameColumns:true} : {}),
+    ...("tags" in row ? {tagsColumn:true} : {})
+  };
   return { game: saved, imageFailures: failures };
 }
 // A short, plain reason for a failed database write.
@@ -1941,6 +1948,7 @@ function describeSaveError(e){
   const status = msg.match(/Supabase error (\d{3})/)?.[1];
   if(status==="401"||status==="403") return "the database refused the change (permission denied).";
   if(msg.includes("_share_name")) return "the database doesn't have the share-name columns yet (supabase/share_names.sql). Clear both share names to save without them.";
+  if(msg.includes("'tags' column")) return "the database doesn't have the topic tags column yet (supabase/puzzle_tags.sql). Deselect every topic to save without it.";
   if(msg.includes("games_one_published_per_date")) return "another published puzzle already has that date. Pick another day.";
   if(msg.includes("game_records_puzzle_id_fkey")) return "players have already played this puzzle, so it can't be deleted. Retire it instead.";
   if(status) return `the database returned an error (${status}).`;
@@ -2207,19 +2215,9 @@ function formatAccountLabel(email){
   return `${parts[0].slice(0,10)}...@${parts[1]}`;
 }
 function getEditorDraftKey(id){return `wtf-editor-draft:${id||"unsaved"}`;}
-function normalizeEditorDraft(game){
-  return {
-    ...game,
-    status: game.status==="published"||game.status==="retired" ? game.status : "draft",
-    questions: game.questions||[]
-  };
-}
 function loadEditorDraft(game){
   if(!game?.id) return game;
-  const saved = safeRead(getEditorDraftKey(game.id));
-  // shareNameColumns describes the database, not the draft, so the loaded
-  // puzzle's value always wins over whatever an older draft recorded.
-  return saved?.game ? {...game, ...saved.game, id: game.id, shareNameColumns: game.shareNameColumns} : game;
+  return restoreEditorDraft(game, safeRead(getEditorDraftKey(game.id)));
 }
 function saveEditorDraft(game){
   if(!game?.id) return false;
@@ -3634,6 +3632,7 @@ function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onPlayToday,o
   const[showHelp,setShowHelp]=useState(false);
   const[query,setQuery]=useState("");
   const[filter,setFilter]=useState("all");
+  const[topicChoice,setTopicChoice]=useState("all");
 
   // One request for all of this player's plays, keyed by puzzle id, so a
   // score stays on its puzzle whatever day the puzzle is scheduled for.
@@ -3645,16 +3644,24 @@ function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onPlayToday,o
   },[playerId, games.length]);
 
   // Inclusion and order are archivePuzzles' (unchanged rules); search and
-  // the filter pills only narrow what's already loaded.
+  // the filter pills and the topic menu only narrow what's already loaded.
+  // Topic counts come from the whole Archive, so they hold still while
+  // searching or filtering. A chosen topic that no longer has puzzles (the
+  // list reloaded) quietly falls back to All topics.
   const {puzzles,todayGame} = archivePuzzles(games, records, today);
-  const shown = filterArchive(puzzles, records, {query, filter});
-  const narrowed = query.trim()!=="" || filter!=="all";
+  const topics = archiveTopicCounts(puzzles);
+  const topic = topics.some(t=>t.id===topicChoice) ? topicChoice : "all";
+  const topicLabel = topics.find(t=>t.id===topic)?.label;
+  const shown = filterArchive(puzzles, records, {query, filter, topic});
+  const narrowed = query.trim()!=="" || filter!=="all" || topic!=="all";
   const signedIn = player && !player.isGuest;
   const toTop = ()=>{
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     window.scrollTo({top:0, behavior:reduce?"auto":"smooth"});
   };
-  const showAll = ()=>{ setQuery(""); setFilter("all"); };
+  const showAll = ()=>{ setQuery(""); setFilter("all"); setTopicChoice("all"); };
+  const filterWord = filter==="all" ? "" : filter+" ";
+  const topicWord = topicLabel ? topicLabel+" " : "";
 
   return(
     <CandyPageShell>
@@ -3697,6 +3704,9 @@ function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onPlayToday,o
                 </button>
               ))}
             </div>
+            {topics.length>0&&(
+              <ArchiveTopicFilter topics={topics} total={puzzles.length} value={topic} onChange={setTopicChoice}/>
+            )}
           </div>
         )}
         <p className="arc-sr-only" role="status">
@@ -3709,8 +3719,8 @@ function ArchiveScreen({games,playerId,player,sound,onNav,onReplay,onPlayToday,o
           <div className="arc-empty">
             <p className="arc-empty-title">
               {query.trim()
-                ? <>No {filter==="all"?"":filter+" "}puzzles match &ldquo;{query.trim()}&rdquo;.</>
-                : filter==="completed" ? "No completed puzzles yet." : "You've played every puzzle!"}
+                ? <>No {filterWord}{topicWord}puzzles match &ldquo;{query.trim()}&rdquo;.</>
+                : filter==="completed" ? `No completed ${topicWord}puzzles yet.` : `You've played every ${topicWord}puzzle!`}
             </p>
             <button type="button" className="candy-pill" onClick={showAll}>Show all puzzles</button>
           </div>
@@ -4016,7 +4026,9 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
     const id = setInterval(()=>setNow(Date.now()), 30000);
     return ()=>clearInterval(id);
   },[lastSavedAt]);
-  const set=(f,v)=>setGame(g=>({...g,[f]:v}));
+  // v may be an updater (old value => new value), for edits that build on
+  // the current value, like toggling one topic.
+  const set=(f,v)=>setGame(g=>({...g,[f]:typeof v==="function"?v(g[f]):v}));
   const qs=game.questions??[];
   const qc=qs.length;
   const ok=questionCountOk(qc);
@@ -4727,7 +4739,7 @@ export default function WhatTheFudgeTrivia(){
   // Admin branch
   if(view==="admin"){
     if(!adminIn)return <><style>{styles}</style><CandyBackdrop preset="admin"/><AdminLogin onLogin={()=>{setAdminIn(true);setAdminView("dashboard");}}/></>;
-    if(adminView==="dashboard")return <StudioContext.Provider value={STUDIO_SERVICES}><style>{styles}</style><CandyBackdrop preset="admin"/><Dashboard games={games} today={getLocalGameDay()} onNew={()=>{setEditGame({id:`g-${Date.now()}`,date:"",themeTitle:"",categoryA:"",categoryB:"",status:"draft",questions:[]});setAdminView("editor");}} onEdit={g=>{setEditGame(g);setAdminView("editor");}} onLogout={()=>{setAdminIn(false);setAdminView("login");setView("home");}}/></StudioContext.Provider>;
+    if(adminView==="dashboard")return <StudioContext.Provider value={STUDIO_SERVICES}><style>{styles}</style><CandyBackdrop preset="admin"/><Dashboard games={games} today={getLocalGameDay()} onNew={()=>{setEditGame({id:`g-${Date.now()}`,date:"",themeTitle:"",categoryA:"",categoryB:"",status:"draft",questions:[],tags:[]});setAdminView("editor");}} onEdit={g=>{setEditGame(g);setAdminView("editor");}} onLogout={()=>{setAdminIn(false);setAdminView("login");setView("home");}}/></StudioContext.Provider>;
     if(adminView==="editor")return <StudioContext.Provider value={STUDIO_SERVICES}><style>{styles}</style><CandyBackdrop preset="admin"/><AdminEditor game={editGame} games={games} onSave={handleSave} onDelete={handleDel} onBack={()=>setAdminView("dashboard")}/></StudioContext.Provider>;
   }
 

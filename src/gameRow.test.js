@@ -56,3 +56,57 @@ describe("share names in the games row", () => {
     expect(row).not.toHaveProperty("share_name_columns");
   });
 });
+
+// A row as the database returns it after supabase/puzzle_tags.sql runs.
+const TAGGED_ROW = { ...MIGRATED_ROW, tags: [] };
+
+describe("topic tags in the games row", () => {
+  it("loads a row without a tags column (old database) as no tags", () => {
+    const game = rowToGame(MIGRATED_ROW);
+    expect(game.tags).toEqual([]);
+    expect(game.tagsColumn).toBe(false);
+  });
+
+  it("saves an untagged puzzle without the tags column on an old database", () => {
+    const row = gameToRow(rowToGame(MIGRATED_ROW));
+    expect("tags" in row).toBe(false);
+  });
+
+  it("saves a new draft's tags", () => {
+    const row = gameToRow({ id: "g-new", date: "2026-10-10", themeTitle: "", categoryA: "", categoryB: "", status: "draft", questions: [], tags: ["music", "gaming"] });
+    expect(row.tags).toEqual(["music", "gaming"]);
+  });
+
+  it("round-trips several tags through save and load", () => {
+    const game = { ...rowToGame(TAGGED_ROW), tags: ["toys", "music", "gaming"] };
+    const row = gameToRow(game);
+    expect(row.tags).toEqual(["music", "gaming", "toys"]);
+    const reloaded = rowToGame(JSON.parse(JSON.stringify({ ...row, created_at: "x" })));
+    expect(reloaded.tags).toEqual(["music", "gaming", "toys"]);
+    expect(reloaded.tagsColumn).toBe(true);
+  });
+
+  it("keeps tags through a publish (status change) and a re-save", () => {
+    const draft = rowToGame({ ...TAGGED_ROW, status: "draft", tags: ["food"] });
+    const published = rowToGame(gameToRow({ ...draft, status: "published" }));
+    expect(published.status).toBe("published");
+    expect(gameToRow({ ...published, themeTitle: "Edited" }).tags).toEqual(["food"]);
+  });
+
+  it("survives the on-device draft copy (JSON in localStorage)", () => {
+    const game = { ...rowToGame(TAGGED_ROW), tags: ["sports", "cars"] };
+    const restored = JSON.parse(JSON.stringify(game));
+    expect(gameToRow(restored).tags).toEqual(["sports", "cars"]);
+  });
+
+  it("saves [] when the last tag is removed on a migrated database", () => {
+    const game = rowToGame({ ...TAGGED_ROW, tags: ["food"] });
+    expect(gameToRow({ ...game, tags: [] })).toHaveProperty("tags", []);
+  });
+
+  it("never writes the internal tagsColumn flag or unknown ids", () => {
+    const row = gameToRow({ ...rowToGame(TAGGED_ROW), tags: ["music", "made_up"] });
+    expect(row).not.toHaveProperty("tagsColumn");
+    expect(row.tags).toEqual(["music"]);
+  });
+});

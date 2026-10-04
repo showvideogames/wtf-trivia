@@ -1,16 +1,23 @@
 // Puzzle (app shape) <-> public.games row (database shape).
-//
+import { normalizeTags } from "./topics.js";
+
 // Share names (the category labels in the copied Results text) live in two
 // optional columns added by supabase/share_names.sql. They are only sent when
 // the puzzle has one, or when it was loaded from a database that already has
 // the columns (so clearing a name saves null). Until that migration runs,
 // puzzles without share names keep saving exactly as before.
+//
+// Topic tags (supabase/puzzle_tags.sql) follow the same rule: `tags` is sent
+// when the puzzle has any, or when its row came back with a tags column (so
+// removing the last tag saves []). An untagged puzzle saves exactly as
+// before on a database that hasn't run the migration yet.
 function trimmedShareName(value){
   return typeof value==="string" && value.trim() ? value.trim() : null;
 }
 export function gameToRow(g){
   const shareA = trimmedShareName(g.categoryAShareName);
   const shareB = trimmedShareName(g.categoryBShareName);
+  const tags = normalizeTags(g.tags);
   return {
     id: g.id,
     date: g.date,
@@ -24,7 +31,8 @@ export function gameToRow(g){
     header_image: g.headerImage||null,
     status: g.status,
     questions: g.questions||[],
-    ...(shareA||shareB||g.shareNameColumns ? {category_a_share_name:shareA, category_b_share_name:shareB} : {})
+    ...(shareA||shareB||g.shareNameColumns ? {category_a_share_name:shareA, category_b_share_name:shareB} : {}),
+    ...(tags.length||g.tagsColumn ? {tags} : {})
   };
 }
 export function rowToGame(r){
@@ -42,8 +50,9 @@ export function rowToGame(r){
     categoryAShareName: r.category_a_share_name||"",
     categoryBShareName: r.category_b_share_name||"",
     shareNameColumns: "category_a_share_name" in r,
+    tags: normalizeTags(r.tags),
+    tagsColumn: "tags" in r,
     status: r.status,
     questions: r.questions||[]
   };
 }
-
