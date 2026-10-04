@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { archivePuzzles, archiveTopicCounts, filterArchive, matchesArchiveSearch } from "./archiveList.js";
+import {
+  MIN_RANKED_PLAYS,
+  archivePuzzles,
+  archiveTopicCounts,
+  filterArchive,
+  matchesArchiveSearch,
+  puzzleAccuracy,
+  sortArchive,
+} from "./archiveList.js";
 
 const g = (id, date, extra = {}) => ({
   id,
@@ -206,5 +214,190 @@ describe("archive topic filter", () => {
     const before = archiveTopicCounts(puzzles);
     filterArchive(puzzles, records, { topic: "music", query: "pasta", filter: "unplayed" });
     expect(archiveTopicCounts(puzzles)).toEqual(before);
+  });
+});
+
+describe("Favorites filter", () => {
+  const puzzles = [
+    g("a", "2026-01-05", { themeTitle: "Opera or Pasta?", tags: ["music", "food"] }),
+    g("b", "2026-01-04", { themeTitle: "Pokémon or Planet?", tags: ["gaming"] }),
+    g("c", "2026-01-03", { themeTitle: "Puppet or Singer?", tags: ["music"] }),
+    g("d", "2026-01-02", { themeTitle: "Cheese or Font?", tags: ["food"] }),
+  ];
+  const records = { a: { completed: true }, c: { completed: true } };
+  const favorites = new Set(["a", "b", "d"]);
+  const ids = (list) => list.map((p) => p.id);
+
+  it("shows only this player's favorites", () => {
+    expect(ids(filterArchive(puzzles, records, { filter: "favorites", favorites }))).toEqual(["a", "b", "d"]);
+  });
+
+  it("combines with a topic: Favorites + Music", () => {
+    expect(ids(filterArchive(puzzles, records, { filter: "favorites", favorites, topic: "music" }))).toEqual(["a"]);
+  });
+
+  it("combines with search, accents included", () => {
+    expect(ids(filterArchive(puzzles, records, { filter: "favorites", favorites, query: "pokemon" }))).toEqual(["b"]);
+    expect(ids(filterArchive(puzzles, records, { filter: "favorites", favorites, query: "puppet" }))).toEqual([]);
+  });
+
+  it("combines with topic and search together", () => {
+    expect(ids(filterArchive(puzzles, records, { filter: "favorites", favorites, topic: "food", query: "cheese" }))).toEqual(["d"]);
+  });
+
+  it("shows nothing (never everything) when favorites aren't known", () => {
+    expect(filterArchive(puzzles, records, { filter: "favorites", favorites: null })).toEqual([]);
+  });
+
+  it("leaves Completed + topic as it was", () => {
+    expect(ids(filterArchive(puzzles, records, { filter: "completed", topic: "music", favorites }))).toEqual(["a", "c"]);
+  });
+});
+
+describe("puzzleAccuracy", () => {
+  const s = (totalFinished, totalScore, totalQuestions) => ({ totalFinished, totalScore, totalQuestions });
+
+  it("is total_score / (total_finished × total_questions)", () => {
+    expect(puzzleAccuracy(s(10, 30, 8))).toBe(0.375);
+    expect(puzzleAccuracy(s(20, 70, 5))).toBe(0.7);
+  });
+
+  it(`needs at least ${MIN_RANKED_PLAYS} finished plays`, () => {
+    expect(MIN_RANKED_PLAYS).toBe(5);
+    expect(puzzleAccuracy(s(4, 16, 5))).toBeNull();
+    expect(puzzleAccuracy(s(5, 20, 5))).toBe(0.8);
+  });
+
+  it("treats missing, zero, inconsistent or invalid stats as unranked", () => {
+    expect(puzzleAccuracy(undefined)).toBeNull();
+    expect(puzzleAccuracy({})).toBeNull();
+    expect(puzzleAccuracy(s(0, 0, 0))).toBeNull();
+    expect(puzzleAccuracy(s(10, 30, 0))).toBeNull();
+    expect(puzzleAccuracy(s(10, 81, 8))).toBeNull(); // more than 10 × 8 possible
+    expect(puzzleAccuracy(s(10, -1, 8))).toBeNull();
+    expect(puzzleAccuracy(s(10, null, 8))).toBeNull();
+    expect(puzzleAccuracy(s(10, "", 8))).toBeNull();
+    expect(puzzleAccuracy(s(10, "abc", 8))).toBeNull();
+    expect(puzzleAccuracy(s(10.5, 30, 8))).toBeNull();
+    expect(puzzleAccuracy(s(Infinity, 30, 8))).toBeNull();
+  });
+
+  it("accepts numeric strings from the database", () => {
+    expect(puzzleAccuracy(s("10", "40", "8"))).toBe(0.5);
+  });
+});
+
+describe("sortArchive", () => {
+  const ids = (list) => list.map((p) => p.id);
+
+  describe("Newest and Oldest", () => {
+    const puzzles = [
+      g("mid", "2026-02-01"),
+      g("old", "2026-01-01"),
+      g("tie-b", "2026-03-01", { themeTitle: "Banana" }),
+      g("tie-a", "2026-03-01", { themeTitle: "apple" }),
+      g("new", "2026-04-01"),
+    ];
+
+    it("Newest first by date, ties by title then id (default)", () => {
+      expect(ids(sortArchive(puzzles))).toEqual(["new", "tie-a", "tie-b", "mid", "old"]);
+      expect(ids(sortArchive(puzzles, "newest"))).toEqual(["new", "tie-a", "tie-b", "mid", "old"]);
+    });
+
+    it("Oldest first by date, same tie order", () => {
+      expect(ids(sortArchive(puzzles, "oldest"))).toEqual(["old", "mid", "tie-a", "tie-b", "new"]);
+    });
+
+    it("is deterministic whatever order the puzzles arrive in", () => {
+      const shuffled = [puzzles[3], puzzles[0], puzzles[4], puzzles[2], puzzles[1]];
+      expect(ids(sortArchive(shuffled, "newest"))).toEqual(ids(sortArchive(puzzles, "newest")));
+      expect(ids(sortArchive(shuffled, "oldest"))).toEqual(ids(sortArchive(puzzles, "oldest")));
+    });
+
+    it("Newest keeps today's puzzle first, as the Archive always has", () => {
+      const today = g("today", "2026-03-15");
+      const list = [...puzzles, today];
+      expect(ids(sortArchive(list, "newest", { todayGame: today }))[0]).toBe("today");
+      expect(ids(sortArchive(list, "oldest", { todayGame: today }))).toEqual(["old", "mid", "tie-a", "tie-b", "today", "new"]);
+    });
+
+    it("never changes the list it was given", () => {
+      const copy = [...puzzles];
+      sortArchive(puzzles, "oldest");
+      expect(puzzles).toEqual(copy);
+    });
+  });
+
+  describe("Hardest and Easiest", () => {
+    // Raw average scores would rank these the other way round: "long" has
+    // the higher average (4 of 10) but the lower accuracy (40%) than
+    // "short" (3 of 5 = 60%).
+    const puzzles = [
+      g("short", "2026-01-05"),
+      g("long", "2026-01-04"),
+      g("few", "2026-01-03"),
+      g("none", "2026-01-02"),
+      g("bad", "2026-01-01"),
+      g("tie-new", "2026-01-07"),
+      g("tie-old", "2026-01-06"),
+    ];
+    const stats = {
+      short: { totalFinished: 10, totalScore: 30, totalQuestions: 5 }, // 60%
+      long: { totalFinished: 10, totalScore: 40, totalQuestions: 10 }, // 40%
+      few: { totalFinished: 4, totalScore: 0, totalQuestions: 5 }, // too few
+      bad: { totalFinished: 6, totalScore: 99, totalQuestions: 5 }, // impossible
+      "tie-new": { totalFinished: 5, totalScore: 15, totalQuestions: 5 }, // 60%
+      "tie-old": { totalFinished: 20, totalScore: 120, totalQuestions: 10 }, // 60%
+    };
+
+    it("Hardest: lowest average percentage correct first", () => {
+      expect(ids(sortArchive(puzzles, "hardest", { stats }))).toEqual(["long", "tie-new", "tie-old", "short", "few", "none", "bad"]);
+    });
+
+    it("Easiest: highest average percentage correct first", () => {
+      expect(ids(sortArchive(puzzles, "easiest", { stats }))).toEqual(["tie-new", "tie-old", "short", "long", "few", "none", "bad"]);
+    });
+
+    it("puts unranked puzzles (too few plays, missing or invalid stats) last in both, newest first", () => {
+      for (const sort of ["hardest", "easiest"]) {
+        expect(ids(sortArchive(puzzles, sort, { stats })).slice(-3)).toEqual(["few", "none", "bad"]);
+      }
+    });
+
+    it("a puzzle reaching 5 finished plays joins the ranking", () => {
+      const fifth = { ...stats, few: { totalFinished: 5, totalScore: 0, totalQuestions: 5 } };
+      expect(ids(sortArchive(puzzles, "hardest", { stats: fifth }))[0]).toBe("few");
+    });
+
+    it("falls back to Newest when the stats didn't load", () => {
+      expect(ids(sortArchive(puzzles, "hardest", { stats: null }))).toEqual(ids(sortArchive(puzzles, "newest")));
+    });
+  });
+
+  describe("Most liked", () => {
+    const puzzles = [g("a", "2026-01-01"), g("b", "2026-01-02"), g("c", "2026-01-03"), g("d", "2026-01-04"), g("e", "2026-01-05")];
+
+    it("most favorites first, newest first among equals, zero-favorite puzzles kept after", () => {
+      const favoriteCounts = { a: 3, b: 7, c: 3, e: 0 };
+      expect(ids(sortArchive(puzzles, "liked", { favoriteCounts }))).toEqual(["b", "c", "a", "e", "d"]);
+    });
+
+    it("ignores nonsense counts", () => {
+      const favoriteCounts = { a: "x", b: -2, c: 1 };
+      expect(ids(sortArchive(puzzles, "liked", { favoriteCounts }))).toEqual(["c", "e", "d", "b", "a"]);
+    });
+
+    it("falls back to Newest when counts didn't load", () => {
+      expect(ids(sortArchive(puzzles, "liked", { favoriteCounts: null }))).toEqual(["e", "d", "c", "b", "a"]);
+    });
+  });
+
+  it("sorting never changes the topic counts", () => {
+    const puzzles = [g("a", "2026-01-01", { tags: ["music"] }), g("b", "2026-01-02", { tags: ["music", "food"] })];
+    const before = archiveTopicCounts(puzzles);
+    for (const sort of ["oldest", "hardest", "easiest", "liked"]) {
+      archiveTopicCounts(sortArchive(puzzles, sort, { stats: {}, favoriteCounts: { a: 1 } }));
+      expect(archiveTopicCounts(puzzles)).toEqual(before);
+    }
   });
 });
