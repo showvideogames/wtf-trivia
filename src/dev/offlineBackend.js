@@ -425,6 +425,25 @@ export const devPlayer = {
   createdAt: new Date().toISOString(),
 };
 
+// Set localStorage "wtf-dev-player" to "signed-in" to review the signed-in
+// header and Home (a made-up address; nothing is authenticated).
+export function devCurrentPlayer() {
+  let mode = null;
+  try { mode = localStorage.getItem("wtf-dev-player"); } catch { /* ignore */ }
+  return mode === "signed-in" ? { ...devPlayer, email: "player@example.test", isGuest: false } : devPlayer;
+}
+
+// Set localStorage "wtf-dev-boot" to "slow" (a 4s load), "hang" (never
+// finishes, to hold the loading page) or "fail" (every load fails, to show
+// the boot error page).
+export async function devBootCheck() {
+  let mode = null;
+  try { mode = localStorage.getItem("wtf-dev-boot"); } catch { /* ignore */ }
+  if (mode === "fail") throw new Error("Simulated load failure (wtf-dev-boot=fail)");
+  if (mode === "slow") await new Promise((r) => setTimeout(r, 4000));
+  if (mode === "hang") await new Promise(() => {});
+}
+
 export function devGetRecord(puzzleId) {
   return readJSON(RECORD_KEY, {})[puzzleId] || null;
 }

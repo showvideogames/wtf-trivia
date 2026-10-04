@@ -1,0 +1,495 @@
+/* ================= HOME (category-first) =================
+   The Home page (`hm-` classes, see Home.jsx), on the custard page shell and
+   cream site header from site.css. The daily matchup is the star, the Play
+   button is the one big action, and everything else supports those two.
+   The older `hp-` rules in home.css still serve the How to Play dialog and
+   Admin's artwork previews. */
+
+.hm-inner {
+  width: 100%;
+  max-width: 1024px;
+  margin: 0 auto;
+  padding: max(12px, env(safe-area-inset-top)) 24px 48px;
+}
+
+/* The hero column: everything centred under the header. */
+.hm-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+  /* Sized once so the matchup, the button and the loading placeholder all
+     share it: wide, but held back on short screens so Play stays in view. */
+  --hm-hero-w: min(100%, max(480px, min(780px, (100svh - 420px) * 2)));
+}
+
+/* ===== HEADING ===== */
+.hm-heading { margin-top: 22px; }
+.hm-eyebrow {
+  margin: 0;
+  font-family: 'Fredoka One', cursive;
+  font-size: 15px;
+  line-height: 1.2;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--teal-dark, #0F9488);
+}
+.hm-title {
+  margin: 6px 0 0;
+  font-family: 'Fredoka One', cursive;
+  font-weight: 400;
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1.12;
+  color: var(--black);
+  overflow-wrap: break-word;
+  text-wrap: balance;
+}
+.hm-title-quiet { font-size: clamp(24px, 2.4vw, 32px); }
+.hm-lede {
+  max-width: 560px;
+  margin: 8px auto 0;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 18px;
+  line-height: 1.4;
+  color: var(--cs-ink-soft);
+}
+
+/* ===== CATEGORY MATCHUP =====
+   Two near-square halves, 2:1 overall. Each half: the saved image
+   `contain`ed in the padded space above the saved name, on the category's
+   saved colour, so transparent, square, tall and wide art all stay whole. */
+.hm-matchup {
+  position: relative;
+  /* The size container for the names (not the halves: containment would
+     switch their subgrid off). */
+  container-type: inline-size;
+  width: var(--hm-hero-w);
+  aspect-ratio: 2 / 1;
+  margin-top: 18px;
+  overflow: hidden;
+  border: 3px solid var(--black);
+  border-radius: 26px;
+  background: var(--black);
+  box-shadow: 0 6px 0 var(--black);
+}
+/* Art row, then a shared name row (each half joins it through subgrid), so
+   the two names always line up, whatever their length. Absolutely filled so
+   the grid has a definite height to share out. */
+.hm-matchup-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.hm-half {
+  position: relative;
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  row-gap: 0;
+  min-width: 0;
+  min-height: 0;
+  padding: 6% 6% 5%;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.34) 0, rgba(255, 255, 255, 0) 62%),
+    var(--hm-cat);
+}
+.hm-half + .hm-half { border-left: 3px solid var(--black); }
+.hm-half-art {
+  position: relative;
+  min-height: 0;
+}
+/* Positioned, so the source's own proportions can never stretch the half. */
+.hm-half-art img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 0 rgba(26, 26, 26, 0.16));
+}
+.hm-half-art .hm-half-candy { inset: 12%; width: 76%; height: 76%; opacity: 0.92; }
+
+/* The saved name as live text: cream with a black outline, like a candy
+   sticker, so it reads on every palette colour. Longer names step down. */
+.hm-name {
+  align-self: center;
+  margin-top: 4%;
+  font-family: 'Fredoka One', cursive;
+  font-size: max(17px, 5.1cqi);
+  line-height: 1.02;
+  color: var(--cs-cream);
+  overflow-wrap: break-word;
+  text-wrap: balance;
+  text-shadow:
+    0.055em 0 0 var(--black), -0.055em 0 0 var(--black),
+    0 0.055em 0 var(--black), 0 -0.055em 0 var(--black),
+    0.04em 0.04em 0 var(--black), -0.04em 0.04em 0 var(--black),
+    0.04em -0.04em 0 var(--black), -0.04em -0.04em 0 var(--black),
+    0 0.11em 0 var(--black);
+}
+/* Sizes are in matchup widths: 5cqi is about 11% of one half. */
+.hm-name.is-short { font-size: max(18px, 5.9cqi); }
+.hm-name.is-long { font-size: max(15px, 4cqi); }
+.hm-name.is-xlong { font-size: max(13px, 3.1cqi); line-height: 1.08; }
+
+/* The comic OR on the divider, a little above centre (level with the art). */
+.hm-or {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  z-index: 2;
+  width: clamp(62px, 17%, 132px);
+  transform: translate(-50%, -50%) rotate(-7deg);
+  pointer-events: none;
+}
+.hm-or svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  filter: drop-shadow(0 4px 0 var(--black));
+}
+.hm-or-burst {
+  fill: #FFE347;
+  stroke: var(--black);
+  stroke-width: 4.5;
+  stroke-linejoin: round;
+}
+.hm-or text {
+  font-family: 'Fredoka One', cursive;
+  font-size: 34px;
+  fill: var(--black);
+}
+
+/* ===== PRIMARY ACTION ===== */
+.hm-cta {
+  width: var(--hm-hero-w);
+  margin-top: 22px;
+}
+.hm-progress {
+  margin: 0 0 8px;
+  font-family: 'Fredoka One', cursive;
+  font-size: 17px;
+  color: var(--teal-dark, #0F9488);
+}
+.hm-play {
+  appearance: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 84px;
+  padding: 12px 24px;
+  overflow: hidden;
+  border: 3px solid var(--black);
+  border-radius: 24px;
+  background: linear-gradient(180deg, #FFEA6B 0%, #FFD23F 42%, #FFAA2B 78%, #FF9418 100%);
+  color: var(--black);
+  font-family: 'Fredoka One', cursive;
+  font-size: clamp(26px, 2.9vw, 36px);
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 6px 0 var(--black);
+  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+}
+/* A soft gloss along the top, like the candy buttons elsewhere. */
+.hm-play::before {
+  content: "";
+  position: absolute;
+  inset: 5px 14px auto;
+  height: 38%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+.hm-play-label { position: relative; }
+.hm-play:hover { filter: brightness(1.04) saturate(1.05); }
+.hm-play:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--black); }
+.cps-page .hm-play:focus-visible { outline-offset: 4px; }
+
+/* Loading: an empty slot where the button will be, so nothing shifts. */
+.hm-play-ghost {
+  min-height: 84px;
+  border: 3px dashed rgba(26, 26, 26, 0.18);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.32);
+}
+
+/* ===== SECONDARY ACTIONS ===== */
+.hm-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px 18px;
+  width: var(--hm-hero-w);
+  margin-top: 20px;
+}
+.hm-link {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 1 300px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 0 14px 0 12px;
+  border: 3px solid var(--black);
+  border-radius: 18px;
+  color: var(--black);
+  font-family: 'Fredoka One', cursive;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 0 var(--black);
+  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+}
+.hm-link:hover { filter: brightness(1.05); }
+.hm-link:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--black); }
+.hm-link-teal { background: linear-gradient(180deg, #6FF0DD, var(--cs-teal) 60%, #2CC9B3); }
+.hm-link-orange { background: linear-gradient(180deg, #FFB866, #FF9A3C 60%, #F5841F); }
+.hm-link-cream { background: var(--cs-cream); justify-content: center; }
+.hm-link-icon { display: grid; place-items: center; flex: none; }
+.hm-link-label { flex: 1 1 auto; min-width: 0; text-align: left; }
+.hm-link-cream .hm-link-label { flex: none; text-align: center; }
+.hm-chev { flex: none; width: 18px; height: 18px; }
+
+/* ===== FOOTER LINE ===== */
+.hm-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 14px;
+  margin-top: 18px;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--cs-ink-soft);
+}
+.hm-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 4px 8px;
+  border: 2px solid var(--black);
+  border-radius: 999px;
+  background: #FFD39A;
+  color: var(--black);
+  font-family: 'Fredoka One', cursive;
+  font-weight: 400;
+  font-size: 15px;
+}
+
+/* ===== TODAY FINISHED ===== */
+.hm-done {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: var(--hm-hero-w);
+  margin-top: 22px;
+  padding: 16px 22px 20px;
+  border: 3px solid var(--black);
+  border-radius: 24px;
+  background: var(--cs-cream);
+  box-shadow: 0 6px 0 var(--black);
+}
+.hm-done-score {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px 14px;
+  font-family: 'Fredoka One', cursive;
+  color: var(--black);
+  line-height: 1;
+}
+.hm-done-lead {
+  font-size: 26px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.hm-done-num {
+  font-size: 58px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 3px 3px 0 var(--cs-pink);
+}
+.hm-done-of { font-size: 0.62em; }
+.hm-done-msg {
+  max-width: 540px;
+  margin: 0;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  line-height: 1.35;
+  color: var(--cs-ink-soft);
+}
+.hm-done-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 14px;
+  width: 100%;
+  max-width: 560px;
+  margin-top: 6px;
+}
+.hm-done-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 60px;
+  padding: 0 18px;
+  border: 3px solid var(--black);
+  border-radius: 18px;
+  color: var(--black);
+  font-family: 'Fredoka One', cursive;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 0 var(--black);
+  transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease;
+}
+.hm-done-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--black); }
+.hm-done-results { background: var(--cs-pink); }
+.hm-done-results:hover { background: var(--cs-pink-hover); }
+.hm-done-share { display: inline-grid; background: var(--cs-teal); }
+.hm-done-share:hover { background: #38D3BE; }
+.hm-share-face {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.hm-share-face[data-shown="false"] { visibility: hidden; }
+.hm-share-error {
+  max-width: 520px;
+  margin: 2px 0 0;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #B42318;
+}
+.hm-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ===== CANDY ARTWORK (no puzzle, loading, error) ===== */
+.hm-candy-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4%;
+  width: var(--hm-hero-w);
+  aspect-ratio: 3 / 1;
+  margin-top: 18px;
+  border: 3px solid var(--black);
+  border-radius: 26px;
+  background:
+    radial-gradient(ellipse 60% 70% at 50% 50%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 100%),
+    #FFF3C4;
+  box-shadow: 0 6px 0 var(--black);
+}
+/* Loading holds the matchup's exact shape, so the real page doesn't jump. */
+.hm-candy-art.is-busy { aspect-ratio: 2 / 1; }
+.hm-candy { display: block; width: 28%; height: auto; }
+.hm-candy-a { transform: rotate(-12deg); }
+.hm-candy-b { transform: rotate(10deg); }
+.hm-candy-dots { display: flex; align-items: center; gap: 10px; }
+.hm-candy-dots img { display: block; width: 46px; height: auto; margin: 0 -10px; }
+.hm-candy-art.is-busy .hm-candy-dots img { animation: hmBounce 1s ease-in-out infinite; }
+.hm-candy-art.is-busy .hm-candy-dots img:nth-child(2) { animation-delay: .15s; }
+.hm-candy-art.is-busy .hm-candy-dots img:nth-child(3) { animation-delay: .3s; }
+@keyframes hmBounce {
+  0%, 100% { transform: translateY(0); opacity: .6; }
+  50%      { transform: translateY(-9px); opacity: 1; }
+}
+
+.hm-error-detail {
+  max-width: 560px;
+  margin: 12px auto 0;
+  padding: 8px 14px;
+  border: 2px solid var(--black);
+  border-radius: 14px;
+  background: #FFE9DC;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  line-height: 1.4;
+  color: #7A2E0E;
+}
+
+/* Loading and error: the header holds its place but has nothing behind its
+   links yet, and the account button isn't known. */
+.hm-header-pending .sh-account { visibility: hidden; }
+.hm-header-pending .sh-nav { opacity: 0.55; }
+
+/* ===== TABLET + PHONE ===== */
+@media (max-width: 899px) {
+  .hm-inner { padding-left: 16px; padding-right: 16px; }
+  .hm-main { --hm-hero-w: min(100%, 680px); }
+}
+@media (max-width: 599px) {
+  .hm-inner { padding-bottom: 36px; }
+  .hm-heading { margin-top: 16px; }
+  .hm-eyebrow { font-size: 13px; }
+  .hm-title { margin-top: 4px; font-size: clamp(23px, 6.6vw, 28px); }
+  .hm-lede { font-size: 16px; }
+  /* Taller halves than desktop, so the names keep room under the art. */
+  .hm-matchup { aspect-ratio: 1.3 / 1; margin-top: 14px; border-radius: 22px; box-shadow: 0 5px 0 var(--black); }
+  .hm-half { padding: 7% 6% 6%; }
+  .hm-or { width: clamp(56px, 19%, 80px); }
+  .hm-name { font-size: max(17px, 6.2cqi); }
+  .hm-name.is-short { font-size: max(18px, 7cqi); }
+  .hm-name.is-long { font-size: max(15px, 4.8cqi); }
+  .hm-name.is-xlong { font-size: max(13px, 3.7cqi); }
+  .hm-cta { margin-top: 18px; }
+  .hm-play { min-height: 70px; border-radius: 20px; font-size: clamp(21px, 6.4vw, 26px); box-shadow: 0 5px 0 var(--black); }
+  .hm-play-ghost { min-height: 70px; border-radius: 20px; }
+  .hm-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+  .hm-links:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
+  .hm-link { min-height: 54px; gap: 8px; padding: 0 10px; font-size: 18px; border-radius: 16px; }
+  .hm-link-icon img { width: 26px !important; height: 26px !important; }
+  .hm-done { padding: 14px 14px 16px; border-radius: 20px; }
+  .hm-done-lead { font-size: 21px; }
+  .hm-done-num { font-size: 46px; }
+  .hm-done-msg { font-size: 15px; }
+  .hm-done-actions { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .hm-done-btn { min-height: 54px; font-size: 20px; }
+  .hm-candy-art { aspect-ratio: 2.4 / 1; border-radius: 22px; }
+  .hm-candy-art.is-busy { aspect-ratio: 1.3 / 1; }
+}
+/* Short phones: a little less height everywhere so Play stays on screen. */
+@media (max-width: 599px) and (max-height: 700px) {
+  .hm-heading { margin-top: 12px; }
+  .hm-matchup { aspect-ratio: 1.75 / 1; }
+  .hm-candy-art.is-busy { aspect-ratio: 1.75 / 1; }
+  .hm-cta { margin-top: 14px; }
+  .hm-play, .hm-play-ghost { min-height: 62px; }
+  .hm-links { margin-top: 14px; }
+  .hm-link { min-height: 50px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hm-play, .hm-link, .hm-done-btn { transition: none; }
+  .hm-play:active, .hm-link:active, .hm-done-btn:active { transform: none; }
+  .hm-candy-art.is-busy .hm-candy-dots img { animation: none; opacity: 0.9; }
+}

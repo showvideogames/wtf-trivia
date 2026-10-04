@@ -4,6 +4,7 @@ import "./home.css";
 import "./game.css";
 import "./site.css";
 import "./archive.css";
+import "./homePage.css";
 import "./results.css";
 import "./backdrop.css";
 import "./admin/studio.css";
@@ -19,6 +20,8 @@ import ResultsNerdMode from "./ResultsNerdMode.jsx";
 import ResultsScore from "./ResultsScore.jsx";
 import CandyPageShell from "./CandyPageShell.jsx";
 import SiteHeader from "./SiteHeader.jsx";
+import CategoryArtImage from "./CategoryArtImage.jsx";
+import { HomeBigButton, HomeCandyArt, HomeDonePanel, HomeFoot, HomeHeader, HomeHeading, HomeLinks, HomeMatchup, HomePage } from "./Home.jsx";
 import { ARCHIVE_FILTERS, archivePuzzles, archiveTopicCounts, filterArchive, sortArchive, sortAvailable } from "./archiveList.js";
 import { emptyFavorites, toggleFavorite } from "./archiveFavorites.js";
 import ArchiveTopicFilter from "./ArchiveTopicFilter.jsx";
@@ -39,6 +42,8 @@ import Icon from "./admin/Icon.jsx";
 import {
   demoGames as devDemoGames,
   devPlayer,
+  devCurrentPlayer,
+  devBootCheck,
   devGetRecord,
   devGetAllRecords,
   devInitRecord,
@@ -1901,7 +1906,7 @@ async function prepareImageForSave(value, options, archiveExternal=false){
 
 // ===== DB FUNCTIONS — GAMES =====
 async function dbLoadGames(){
-  if(OFFLINE_PREVIEW) return devMergeSavedGames(devDemoGames(), rowToGame);
+  if(OFFLINE_PREVIEW){ await devBootCheck(); return devMergeSavedGames(devDemoGames(), rowToGame); }
   const rows = await sbFetch("/rest/v1/games?select=*&order=date.desc");
   return (rows||[]).map(rowToGame);
 }
@@ -1971,7 +1976,7 @@ async function dbDeleteGame(id){
 
 // ===== DB FUNCTIONS — PLAYERS =====
 async function dbGetOrCreatePlayer(user){
-  if(OFFLINE_PREVIEW) return devPlayer;
+  if(OFFLINE_PREVIEW) return devCurrentPlayer();
   if(!user) return null;
   try{
     await sbFetch("/rest/v1/players", {
@@ -2605,6 +2610,13 @@ const PALETTE = [
   {id:"peach",   name:"Peach Fudge",    light:"#FDBA74", mid:"#FB923C", dark:"#9A3412", isDark:true},
   {id:"cream",   name:"Vanilla",        light:"#FEF9C3", mid:"#FEF08A", dark:"#CA8A04", isDark:false},
 ];
+// A puzzle's two saved category colours, with the long-standing defaults.
+function categoryColors(game){
+  return [
+    PALETTE.find(p=>p.id===(game.categoryAColor||"teal"))||PALETTE[0],
+    PALETTE.find(p=>p.id===(game.categoryBColor||"pink"))||PALETTE[1],
+  ];
+}
 
 // ============================================================
 // FUDGE ICONS — base64 embedded custom icons
@@ -2698,15 +2710,6 @@ function HomePuzzleArt({game}){
   );
 }
 
-function ShareGlyph(){
-  return(
-    <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M12 15V4m0 0L8.5 7.5M12 4l3.5 3.5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M5 13v5.5A1.5 1.5 0 006.5 20h11a1.5 1.5 0 001.5-1.5V13" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"/>
-    </svg>
-  );
-}
-
 function HomeHelp({game,onClose}){
   const n = game?.questions?.length||8;
   return(
@@ -2722,136 +2725,108 @@ function HomeHelp({game,onClose}){
   );
 }
 
-function HomeHeader({player,sound,onHelp,onAccount}){
-  const signedIn = player && !player.isGuest;
-  return(
-    <header className="hp-hdr">
-      <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="hp-logo"/>
-      <div className="hp-tools">
-        <button className="hp-sound" onClick={()=>sound.setMuted(m=>!m)}
-                aria-pressed={!sound.muted} aria-label={sound.muted?"Turn sound on":"Turn sound off"}
-                title={sound.muted?"Turn sound on":"Turn sound off"}>
-          {sound.muted?"\u{1F507}":"\u{1F50A}"}
-        </button>
-        <button className="hp-help" onClick={onHelp} aria-label="How to play" title="How to play">?</button>
-        <button className={signedIn?"hp-signin hp-acct":"hp-signin"} onClick={onAccount}
-                title={signedIn?(player.email||"Account"):"Sign in"}>
-          {signedIn?formatAccountLabel(player.email):"Sign in"}
-        </button>
-      </div>
-    </header>
-  );
-}
-
+// Home: today's matchup, then one big action -- Play (or Keep going! for a
+// game in progress), or, once today is finished, the score panel with See
+// my results and Share. Stats and Archive sit underneath. With no puzzle
+// scheduled today it points at the Archive instead. `game` is null then.
 function HomeScreen({game,gameRecord,stats,player,sound,onPlay,onNav,onAdmin,onShare}){
   const[showHelp,setShowHelp]=useState(false);
-  // Share feedback: "copied" flips the button label for a moment; "failed"
-  // stays until the next press. Presses while a share sheet is open are ignored.
-  const[shareStatus,setShareStatus]=useState(null);
-  const shareBusy=useRef(false);
-  const copiedTimer=useRef(null);
-  useEffect(()=>()=>clearTimeout(copiedTimer.current),[]);
-  const share=async()=>{
-    if(shareBusy.current) return;
-    shareBusy.current=true;
-    clearTimeout(copiedTimer.current);
-    setShareStatus(null);
-    try{
-      const outcome=await onShare();
-      if(outcome==="copied"){
-        setShareStatus("copied");
-        copiedTimer.current=setTimeout(()=>setShareStatus(null),2000);
-      }else if(outcome==="failed") setShareStatus("failed");
-    }finally{ shareBusy.current=false; }
-  };
   const answered = gameRecord?.answers?.length||0;
-  const total = gameRecord?.totalQuestions||game.questions.length;
+  const total = gameRecord?.totalQuestions||game?.questions.length||0;
   const done = Boolean(gameRecord?.completed);
   const inProgress = Boolean(gameRecord && !gameRecord.completed && answered>0);
   const signedIn = player && !player.isGuest;
+  const toTop = ()=>{
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({top:0, behavior:reduce?"auto":"smooth"});
+  };
+  const header = (
+    <HomeHeader player={player} sound={sound} accountLabel={formatAccountLabel(player?.email)}
+      onPlay={toTop} onArchive={()=>onNav("archive")} onHelp={()=>setShowHelp(true)}
+      onAccount={()=>onNav("account")}
+      admin={SHOW_ADMIN_LINK&&onAdmin ? {onClick:onAdmin, icon:<FI name="gear" size={22}/>} : null}/>
+  );
+  const links = [
+    {id:"stats", label:"Stats", tone:"teal", icon:<FI name="chart" size={30}/>, onClick:()=>onNav("stats")},
+    {id:"archive", label:"Archive", tone:"orange", icon:<FI name="cal" size={30}/>, onClick:()=>onNav("archive")},
+  ];
+  const foot = (stats.currentStreak>0||!signedIn)&&(
+    <HomeFoot>
+      {stats.currentStreak>0&&(
+        <span className="hm-streak"><FI name="flame" size={18}/>{stats.currentStreak}-day streak</span>
+      )}
+      {!signedIn&&<span className="hm-signin-hint">Sign in to save your streak</span>}
+    </HomeFoot>
+  );
 
   return(
-    <div className="hp-wrap">
-      <HomeHeader player={player} sound={sound} onHelp={()=>setShowHelp(true)} onAccount={()=>onNav("account")}/>
-
-      <div className="hp-card-wrap">
-        {stats.currentStreak>0&&(
-          <span className="hp-streak">
-            <FI name="flame" size={19}/>{stats.currentStreak}-day streak
-          </span>
-        )}
-        <div className="hp-card">
-          <HomePuzzleArt game={game}/>
-          <div className="hp-body">
-            <div className="hp-eyebrow">Today&rsquo;s theme</div>
-            <h1 className="hp-title">{game.themeTitle}</h1>
-            <div className="vs-strip">
-              <span className="cat-chip cat-a hp-chip">{game.categoryA}</span>
-              <span className="vs-word">VS</span>
-              <span className="cat-chip cat-b hp-chip">{game.categoryB}</span>
+    <HomePage header={header}>
+      {game?(
+        <>
+          <HomeHeading eyebrow={<>Today&rsquo;s puzzle</>} title={game.themeTitle}/>
+          <HomeMatchup game={game} colors={categoryColors(game)}/>
+          {done?(
+            <HomeDonePanel score={gameRecord.score} total={gameRecord.totalQuestions}
+              message={scoreMsg(gameRecord.score, gameRecord.totalQuestions||1)}
+              onResults={()=>onNav("score")} onShare={onShare}/>
+          ):(
+            <div className="hm-cta">
+              {inProgress&&<p className="hm-progress" id="hm-progress">{answered} of {total} answered</p>}
+              <HomeBigButton onClick={onPlay} describedBy={inProgress?"hm-progress":undefined}>
+                {inProgress?"KEEP GOING!":"PLAY TODAY’S PUZZLE"}
+              </HomeBigButton>
             </div>
-            <hr className="hp-rule"/>
-
-            {done?(
-              <div className="hp-done">
-                <div className="hp-eyebrow">Today&rsquo;s score</div>
-                <div className="hp-score-row">
-                  <span className="hp-spark" aria-hidden="true">{"✦"}</span>
-                  <span className="hp-score-big">{gameRecord.score}<small>/{gameRecord.totalQuestions}</small></span>
-                  <span className="hp-spark" aria-hidden="true">{"✦"}</span>
-                </div>
-                <button className="btn btn-pink" onClick={()=>onNav("score")}>See my results 🎉</button>
-                {/* Both labels sit in one grid cell, so the button is always
-                    sized for the wider one and "Copied!" moves nothing. */}
-                <button className="hp-share" onClick={share}>
-                  <span className="hp-share-face" data-shown={shareStatus!=="copied"}><ShareGlyph/> Share</span>
-                  <span className="hp-share-face" data-shown={shareStatus==="copied"}>Copied!</span>
-                </button>
-                <span className="hp-sr-only" role="status">{shareStatus==="copied"?"Result copied to clipboard":""}</span>
-                {shareStatus==="failed"&&(
-                  <p className="hp-share-error" role="alert">
-                    Couldn&rsquo;t copy your result. Open &ldquo;See my results&rdquo; and copy the text shown there.
-                  </p>
-                )}
-              </div>
-            ):inProgress?(
-              <>
-                <div className="hp-progress">{answered} of {total} answered</div>
-                <button className="btn btn-yellow" onClick={onPlay}>Keep going!</button>
-              </>
-            ):(
-              <button className="btn btn-yellow" onClick={onPlay}>Let&rsquo;s gooo!!</button>
-            )}
+          )}
+          <HomeLinks links={links}/>
+        </>
+      ):(
+        <>
+          <HomeHeading eyebrow="No puzzle today" title="The fudge is still setting."/>
+          <p className="hm-lede">Come back soon&mdash;or dig into something delicious from the Archive.</p>
+          <HomeCandyArt/>
+          <div className="hm-cta">
+            <HomeBigButton onClick={()=>onNav("archive")}>BROWSE THE ARCHIVE</HomeBigButton>
           </div>
-        </div>
-      </div>
-
-      <div className="hp-tiles">
-        <button className="hp-tile hp-tile-teal" onClick={()=>onNav("stats")}>
-          <FI name="chart" size={40}/>
-          <span className="hp-tile-lbl">Stats</span>
-          <span className="hp-chev" aria-hidden="true">&rsaquo;</span>
-        </button>
-        <button className="hp-tile hp-tile-orange" onClick={()=>onNav("archive")}>
-          <FI name="cal" size={40}/>
-          <span className="hp-tile-lbl">Archive</span>
-          <span className="hp-chev" aria-hidden="true">&rsaquo;</span>
-        </button>
-      </div>
-
-      <div className="hp-foot">
-        {SHOW_ADMIN_LINK&&(
-          <div className="hp-admin-line">
-            <button className="hp-admin-link" onClick={onAdmin}>Admin tools</button>
-          </div>
-        )}
-        {!signedIn&&<div className="hp-signin-hint">Sign in to save your streak</div>}
-      </div>
-
+          <HomeLinks links={[{id:"help", label:"How to Play", tone:"cream", chevron:false, onClick:()=>setShowHelp(true)}]}/>
+        </>
+      )}
+      {foot}
       {showHelp&&<HomeHelp game={game} onClose={()=>setShowHelp(false)}/>}
-    </div>
+    </HomePage>
   );
 }
+
+// Boot loading and boot failure, drawn in Home's own frame (the app always
+// boots onto Home) so nothing jumps when the real page arrives. The header
+// keeps its shape but is inert: there's nothing behind its links yet.
+function HomeStatusHeader({sound}){
+  return <HomeHeader player={null} sound={sound} onPlay={()=>{}} onArchive={()=>{}} onHelp={()=>{}} onAccount={()=>{}}/>;
+}
+function HomeLoadingPage({sound}){
+  return(
+    <HomePage pending header={<HomeStatusHeader sound={sound}/>}>
+      <div className="hm-heading">
+        <p className="hm-eyebrow">Today&rsquo;s puzzle</p>
+        <p className="hm-title hm-title-quiet" role="status">Mixing today&rsquo;s trivia&hellip;</p>
+      </div>
+      <HomeCandyArt busy/>
+      <div className="hm-cta"><div className="hm-play-ghost" aria-hidden="true"/></div>
+    </HomePage>
+  );
+}
+function HomeErrorPage({sound,detail,onRetry}){
+  return(
+    <HomePage pending header={<HomeStatusHeader sound={sound}/>}>
+      <HomeHeading eyebrow="Uh-oh" title="Something got scrambled."/>
+      {detail&&<p className="hm-error-detail" role="alert">{detail}</p>}
+      <HomeCandyArt/>
+      <div className="hm-cta">
+        <HomeBigButton onClick={onRetry}>TRY AGAIN</HomeBigButton>
+      </div>
+    </HomePage>
+  );
+}
+
 
 // ---- GAME ----
 
@@ -3570,24 +3545,19 @@ function archiveDateLabel(date){
 // category's colour, `contain`ed so the whole piece stays visible. With no
 // usable image (or one that fails to load) the category name stands in.
 function ArchiveArtHalf({name,image,color,loading}){
-  const src = usableMediaUrl(image);
-  const[failed,setFailed]=useState(false);
   return(
     <div className="arc-half" style={{background:color.mid}}>
-      {src&&!failed
-        ? <img src={src} alt={name||""} loading={loading} decoding="async" onError={()=>setFailed(true)}/>
-        : <span className={color.isDark?"arc-half-name":"arc-half-name on-light"}>{name}</span>}
+      <CategoryArtImage image={image} alt={name||""} loading={loading}
+        fallback={<span className={color.isDark?"arc-half-name":"arc-half-name on-light"}>{name}</span>}/>
     </div>
   );
 }
 
 // The card artwork is always the two category images, A on the left and B
-// on the right, even when the puzzle also has a wide header image: that one
-// stays Home's featured artwork.
+// on the right. The wide header image isn't used here (or on Home).
 function ArchiveCardArt({game,eager}){
   const loading = eager?"eager":"lazy";
-  const colA = PALETTE.find(p=>p.id===(game.categoryAColor||"teal"))||PALETTE[0];
-  const colB = PALETTE.find(p=>p.id===(game.categoryBColor||"pink"))||PALETTE[1];
+  const [colA, colB] = categoryColors(game);
   return(
     <div className="arc-art">
       <ArchiveArtHalf name={game.categoryA} image={game.categoryAImage} color={colA} loading={loading}/>
@@ -4804,6 +4774,12 @@ export default function WhatTheFudgeTrivia(){
   // Record an answer mid-game
   const handleAnswer = async(puzzleId, answers, score) => {
     if(!player) return;
+    // Keep App's copy of today's record in step, so going back to Home
+    // mid-game shows "N of M answered" / Keep going! straight away.
+    // GameScreen reads its record only when it mounts, so this doesn't
+    // touch the game in progress.
+    setGameRecord(r=>r && r.puzzleId===puzzleId && !r.completed
+      ? {...r, answers, score, currentIndex:answers.length} : r);
     try { await dbRecordAnswer(player.id, puzzleId, answers, score); } catch(e){}
   };
 
@@ -4848,35 +4824,21 @@ export default function WhatTheFudgeTrivia(){
     setView("replay");
   };
 
-  // Loading screen
+  // Loading and boot failure: Home's own frame (see HomeLoadingPage).
+  // Try again reloads the page, as before.
   if(loading) return(
     <>
       <style>{styles}</style>
-      <div className="ld-screen" role="status" aria-live="polite">
-        <LandingBackdrop/>
-        <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="ld-logo"/>
-        <div className="ld-sprinkles" aria-hidden="true">
-          <img src="/sprinkle-pink.png" className="ld-sprinkle ld-sprinkle-1" alt=""/>
-          <img src="/sprinkle-turquoise.png" className="ld-sprinkle ld-sprinkle-2" alt=""/>
-          <img src="/sprinkle-yellow.png" className="ld-sprinkle ld-sprinkle-3" alt=""/>
-        </div>
-        <p className="ld-text">Mixing today&rsquo;s trivia&hellip;</p>
-      </div>
+      <div className="app"><div className="main"><HomeLoadingPage sound={sound}/></div></div>
     </>
   );
 
   if(error) return(
     <>
       <style>{styles}</style>
-      <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-        <GameBackdrop/>
-        <div className="card" style={{textAlign:"center",maxWidth:340}}>
-          <div style={{fontSize:48,marginBottom:12}}>😬</div>
-          <div style={{fontFamily:"'Fredoka One',cursive",fontSize:22,marginBottom:8}}>Connection Error</div>
-          <div style={{fontSize:14,fontWeight:700,color:"#666",marginBottom:20}}>{error}</div>
-          <button className="btn btn-teal" onClick={()=>window.location.reload()}>Try Again</button>
-        </div>
-      </div>
+      <div className="app"><div className="main">
+        <HomeErrorPage sound={sound} detail={error} onRetry={()=>window.location.reload()}/>
+      </div></div>
     </>
   );
 
@@ -4892,7 +4854,6 @@ export default function WhatTheFudgeTrivia(){
     <>
       <style>{styles}</style>
       <div className={`app${usesSharedHeader?" cbd-page":""}${isGameplay?" gp-fullscreen":""}`}>
-        {view==="home"&&<LandingBackdrop/>}
         {(isGameplay||usesSharedHeader)&&<GameBackdrop/>}
         {/* Gameplay, Archive and Results each carry their own public header (logo,
             sound, help, account) and backdrop. Every other screen keeps the
@@ -4915,16 +4876,7 @@ export default function WhatTheFudgeTrivia(){
           </div>
         </div>}
         <div className="main">
-          {!todayGame&&view==="home"&&(
-            <div className="no-game">
-              <div style={{fontSize:56,marginBottom:12,filter:"drop-shadow(0 4px 0 rgba(0,0,0,0.15))"}}>🍬</div>
-              <div style={{fontFamily:"'Fredoka One',cursive",fontSize:24,marginBottom:6,color:"var(--black)"}}>No game today!</div>
-              <div style={{fontSize:13,fontWeight:700,color:"var(--teal-dark)",marginBottom:18}}>Head to Admin to schedule one!</div>
-              <button className="btn btn-teal" onClick={()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");}}>Go to Admin →</button>
-            </div>
-          )}
-
-          {todayGame&&view==="home"&&(
+          {view==="home"&&(
             <HomeScreen game={todayGame} gameRecord={todayRecord} stats={stats}
               player={player}
               sound={sound}
