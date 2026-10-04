@@ -13,7 +13,7 @@ import { archivePuzzleImages, describeImageWarning, failureReason, imageName, is
 import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor } from "./crowdStats.js";
 import { gameToRow, rowToGame } from "./gameRow.js";
 import { copyText, shareOrCopy } from "./homeShare.js";
-import { saveAnswerThenSync } from "./answerSync.js";
+import { answerWriteFilter, saveAnswerThenSync } from "./answerSync.js";
 import SharePreview from "./SharePreview.jsx";
 import ResultsCopyButton from "./ResultsCopyButton.jsx";
 import { CrowdPanel, CrowdTiles } from "./ResultsCrowd.jsx";
@@ -2055,12 +2055,19 @@ async function dbInitGameRecord(playerId, game){
   });
   return newRecordFor(game);
 }
+// Saves one answer. Conditional, so a saved record never moves backward:
+// it lands only on an unfinished record holding fewer answers than this
+// save (see answerSync.js). Resolves true when it landed, false when the
+// database already had as many or more (a newer save got there first) or
+// the game is finished; throws when the request fails.
 async function dbRecordAnswer(playerId, puzzleId, answers, score){
+  if(!answers.length) return false;
   if(OFFLINE_PREVIEW) return devRecordAnswer(puzzleId, answers, score);
-  await sbFetch(`/rest/v1/game_records?${puzzleFilter(playerId, puzzleId)}`, {
+  const rows = await sbFetch(`/rest/v1/game_records?${puzzleFilter(playerId, puzzleId)}&${answerWriteFilter(answers)}`, {
     method:"PATCH",
     body: JSON.stringify({answers, score})
   });
+  return Array.isArray(rows) && rows.length>0;
 }
 // Marks today's game finished. Resolves only once the database returns the
 // updated row as completed; throws otherwise. The puzzle_stats trigger on

@@ -11,6 +11,8 @@
    layer is used instead. It never talks to any database.
    ============================================================ */
 
+import { answerWriteApplies } from "../answerSync.js";
+
 const svg = (markup) =>
   `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup.replace(/\s+/g, " ").trim())}`;
 
@@ -471,11 +473,14 @@ export function devInitRecord(game) {
   return all[game.id];
 }
 
+// The live save's rule (see answerSync.js): it lands only on an unfinished
+// record holding fewer answers. Returns whether it landed.
 export function devRecordAnswer(puzzleId, answers, score) {
   const all = readJSON(RECORD_KEY, {});
-  if (!all[puzzleId]) return;
+  if (!answerWriteApplies(all[puzzleId], answers)) return false;
   all[puzzleId] = { ...all[puzzleId], answers, score, currentIndex: answers.length };
   writeJSON(RECORD_KEY, all);
+  return true;
 }
 
 // Set localStorage "wtf-dev-complete" to "fail" (the save is rejected) or
