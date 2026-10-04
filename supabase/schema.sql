@@ -511,6 +511,14 @@ $$;
 revoke execute on function public.set_puzzle_favorite(text, boolean) from public, anon;
 grant execute on function public.set_puzzle_favorite(text, boolean) to authenticated;
 
+-- Explicit table privileges (not project defaults); RLS below limits
+-- favorites to the player's own rows. Counts are read-only for clients.
+revoke all on table public.puzzle_favorites from anon, authenticated;
+grant select, insert, delete on table public.puzzle_favorites to authenticated;
+
+revoke all on table public.puzzle_favorite_counts from anon, authenticated;
+grant select on table public.puzzle_favorite_counts to anon, authenticated;
+
 alter table public.puzzle_favorites enable row level security;
 alter table public.puzzle_favorite_counts enable row level security;
 

@@ -78,3 +78,10 @@ export async function toggleFavorite({ puzzleId, title, getState, setState, save
     return "failed";
   }
 }
+
+// A press on the heart: never reaches the card underneath (which would open
+// the puzzle), and does nothing while busy or unavailable.
+export function pressFavorite(event, unavailable, onToggle) {
+  event.stopPropagation();
+  if (!unavailable) onToggle();
+}

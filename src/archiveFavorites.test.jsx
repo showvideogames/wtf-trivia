@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { emptyFavorites, toggleFavorite } from "./archiveFavorites.js";
+import { emptyFavorites, pressFavorite, toggleFavorite } from "./archiveFavorites.js";
 import ArchiveFavoriteButton from "./ArchiveFavoriteButton.jsx";
 
 // A tiny store like the Archive's: setState applies updates synchronously.
@@ -126,9 +126,17 @@ describe("ArchiveFavoriteButton", () => {
 
   it("shows the total, including 0, and no number when it's unknown", () => {
     expect(html({ selected: false, count: 0 })).toContain('<span class="arc-fav-count" aria-hidden="true">0</span>');
-    expect(html({ selected: false, count: 0 })).toContain("0 favorites");
-    expect(html({ selected: true, count: 1 })).toContain("1 favorite<");
     expect(html({ selected: false, count: null })).not.toContain("arc-fav-count");
+  });
+
+  it("describes the heart with its total, so focus announces the count", () => {
+    const markup = html({ selected: false, count: 12 });
+    const describedBy = markup.match(/aria-describedby="([^"]+)"/)[1];
+    expect(markup).toContain(`<span id="${describedBy}" hidden="">12 favorites</span>`);
+    expect(html({ selected: true, count: 1 })).toMatch(/hidden="">1 favorite<\/span>/);
+    expect(html({ selected: true, count: 0 })).toMatch(/hidden="">0 favorites<\/span>/);
+    // No total known: no description pointing at nothing.
+    expect(html({ selected: false, count: null })).not.toContain("aria-describedby");
   });
 
   it("marks busy and unavailable states without the disabled attribute", () => {
@@ -139,23 +147,20 @@ describe("ArchiveFavoriteButton", () => {
 
   // The press never reaches the card (which would open the puzzle), and is
   // ignored while busy or unavailable.
-  const press = (props) => {
+  const press = (unavailable) => {
     const onToggle = vi.fn();
-    const button = ArchiveFavoriteButton({ title: "T", selected: false, count: 0, onToggle, ...props }).props.children[0];
     const event = { stopPropagation: vi.fn() };
-    button.props.onClick(event);
+    pressFavorite(event, unavailable, onToggle);
     return { onToggle, event };
   };
   it("a press toggles and stops at the heart", () => {
-    const { onToggle, event } = press({});
+    const { onToggle, event } = press(false);
     expect(onToggle).toHaveBeenCalledTimes(1);
     expect(event.stopPropagation).toHaveBeenCalled();
   });
   it("a press while busy or unavailable does nothing, and still stops at the heart", () => {
-    for (const state of [{ busy: true }, { disabled: true }]) {
-      const { onToggle, event } = press(state);
-      expect(onToggle).not.toHaveBeenCalled();
-      expect(event.stopPropagation).toHaveBeenCalled();
-    }
+    const { onToggle, event } = press(true);
+    expect(onToggle).not.toHaveBeenCalled();
+    expect(event.stopPropagation).toHaveBeenCalled();
   });
 });

@@ -130,6 +130,18 @@ $$;
 revoke execute on function public.set_puzzle_favorite(text, boolean) from public, anon;
 grant execute on function public.set_puzzle_favorite(text, boolean) to authenticated;
 
+-- Table privileges, set explicitly rather than left to project defaults.
+-- RLS (below) then limits favorites to the player's own rows.
+--   puzzle_favorites: signed-in players may read, add and remove (their
+--     own) favorites; never update or truncate. Signed-out: nothing.
+--   puzzle_favorite_counts: read-only for everyone; only the trigger above
+--     (running as the owner) writes it.
+revoke all on table public.puzzle_favorites from anon, authenticated;
+grant select, insert, delete on table public.puzzle_favorites to authenticated;
+
+revoke all on table public.puzzle_favorite_counts from anon, authenticated;
+grant select on table public.puzzle_favorite_counts to anon, authenticated;
+
 alter table public.puzzle_favorites enable row level security;
 alter table public.puzzle_favorite_counts enable row level security;
 
