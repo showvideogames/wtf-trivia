@@ -1371,6 +1371,7 @@ const styles = `
   .login-card::before { content: ''; position: absolute; top: 6px; left: 14px; right: 14px; height: 18%; border-radius: 20px 20px 50% 50%; background: linear-gradient(180deg, rgba(255,255,255,.65) 0%, rgba(255,255,255,0) 100%); pointer-events: none; }
   .login-logo { font-family: 'Fredoka One', cursive; font-size: 26px; margin-bottom: 4px; line-height: 1.25; }
   .login-sub { font-size: 13px; font-weight: 700; color: var(--teal-dark); margin-bottom: 24px; letter-spacing: 1px; text-transform: uppercase; }
+  .login-back { display: inline-block; margin-top: 16px; font-size: 14px; font-weight: 800; color: var(--teal-dark); }
   .login-err { background: linear-gradient(160deg,#FEE2E2,#FECACA); border: 2px solid var(--red-dark); border-radius: 14px; color: var(--red-dark); font-size: 13px; font-weight: 800; padding: 9px; margin-bottom: 11px; }
 
   /* ===== TOAST ===== */
@@ -3999,7 +4000,16 @@ function AccountScreenV2({player,onNav,onCreateAccount,onPasswordSignIn,onMagicL
 // ============================================================
 // ADMIN
 // ============================================================
-function AdminLogin({onLogin}){
+// Admin lives at /admin (vercel.json sends that path to the app). The
+// sign-in is remembered for this browser tab, so a refresh stays signed in.
+const ADMIN_PATH = "/admin";
+const ADMIN_SESSION_KEY = "wtf-admin-in";
+const isAdminPath = ()=>window.location.pathname.replace(/\/+$/,"")===ADMIN_PATH;
+const readAdminSession = ()=>{ try { return sessionStorage.getItem(ADMIN_SESSION_KEY)==="1"; } catch { return false; } };
+const writeAdminSession = on=>{ try { if(on) sessionStorage.setItem(ADMIN_SESSION_KEY,"1"); else sessionStorage.removeItem(ADMIN_SESSION_KEY); } catch { /* storage blocked */ } };
+const setPath = path=>{ if(window.location.pathname!==path) window.history.pushState(null,"",path); };
+
+function AdminLogin({onLogin,onExit}){
   const[p,setP]=useState("");const[err,setErr]=useState(false);
   const go=()=>{if(p===ADMIN_PASS){onLogin();}else{setErr(true);setTimeout(()=>setErr(false),2000);}};
   return(
@@ -4012,6 +4022,7 @@ function AdminLogin({onLogin}){
           <input className="adm-input" type="password" placeholder="Password" value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()}/>
         </div>
         <button className="btn btn-yellow" style={{fontSize:18}} onClick={go}>Sign In →</button>
+        <a className="login-back" href="/" onClick={e=>{e.preventDefault();onExit();}}>← Back to site</a>
       </div>
     </div>
   );
@@ -4459,9 +4470,15 @@ function AdminPreview({game,onBack}){
 // ROOT APP
 // ============================================================
 export default function WhatTheFudgeTrivia(){
-  const[view,setView]=useState("home");
-  const[adminView,setAdminView]=useState("login");
-  const[adminIn,setAdminIn]=useState(false);
+  const[view,setView]=useState(()=>isAdminPath()?"admin":"home");
+  const[adminView,setAdminView]=useState(()=>readAdminSession()?"dashboard":"login");
+  const[adminIn,setAdminIn]=useState(readAdminSession);
+  // Back/forward between /admin and the site.
+  useEffect(()=>{
+    const onPop=()=>setView(v=>isAdminPath()?"admin":v==="admin"?"home":v);
+    window.addEventListener("popstate",onPop);
+    return ()=>window.removeEventListener("popstate",onPop);
+  },[]);
   const[editGame,setEditGame]=useState(null);
   const[replayGame,setReplayGame]=useState(null);
   const[replayRecord,setReplayRecord]=useState(null);
@@ -4810,7 +4827,8 @@ export default function WhatTheFudgeTrivia(){
   // sound, the dev-only Admin gear and the account control. A current link
   // pressed again scrolls back to the top. Leaving a game goes through here.
   const signedIn = Boolean(player && !player.isGuest);
-  const openAdmin = ()=>{setView("admin");setAdminView(adminIn?"dashboard":"login");};
+  const openAdmin = ()=>{setPath(ADMIN_PATH);setView("admin");setAdminView(adminIn?"dashboard":"login");};
+  const exitAdmin = ()=>{setPath("/");setView("home");window.scrollTo(0,0);};
   const toTop = ()=>{
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     window.scrollTo({top:0, behavior:reduce?"auto":"smooth"});
@@ -4853,8 +4871,8 @@ export default function WhatTheFudgeTrivia(){
 
   // Admin branch
   if(view==="admin"){
-    if(!adminIn)return <><style>{styles}</style><CandyBackdrop preset="admin"/><AdminLogin onLogin={()=>{setAdminIn(true);setAdminView("dashboard");}}/></>;
-    if(adminView==="dashboard")return <StudioContext.Provider value={STUDIO_SERVICES}><style>{styles}</style><CandyBackdrop preset="admin"/><Dashboard games={games} today={getLocalGameDay()} onNew={()=>{setEditGame({id:`g-${Date.now()}`,date:"",themeTitle:"",categoryA:"",categoryB:"",status:"draft",questions:[],tags:[]});setAdminView("editor");}} onEdit={g=>{setEditGame(g);setAdminView("editor");}} onLogout={()=>{setAdminIn(false);setAdminView("login");setView("home");}}/></StudioContext.Provider>;
+    if(!adminIn)return <><style>{styles}</style><CandyBackdrop preset="admin"/><AdminLogin onLogin={()=>{writeAdminSession(true);setAdminIn(true);setAdminView("dashboard");}} onExit={exitAdmin}/></>;
+    if(adminView==="dashboard")return <StudioContext.Provider value={STUDIO_SERVICES}><style>{styles}</style><CandyBackdrop preset="admin"/><Dashboard games={games} today={getLocalGameDay()} onNew={()=>{setEditGame({id:`g-${Date.now()}`,date:"",themeTitle:"",categoryA:"",categoryB:"",status:"draft",questions:[],tags:[]});setAdminView("editor");}} onEdit={g=>{setEditGame(g);setAdminView("editor");}} onLogout={()=>{writeAdminSession(false);setAdminIn(false);setAdminView("login");}} onExit={exitAdmin}/></StudioContext.Provider>;
     if(adminView==="editor")return <StudioContext.Provider value={STUDIO_SERVICES}><style>{styles}</style><CandyBackdrop preset="admin"/><AdminEditor game={editGame} games={games} onSave={handleSave} onDelete={handleDel} onBack={()=>setAdminView("dashboard")}/></StudioContext.Provider>;
   }
 

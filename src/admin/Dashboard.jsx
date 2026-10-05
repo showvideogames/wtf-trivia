@@ -76,7 +76,7 @@ function PuzzleTable({games, today, onEdit, quiet=false}){
   );
 }
 
-export default function Dashboard({games, today, onNew, onEdit, onLogout}){
+export default function Dashboard({games, today, onNew, onEdit, onLogout, onExit}){
   const {BrandIcon} = useStudio();
   const[query,setQuery]=useState("");
   const {drafts, upcoming, history, retired} = groupPuzzles(games, today);
@@ -92,6 +92,7 @@ export default function Dashboard({games, today, onNew, onEdit, onLogout}){
         </div>
         <div className="ps-topbar-actions">
           <button type="button" className="ps-btn ps-btn-primary" onClick={onNew}><Icon name="plus" size={18}/>New Puzzle</button>
+          <a className="ps-btn" href="/" onClick={e=>{e.preventDefault();onExit();}}>Back to site</a>
           <button type="button" className="ps-btn" onClick={onLogout}>Sign out</button>
         </div>
       </header>
