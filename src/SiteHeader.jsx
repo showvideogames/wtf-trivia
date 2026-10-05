@@ -79,8 +79,8 @@ function HeaderMenu({ items, current }) {
             {items.map((item) => (
               <li key={item.id}>
                 <button type="button"
-                        className={item.id === current ? "sh-menu-item is-current" : "sh-menu-item"}
-                        aria-current={item.id === current ? "page" : undefined}
+                        className={currentClass("sh-menu-item", item.id, current)}
+                        aria-current={ariaCurrent(item.id, current)}
                         onClick={() => { setOpen(false); buttonRef.current?.focus(); item.onClick(); }}>
                   {item.icon && <span className="sh-menu-icon" aria-hidden="true">{item.icon}</span>}
                   <span className="sh-menu-label">{item.label}</span>
@@ -95,16 +95,91 @@ function HeaderMenu({ items, current }) {
   );
 }
 
+// Marks for the current link. How to Play is a dialog, not a page: while it
+// is open it takes the mark (a blue outline, no aria-current), and the page
+// underneath gets its own mark back when it closes.
+function currentClass(base, id, current) {
+  if (id !== current) return base;
+  return id === "help" ? `${base} is-current is-dialog` : `${base} is-current`;
+}
+function ariaCurrent(id, current) {
+  return id === current && id !== "help" ? "page" : undefined;
+}
+
+function GridGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="4" y="4" width="7" height="7" rx="1.6" fill="none" stroke="currentColor" strokeWidth="2.4"/>
+      <rect x="13" y="4" width="7" height="7" rx="1.6" fill="none" stroke="currentColor" strokeWidth="2.4"/>
+      <rect x="4" y="13" width="7" height="7" rx="1.6" fill="none" stroke="currentColor" strokeWidth="2.4"/>
+      <rect x="13" y="13" width="7" height="7" rx="1.6" fill="none" stroke="currentColor" strokeWidth="2.4"/>
+    </svg>
+  );
+}
+
+// Phone shortcuts (Archive beside the menu, ? beside sound) show only when
+// both fit in their side of the bar with the logo still dead centre: the
+// bar's two side tracks are equal, so each side's controls are measured
+// against half of what the logo leaves. If either side would not fit, both
+// stay hidden (they are always in the menu too). Nothing is shrunk to fit.
+function useShortcutRoom(barRef) {
+  const [room, setRoom] = useState(false);
+  useEffect(() => {
+    const bar = barRef.current;
+    if (!bar || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      const left = bar.querySelector(".sh-left");
+      const tools = bar.querySelector(".sh-tools");
+      const logo = bar.querySelector(".sh-logo");
+      const menuBtn = bar.querySelector(".sh-menu-btn");
+      if (!left || !menuBtn || !left.offsetWidth) { setRoom(false); return; }
+      const cs = getComputedStyle(bar);
+      const inner = bar.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const side = (inner - logo.offsetWidth - 2 * parseFloat(cs.columnGap)) / 2;
+      const btn = menuBtn.offsetWidth;
+      const gapL = parseFloat(getComputedStyle(left).columnGap) || 0;
+      const gapT = parseFloat(getComputedStyle(tools).columnGap) || 0;
+      // Each side's width without its shortcut, then with one more circle.
+      const base = (el, gap) => [...el.children]
+        .filter((c) => !c.classList.contains("sh-shortcut") && c.offsetWidth)
+        .reduce((w, c, i) => w + c.offsetWidth + (i ? gap : 0), 0);
+      const needLeft = base(left, gapL) + gapL + btn;
+      const needRight = base(tools, gapT) + gapT + btn;
+      setRoom(needLeft <= side && needRight <= side);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(bar);
+    const logo = bar.querySelector(".sh-logo");
+    if (logo && !logo.complete) logo.addEventListener("load", measure, { once: true });
+    return () => ro.disconnect();
+  }, [barRef]);
+  return room;
+}
+
 export default function SiteHeader({ nav, current, sound, account, admin }) {
   const menuItems = admin ? [...nav, { id: "admin", label: "Admin", icon: admin.icon, onClick: admin.onClick }] : nav;
+  const barRef = useRef(null);
+  const room = useShortcutRoom(barRef);
+  const archive = nav.find((item) => item.id === "archive");
+  const help = nav.find((item) => item.id === "help");
   return (
-    <header className="sh-bar">
-      <HeaderMenu items={menuItems} current={current}/>
+    <header className="sh-bar" ref={barRef} data-shortcuts={room ? "on" : undefined}>
+      <div className="sh-left">
+        <HeaderMenu items={menuItems} current={current}/>
+        {archive && (
+          <button type="button" className={currentClass("sh-icon-btn sh-shortcut", "archive", current)}
+                  aria-current={ariaCurrent("archive", current)}
+                  aria-label={archive.label} title={archive.label} onClick={archive.onClick}>
+            <GridGlyph/>
+          </button>
+        )}
+      </div>
       <nav className="sh-nav" aria-label="Main">
         {nav.map((item) => (
           <button key={item.id} type="button"
-                  className={item.id === current ? "sh-link is-current" : "sh-link"}
-                  aria-current={item.id === current ? "page" : undefined}
+                  className={currentClass("sh-link", item.id, current)}
+                  aria-current={ariaCurrent(item.id, current)}
                   onClick={item.onClick}>
             {item.label}
           </button>
@@ -112,6 +187,12 @@ export default function SiteHeader({ nav, current, sound, account, admin }) {
       </nav>
       <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="sh-logo"/>
       <div className="sh-tools">
+        {help && (
+          <button type="button" className={currentClass("sh-icon-btn sh-shortcut sh-help", "help", current)}
+                  aria-label={help.label} title={help.label} onClick={help.onClick}>
+            <span aria-hidden="true">?</span>
+          </button>
+        )}
         {sound && (
           <button type="button" className="sh-icon-btn" onClick={() => sound.setMuted((m) => !m)}
                   aria-pressed={!sound.muted}

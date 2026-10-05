@@ -4400,7 +4400,7 @@ function AdminPreview({game,onBack}){
   // to the preview's start card; Archive and Sign in have nothing to show in
   // a preview, so they do nothing here.
   const previewChrome={
-    current: view==="score" ? null : "play",
+    current: showHelp ? "help" : view==="score" ? null : "play",
     nav: [
       {id:"play", label:"Play", onClick:()=>setView("home")},
       {id:"archive", label:"Archive", onClick:()=>{}},
@@ -4823,7 +4823,9 @@ export default function WhatTheFudgeTrivia(){
   const playerChrome = {
     // Nothing is marked current during a game, so Play reads as the way back
     // to Home (where the game in progress resumes), not as "you are here".
-    current: view==="home" ? "play" : view==="archive" ? "archive" : null,
+    // While How to Play is open it is the one marked link; closing it
+    // restores the page's own.
+    current: showHelp ? "help" : view==="home" ? "play" : view==="archive" ? "archive" : null,
     nav: [
       {id:"play", label:"Play", onClick:()=>goTo("home")},
       {id:"archive", label:"Archive", onClick:()=>goTo("archive")},
