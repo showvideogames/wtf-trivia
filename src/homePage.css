@@ -2,7 +2,7 @@
    The Home page (`hm-` classes, see Home.jsx), on the custard page shell and
    cream site header from site.css. The daily matchup is the star, the Play
    button is the one big action, and everything else supports those two.
-   The older `hp-` rules in home.css still serve the How to Play dialog and
+   The older `hp-` rules in home.css still serve
    Admin's artwork previews. */
 
 .hm-inner {

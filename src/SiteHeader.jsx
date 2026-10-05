@@ -39,7 +39,8 @@ function CurrentGlyph() {
 
 // The phone menu: a disclosure (button + panel). Opening focuses the first
 // link; Escape closes and returns focus to the button; a press anywhere
-// outside the header closes it; choosing an item closes it, then runs the
+// outside the header closes it; choosing an item closes it and puts focus back
+// on the button (so a dialog it opens can return focus there), then runs the
 // item's own action.
 function HeaderMenu({ items, current }) {
   const [open, setOpen] = useState(false);
@@ -80,7 +81,7 @@ function HeaderMenu({ items, current }) {
                 <button type="button"
                         className={item.id === current ? "sh-menu-item is-current" : "sh-menu-item"}
                         aria-current={item.id === current ? "page" : undefined}
-                        onClick={() => { setOpen(false); item.onClick(); }}>
+                        onClick={() => { setOpen(false); buttonRef.current?.focus(); item.onClick(); }}>
                   {item.icon && <span className="sh-menu-icon" aria-hidden="true">{item.icon}</span>}
                   <span className="sh-menu-label">{item.label}</span>
                   {item.id === current && <CurrentGlyph/>}

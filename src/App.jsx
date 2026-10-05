@@ -5,6 +5,7 @@ import "./game.css";
 import "./site.css";
 import "./archive.css";
 import "./homePage.css";
+import HowToPlay from "./HowToPlay";
 import "./results.css";
 import "./backdrop.css";
 import "./admin/studio.css";
@@ -2725,21 +2726,6 @@ function HomePuzzleArt({game}){
   );
 }
 
-function HomeHelp({game,onClose}){
-  const n = game?.questions?.length||8;
-  return(
-    <div className="hp-modal-bg" role="dialog" aria-modal="true" aria-label="How to play" onClick={onClose}>
-      <div className="hp-modal" onClick={e=>e.stopPropagation()}>
-        <h2>How to play</h2>
-        <p>Every day you get {n} things. For each one, decide which of the two categories it belongs to{game?.categoryA&&game?.categoryB?`: ${game.categoryA} or ${game.categoryB}.`:"."}</p>
-        <p>Tap a category to lock in your answer. You find out straight away whether you were right, plus the actual info and some needless commentary.</p>
-        <p>At the end you get a score out of {n} you can share &mdash; without spoiling the answers.</p>
-        <button className="btn btn-teal" onClick={onClose} style={{marginTop:6}}>Got it</button>
-      </div>
-    </div>
-  );
-}
-
 // Home: today's Home & Share poster (or, without one, the category matchup),
 // then one big action -- Play (or Keep going! for a game in progress), or,
 // once today is finished, the score panel with See my results and Share.
@@ -4460,7 +4446,7 @@ function AdminPreview({game,onBack}){
         )}
         {view==="game"&&<GameScreen game={game} gameRecord={pr} onComplete={onComplete} sound={dummySound} isReplay={true}/>}
         {view==="score"&&<ScoreScreen gameRecord={pr} game={game} onNav={()=>setView("home")} sound={dummySound} isReplay={true}/>}
-        {showHelp&&<HomeHelp game={game} onClose={()=>setShowHelp(false)}/>}
+        {showHelp&&<HowToPlay onClose={()=>setShowHelp(false)} onPlay={()=>{setShowHelp(false);setView("home");}}/>}
       </div>
     </div>
   );
@@ -4946,7 +4932,7 @@ export default function WhatTheFudgeTrivia(){
         </div>
 
         {toast&&<Toast message={toast} onDone={()=>setToast(null)}/>}
-        {showHelp&&<HomeHelp game={view==="replay"?replayGame:todayGame} onClose={()=>setShowHelp(false)}/>}
+        {showHelp&&<HowToPlay onClose={()=>setShowHelp(false)} onPlay={()=>{setShowHelp(false);goTo("home");}}/>}
       </div>
     </PlayerChromeContext.Provider>
   );
