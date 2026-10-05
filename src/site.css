@@ -175,6 +175,10 @@
 .sh-link:hover { background: var(--cs-pink-soft); }
 .sh-link.is-current { background: var(--cs-pink); }
 .sh-link.is-current:hover { background: var(--cs-pink-hover); }
+/* How to Play is a dialog: while open it gets a blue outline, not the pink
+   page fill. */
+.sh-link.is-dialog,
+.sh-link.is-dialog:hover { background: transparent; box-shadow: inset 0 0 0 2.5px var(--cs-focus); }
 
 .sh-icon-btn {
   appearance: none;
@@ -192,6 +196,13 @@
 }
 .sh-icon-btn:hover { background: #fff; }
 .sh-admin img { width: 22px !important; height: 22px !important; }
+.sh-icon-btn svg { display: block; width: 22px; height: 22px; color: var(--black); }
+.sh-help { font-family: 'Fredoka One', cursive; font-size: 22px; color: var(--black); }
+.sh-icon-btn.is-current { background: var(--cs-pink); }
+.sh-icon-btn.is-dialog { background: var(--cs-cream); border-color: var(--cs-focus); box-shadow: inset 0 0 0 1px var(--cs-focus); }
+
+/* Phone shortcuts: hidden unless SiteHeader measured room for both. */
+.sh-shortcut { display: none; }
 
 .sh-account {
   appearance: none;
@@ -220,7 +231,7 @@
 .sh-account-icon { display: none; width: 22px; height: 22px; flex: none; }
 
 /* The phone menu (button + panel); hidden from 900px, where the links show. */
-.sh-menu { grid-area: menu; justify-self: start; display: none; }
+.sh-left { grid-area: menu; justify-self: start; display: none; align-items: center; gap: 6px; }
 .sh-menu-btn svg { display: block; width: 24px; height: 24px; color: var(--black); }
 .sh-menu-btn[aria-expanded="true"] { background: var(--cs-pink-soft); }
 .sh-menu-panel {
@@ -255,6 +266,7 @@
 }
 .sh-menu-item:hover { background: var(--cs-pink-soft); }
 .sh-menu-item.is-current { background: var(--cs-pink); }
+.sh-menu-item.is-dialog { background: transparent; box-shadow: inset 0 0 0 2.5px var(--cs-focus); }
 .sh-menu-label { flex: 1 1 auto; min-width: 0; }
 .sh-menu-icon { display: grid; place-items: center; flex: none; }
 .sh-menu-icon img { width: 22px !important; height: 22px !important; }
@@ -273,14 +285,25 @@
     padding: 6px 10px;
     border-radius: 22px;
   }
-  .sh-menu { display: block; }
+  .sh-left { display: flex; }
+  .sh-bar[data-shortcuts="on"] .sh-shortcut { display: grid; }
   .sh-nav,
   .sh-admin { display: none; }
   .sh-logo { height: 54px; max-width: 128px; }
 }
+/* Compact row: the circles draw at 42px (40px on the narrowest phones) but
+   each one's touch area reaches 44px through an invisible ring, which stays
+   inside the 6px gaps between them. */
+@media (max-width: 899px) {
+  .sh-icon-btn, .sh-account { position: relative; }
+  .sh-account { overflow: visible; }
+  .sh-icon-btn::after, .sh-account::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; }
+}
+.ph-compact .sh-icon-btn, .ph-compact .sh-account { position: relative; }
+.ph-compact .sh-icon-btn::after, .ph-compact .sh-account::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; }
 /* Phones: the account control shrinks to the person icon. */
 @media (max-width: 599px) {
-  .sh-account { width: 42px; min-height: 42px; padding: 0; margin-left: 0; border-radius: 50%; }
+  .sh-account { width: 42px; min-height: 42px; padding: 0; margin-left: 0; border-radius: 50%; overflow: visible; }
   .sh-account-icon { display: block; }
   .sh-account-label {
     position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
@@ -310,12 +333,13 @@
   padding: 6px 10px;
   border-radius: 22px;
 }
-.ph-compact .sh-menu { display: block; }
+.ph-compact .sh-left { display: flex; }
+.ph-compact .sh-bar[data-shortcuts="on"] .sh-shortcut { display: grid; }
 .ph-compact .sh-nav,
 .ph-compact .sh-admin { display: none; }
 .ph-compact .sh-logo { height: 54px; max-width: 128px; margin-block: 0; }
 .ph-compact .sh-icon-btn { width: 42px; height: 42px; font-size: 19px; }
-.ph-compact .sh-account { width: 42px; min-height: 42px; padding: 0; margin-left: 0; border-radius: 50%; }
+.ph-compact .sh-account { width: 42px; min-height: 42px; padding: 0; margin-left: 0; border-radius: 50%; overflow: visible; }
 .ph-compact .sh-account-icon { display: block; }
 .ph-compact .sh-account-label {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
@@ -325,6 +349,7 @@
   .sh-logo { height: 44px; max-width: 108px; }
   .sh-icon-btn { width: 40px; height: 40px; font-size: 17px; }
   .sh-account { width: 40px; min-height: 40px; }
+  .sh-icon-btn::after, .sh-account::after { inset: -2px; }
 }
 
 /* ===== CANDY CONTROLS =====

@@ -5,6 +5,7 @@ import "./game.css";
 import "./site.css";
 import "./archive.css";
 import "./homePage.css";
+import HowToPlay from "./HowToPlay";
 import "./results.css";
 import "./backdrop.css";
 import "./admin/studio.css";
@@ -2725,21 +2726,6 @@ function HomePuzzleArt({game}){
   );
 }
 
-function HomeHelp({game,onClose}){
-  const n = game?.questions?.length||8;
-  return(
-    <div className="hp-modal-bg" role="dialog" aria-modal="true" aria-label="How to play" onClick={onClose}>
-      <div className="hp-modal" onClick={e=>e.stopPropagation()}>
-        <h2>How to play</h2>
-        <p>Every day you get {n} things. For each one, decide which of the two categories it belongs to{game?.categoryA&&game?.categoryB?`: ${game.categoryA} or ${game.categoryB}.`:"."}</p>
-        <p>Tap a category to lock in your answer. You find out straight away whether you were right, plus the actual info and some needless commentary.</p>
-        <p>At the end you get a score out of {n} you can share &mdash; without spoiling the answers.</p>
-        <button className="btn btn-teal" onClick={onClose} style={{marginTop:6}}>Got it</button>
-      </div>
-    </div>
-  );
-}
-
 // Home: today's Home & Share poster (or, without one, the category matchup),
 // then one big action -- Play (or Keep going! for a game in progress), or,
 // once today is finished, the score panel with See my results and Share.
@@ -4414,7 +4400,7 @@ function AdminPreview({game,onBack}){
   // to the preview's start card; Archive and Sign in have nothing to show in
   // a preview, so they do nothing here.
   const previewChrome={
-    current: view==="score" ? null : "play",
+    current: showHelp ? "help" : view==="score" ? null : "play",
     nav: [
       {id:"play", label:"Play", onClick:()=>setView("home")},
       {id:"archive", label:"Archive", onClick:()=>{}},
@@ -4460,7 +4446,7 @@ function AdminPreview({game,onBack}){
         )}
         {view==="game"&&<GameScreen game={game} gameRecord={pr} onComplete={onComplete} sound={dummySound} isReplay={true}/>}
         {view==="score"&&<ScoreScreen gameRecord={pr} game={game} onNav={()=>setView("home")} sound={dummySound} isReplay={true}/>}
-        {showHelp&&<HomeHelp game={game} onClose={()=>setShowHelp(false)}/>}
+        {showHelp&&<HowToPlay onClose={()=>setShowHelp(false)} onPlay={()=>{setShowHelp(false);setView("home");}}/>}
       </div>
     </div>
   );
@@ -4837,7 +4823,9 @@ export default function WhatTheFudgeTrivia(){
   const playerChrome = {
     // Nothing is marked current during a game, so Play reads as the way back
     // to Home (where the game in progress resumes), not as "you are here".
-    current: view==="home" ? "play" : view==="archive" ? "archive" : null,
+    // While How to Play is open it is the one marked link; closing it
+    // restores the page's own.
+    current: showHelp ? "help" : view==="home" ? "play" : view==="archive" ? "archive" : null,
     nav: [
       {id:"play", label:"Play", onClick:()=>goTo("home")},
       {id:"archive", label:"Archive", onClick:()=>goTo("archive")},
@@ -4946,7 +4934,7 @@ export default function WhatTheFudgeTrivia(){
         </div>
 
         {toast&&<Toast message={toast} onDone={()=>setToast(null)}/>}
-        {showHelp&&<HomeHelp game={view==="replay"?replayGame:todayGame} onClose={()=>setShowHelp(false)}/>}
+        {showHelp&&<HowToPlay onClose={()=>setShowHelp(false)} onPlay={()=>{setShowHelp(false);goTo("home");}}/>}
       </div>
     </PlayerChromeContext.Provider>
   );
