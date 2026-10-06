@@ -234,11 +234,17 @@ const styles = `
     align-items: center;
   }
 
-  /* The reveal is one fixed screen on phones: a hard dynamic-viewport height
-     (not the min-height every other screen uses) is what lets the flex chain
-     in game.css shrink the reveal media to fit, so Next stays on screen. The
-     question phase has fixed-size parts and simply scrolls on a very short
-     phone. Desktop/tablet keep the ordinary flow. */
+  /* A hard dynamic-viewport height (not the min-height every other screen
+     uses) is what lets the flex chain in game.css shrink the flexible part of
+     the game to fit the screen actually available, mobile browser toolbars
+     included: the mystery panel during a question (every width), the reveal
+     media on phones. Content that still can't fit (very large text, a tiny
+     window) overflows and the page scrolls, rather than being clipped. */
+  .app.gp-fullscreen:has(.gp-wrap.gp-q) {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+  }
   @media (max-width: 599px) {
     .app.gp-fullscreen:has(.gp-wrap.gp-r) {
       height: 100dvh;
@@ -2842,8 +2848,8 @@ function HomeErrorPage({detail,onRetry}){
 
 // ---- GAME ----
 
-// The puzzle's identity above the question: a small label, then one rounded
-// banner split between the two categories' saved colours, each name on its
+// The puzzle's identity above the question (its label is for screen readers
+// only): one rounded banner split between the two categories' saved colours, each name on its
 // own half with its optional subtitle as a second line ("Led Zeppelin" /
 // "Song"), and the yellow OR badge over the division. Every line is fitted
 // with FitText and all of them show the smallest fitted size, so a name and
@@ -2902,7 +2908,8 @@ function GameMatchup({game,label}){
   },[longName,lineSize,game.categoryA,game.categoryB]);
   return(
     <section className="gp-mu" aria-labelledby={id}>
-      <p className="gp-mu-label" id={id}>{label}</p>
+      {/* The label names the banner for assistive tech only. */}
+      <p className="gp-sr" id={id}>{label}</p>
       <div ref={barRef} className={`gp-mu-bar${withSub?" has-sub":""}${longName?" is-long":""}`}>
         {sides.map((x,i)=>(
           <Fragment key={x.cat}>
@@ -3215,11 +3222,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
       <canvas ref={canvasRef} id="confetti-canvas" style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:9999}}/>
       {reaction&&<ReactionOverlay emoji={reaction}/>}
 
-      {isReplay&&(
-        <div className="gp-replay" role="status">
-          <span aria-hidden="true">📼</span> Replay mode — scores aren&rsquo;t saved
-        </div>
-      )}
+      {/* No replay strip here: Results says a replay isn’t saved. */}
 
       {/* One connected stack above the choices or the reveal: the matchup,
           the progress, then the question itself, set straight on the page.
