@@ -48,6 +48,7 @@ import { normalizeEditorDraft, restoreEditorDraft } from "./admin/editorDraft.js
 import { histogramBuckets } from "./scoreHistogram.js";
 import { StudioContext, paletteColor } from "./admin/StudioContext.js";
 import AdminAccessNotice from "./admin/AdminAccessNotice.jsx";
+import { clearAdminResume, prepareSignInFromEditor, takeAdminResume, writeAdminResume } from "./admin/signInResume.js";
 import { localDateFromISO } from "./admin/adminDates.js";
 import { findDateConflict } from "./admin/dashboardGroups.js";
 import { firstBlankItem, followMove, moveQuestion, questionCountOk, questionKey } from "./admin/questionStatus.js";
@@ -2346,6 +2347,12 @@ function saveEditorDraft(game){
     game: normalizeEditorDraft(game)
   });
 }
+// The draft copy, read back: true only if the edits are really on the device.
+function saveEditorDraftVerified(game){
+  if(!saveEditorDraft(game)) return false;
+  const stored = safeRead(getEditorDraftKey(game.id));
+  return stored?.game?.id===game.id;
+}
 function clearEditorDraft(id){
   if(!id) return false;
   return safeRemove(getEditorDraftKey(id));
@@ -3971,19 +3978,10 @@ function AccountScreen({player,accountsOn,notice,onNav,onSignIn,onSignOut,onDele
 // sign-in is remembered for this browser tab, so a refresh stays signed in.
 const ADMIN_PATH = "/admin";
 const ADMIN_SESSION_KEY = "wtf-admin-in";
-// The puzzle open in the editor when the admin left to sign in: reopened on
-// the way back (same tab), its edits restored from the on-device draft.
-const ADMIN_RESUME_KEY = "wtf-admin-resume";
+// The puzzle open in the editor when the admin left to sign in is reopened
+// on the way back (same tab), its edits restored from the on-device draft
+// (admin/signInResume.js).
 const WRITES_PAUSED = "Saving is paused: Puzzle Studio needs a signed-in admin account. Your changes are still here.";
-const takeAdminResume = ()=>{
-  try{
-    const raw = sessionStorage.getItem(ADMIN_RESUME_KEY);
-    sessionStorage.removeItem(ADMIN_RESUME_KEY);
-    const game = raw ? JSON.parse(raw) : null;
-    return game && typeof game.id==="string" ? game : null;
-  }catch{ return null; }
-};
-const writeAdminResume = game=>{ try{ if(game) sessionStorage.setItem(ADMIN_RESUME_KEY, JSON.stringify(game)); else sessionStorage.removeItem(ADMIN_RESUME_KEY); }catch{ /* storage blocked */ } };
 const isAdminPath = ()=>window.location.pathname.replace(/\/+$/,"")===ADMIN_PATH;
 const readAdminSession = ()=>{ try { return sessionStorage.getItem(ADMIN_SESSION_KEY)==="1"; } catch { return false; } };
 const writeAdminSession = on=>{ try { if(on) sessionStorage.setItem(ADMIN_SESSION_KEY,"1"); else sessionStorage.removeItem(ADMIN_SESSION_KEY); } catch { /* storage blocked */ } };
@@ -4283,10 +4281,17 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   },[focusImage,selected,tab]);
   // Signing in leaves the page, so the edits go into the on-device draft
   // copy first (published puzzles too, just this once) and the root reopens
-  // this puzzle on the way back, where loadEditorDraft restores them.
+  // this puzzle on the way back, where loadEditorDraft restores them. Both
+  // are read back; if either didn't stick, sign-in doesn't start and the
+  // editor stays exactly as it is.
   const signInKeepingEdits=()=>{
-    if(dirty||!inDb) saveEditorDraft(game);
-    access?.onSignIn(ig);
+    const ready = prepareSignInFromEditor({
+      hasEdits: dirty||!inDb,
+      saveDraft: ()=>saveEditorDraftVerified(game),
+      saveResume: ()=>writeAdminResume(ig),
+    });
+    if(!ready.ok){ say("error", ready.message); return; }
+    access?.onSignIn({resume:true});
   };
   const openWarnings = imageWarning ? imageWarning.items.filter(f=>!isWarningResolved(game,f)) : [];
   const resolvedWarnings = imageWarning ? imageWarning.items.filter(f=>isWarningResolved(game,f)) : [];
@@ -4760,11 +4765,12 @@ export default function WhatTheFudgeTrivia(){
     try{ await recheckAdmin(); }
     finally{ setAdminAuthBusy(false); }
   };
-  // resumeGame: the puzzle open in the editor, reopened after the round trip.
-  const handleAdminSignIn = async(resumeGame=null)=>{
+  // resume: the editor has already stored (and checked) the puzzle to reopen
+  // after the round trip (signInKeepingEdits); from the gate there is none.
+  const handleAdminSignIn = async({resume=false}={})=>{
     setAdminAuthError(null);
     setAdminAuthBusy(true);
-    writeAdminResume(resumeGame);
+    if(!resume) clearAdminResume();
     try{
       const err = await authSignInWithPlatform(player);
       if(!err) return; // leaving for the sign-in page
@@ -4772,7 +4778,7 @@ export default function WhatTheFudgeTrivia(){
     }catch(e){
       setAdminAuthError(formatAuthError(e));
     }
-    writeAdminResume(null);
+    clearAdminResume();
     setAdminAuthBusy(false);
   };
   const handleAdminSignOut = async()=>{
@@ -4992,7 +4998,7 @@ export default function WhatTheFudgeTrivia(){
   if(view==="admin"){
     if(!adminIn)return <><style>{styles}</style><CandyBackdrop preset="admin"/><AdminLogin onLogin={()=>{writeAdminSession(true);setAdminIn(true);setAdminView("dashboard");}} onExit={exitAdmin}/></>;
     // The password opened the Studio; only an admin account gets past here.
-    if(!isAdmin)return <StudioContext.Provider value={studioServices}><style>{styles}</style><CandyBackdrop preset="admin"/><AdminAccessNotice variant="gate" {...adminAccess} onSignIn={()=>handleAdminSignIn(null)} onLock={lockAdmin} onExit={exitAdmin}/></StudioContext.Provider>;
+    if(!isAdmin)return <StudioContext.Provider value={studioServices}><style>{styles}</style><CandyBackdrop preset="admin"/><AdminAccessNotice variant="gate" {...adminAccess} onSignIn={()=>handleAdminSignIn()} onLock={lockAdmin} onExit={exitAdmin}/></StudioContext.Provider>;
     if(adminView==="dashboard")return <StudioContext.Provider value={studioServices}><style>{styles}</style><CandyBackdrop preset="admin"/><Dashboard games={games} today={getLocalGameDay()} onNew={()=>{setEditGame({id:`g-${Date.now()}`,date:"",themeTitle:"",categoryA:"",categoryB:"",status:"draft",questions:[],tags:[]});setAdminView("editor");}} onEdit={g=>{setEditGame(g);setAdminView("editor");}} onLogout={lockAdmin} onExit={exitAdmin}/></StudioContext.Provider>;
   }
 
