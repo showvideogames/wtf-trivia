@@ -110,3 +110,30 @@ describe("topic tags in the games row", () => {
     expect(row.tags).toEqual(["music"]);
   });
 });
+
+describe("wide artwork in the games row", () => {
+  const WIDE = "https://example.supabase.co/storage/v1/object/public/wtf-images/wide/w.webp";
+
+  it("saves a puzzle without wide artwork exactly as before the migration", () => {
+    const game = rowToGame(LEGACY_ROW);
+    expect(game.wideImage).toBe("");
+    expect(game.wideImageColumn).toBe(false);
+    expect("wide_image" in gameToRow(game)).toBe(false);
+  });
+
+  it("sends wide_image once there is wide artwork, and round-trips it", () => {
+    const row = gameToRow({ ...rowToGame(LEGACY_ROW), wideImage: ` ${WIDE} ` });
+    expect(row.wide_image).toBe(WIDE);
+    expect(row.header_image).toBeNull(); // the square poster is its own field
+    const back = rowToGame(row);
+    expect(back.wideImage).toBe(WIDE);
+    expect(back.wideImageColumn).toBe(true);
+  });
+
+  it("sends null to remove it on a migrated database, and never the flag itself", () => {
+    const game = rowToGame({ ...LEGACY_ROW, wide_image: WIDE });
+    const row = gameToRow({ ...game, wideImage: "" });
+    expect(row).toHaveProperty("wide_image", null);
+    expect(row).not.toHaveProperty("wideImageColumn");
+  });
+});

@@ -93,9 +93,14 @@ describe("the short text sent with the poster", () => {
   const crowd8 = { status: "ready", puzzleId: "g-zep", score: 5, stats: { finishedPlayers: 100, scoreHistogram: { 3: 67, 5: 6, 7: 27 } } };
   const zep = { categoryA: "Led Zeppelin", categoryB: "My Little Pony", categoryAShareName: "Led Zeppelin 🎸", categoryBShareName: "My Little Pony 🦄" };
 
-  it("is exactly the circles, the score with Beat N%, and the domain", () => {
+  it("is exactly the player's circles, the score with the dare, and the domain", () => {
     const { imageText } = shareTextsFor(zep, record8, crowd8);
-    expect(imageText).toBe("🟢🟢🔴🟢🔴🟢🟢🔴\n5/8 • Beat 67% of players\nwhatthefudge.gg");
+    expect(imageText).toBe("🟢🟢🔴🟢🔴🟢🟢🔴\n5/8 ➜ Can you beat my score?!\nwhatthefudge.gg");
+  });
+
+  it("comes from the record itself: its own circles and its own score", () => {
+    const record = { ...record8, score: 9, totalQuestions: 12, answers: [..."111011101101"].map((c, i) => ({ questionIndex: i, correct: c === "1" })) };
+    expect(shareTextsFor(zep, record, null).imageText).toBe("🟢🟢🟢🔴🟢🟢🟢🔴🟢🟢🔴🟢\n9/12 ➜ Can you beat my score?!\nwhatthefudge.gg");
   });
 
   it("has no header, divider, category name, emoji label or OR", () => {
@@ -106,18 +111,21 @@ describe("the short text sent with the poster", () => {
     expect(imageText.split("\n")).toHaveLength(3);
   });
 
-  it("keeps only the score on its middle line without a valid percentage", () => {
-    for (const crowd of [null, { ...crowd8, stats: { finishedPlayers: 1, scoreHistogram: { 5: 1 } } }]) {
-      expect(shareTextsFor(zep, record8, crowd).imageText).toBe("🟢🟢🔴🟢🔴🟢🟢🔴\n5/8\nwhatthefudge.gg");
+  it("never carries a percentage, with or without crowd stats", () => {
+    for (const crowd of [null, crowd8, { ...crowd8, stats: { finishedPlayers: 1, scoreHistogram: { 5: 1 } } }]) {
+      expect(shareTextsFor(zep, record8, crowd).imageText).toBe("🟢🟢🔴🟢🔴🟢🟢🔴\n5/8 ➜ Can you beat my score?!\nwhatthefudge.gg");
     }
   });
 
-  it("is the full text's last three lines, from the same result", () => {
+  it("has the full text's circles and domain, from the same result", () => {
     for (const crowd of [crowd8, null]) {
       const { text, imageText } = shareTextsFor(zep, record8, crowd);
       expect(text).toBe(shareTextFor(zep, record8, crowd));
-      expect(text.split("\n")).toHaveLength(9);
-      expect(text.split("\n").slice(6).join("\n")).toBe(imageText);
+      const full = text.split("\n");
+      const short = imageText.split("\n");
+      expect(full).toHaveLength(9);
+      expect(short[0]).toBe(full[6]);
+      expect(short[2]).toBe(full[8]);
     }
   });
 
@@ -140,8 +148,9 @@ describe("the short text sent with the poster", () => {
 
 describe("no old share format left in active share code", () => {
   const files = ["share.js", "crowdStats.js", "homeShare.js", "SharePreview.jsx", "App.jsx"];
-  it.each(files)("%s has no old header, arrow or domain", (file) => {
-    const source = readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
+  // The arrow is back only inside the image text's dare (SHARE_DARE).
+  it.each(files)("%s has no old header, stray arrow or domain", (file) => {
+    const source = readFileSync(new URL(`./${file}`, import.meta.url), "utf8").replaceAll("➜ Can you beat my score?!", "");
     expect(source).not.toMatch(/WTF Trivia|➜|whatthefudgetrivia/);
   });
 });

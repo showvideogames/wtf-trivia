@@ -6,7 +6,7 @@ import ImageField from "./ImageField.jsx";
 import { paletteColor, useStudio } from "./StudioContext.js";
 import { TOPICS, normalizeTags, toggleTag } from "../topics.js";
 import { answerButtonName } from "../categoryNames.js";
-import { SHARE_OR, normalizeShareLabel, shareCategoryName } from "../share.js";
+import { SHARE_OR, buildImageShareText, buildResultsShareText, normalizeShareLabel, shareCategoryName } from "../share.js";
 
 function CardHead({icon, title, sub}){
   return(
@@ -265,18 +265,18 @@ function ArtworkPreview({src, title}){
   );
 }
 
-// The puzzle's Home & Share artwork: a square poster that is Home's
-// centrepiece and the image a phone's share sheet sends with the result.
-// Stored in the existing headerImage field.
+// The puzzle's square poster: Home's centrepiece. Stored in the existing
+// headerImage field. Shares and Up Next use it only when there's no wide
+// artwork.
 function Artwork({game, set, trackImage}){
   return(
     <section className="ps-panel ps-card" aria-labelledby="ps-artwork-title">
-      <CardHead icon="image" title={<span id="ps-artwork-title">Home &amp; Share artwork</span>} sub="Upload a square image used as the centerpiece on Home and attached when players share their result."/>
+      <CardHead icon="image" title={<span id="ps-artwork-title">Square poster</span>} sub="The centerpiece on Home. Shares and Up Next use it only when there's no wide artwork."/>
       <div className="ps-artwork">
         <div className="ps-artwork-field">
-          <ImageField label="Artwork" value={game.headerImage||""} onChange={v=>set("headerImage",v)} preset="header"
+          <ImageField label="Square poster" value={game.headerImage||""} onChange={v=>set("headerImage",v)} preset="header"
                       onBusyChange={trackImage("headerImage")} fieldId="img-field-headerImage" layout="square"/>
-          <ul className="ps-art-guide" aria-label="Artwork guidelines">
+          <ul className="ps-art-guide" aria-label="Square poster guidelines">
             <li>Square, 1:1</li>
             <li>Recommended: 1600&times;1600 PNG or JPG</li>
             <li>Minimum: 1200&times;1200</li>
@@ -289,12 +289,103 @@ function Artwork({game, set, trackImage}){
             <ArtworkPreview src={game.headerImage} title={game.themeTitle||"Untitled puzzle"}/>
           ):(
             <div className="ps-home-empty">
-              <strong>No artwork uploaded yet.</strong>
-              <span>Home shows the category matchup instead, and shares send text only.</span>
+              <strong>No square poster uploaded yet.</strong>
+              <span>Home shows the category matchup instead.</span>
             </div>
           )}
         </div>
       </div>
+    </section>
+  );
+}
+
+// The 1200x630 shape the wide artwork is meant for.
+const WIDE_W = 1200;
+const WIDE_H = 630;
+
+// The wide preview: the whole image at its own proportions (never cropped
+// or boxed into another shape), with a note, without blocking anything,
+// when it isn't 1200x630-shaped or is smaller than that.
+function WideArtworkPreview({src, title}){
+  const[size,setSize]=useState(null); // {src, w, h} once the image loads
+  const[broken,setBroken]=useState(null);
+  const loaded = size&&size.src===src ? size : null;
+  const offShape = loaded && Math.abs(loaded.w/loaded.h - WIDE_W/WIDE_H) > 0.03;
+  const small = loaded && (loaded.w<WIDE_W || loaded.h<WIDE_H);
+  return(
+    <>
+      <div className="ps-art-wide">
+        {broken===src
+          ? <div className="ps-media-broken">This image couldn&rsquo;t be loaded.</div>
+          : <img src={src} alt={title} onLoad={e=>setSize({src, w:e.currentTarget.naturalWidth, h:e.currentTarget.naturalHeight})} onError={()=>setBroken(src)}/>}
+      </div>
+      {loaded&&(
+        <div className={`ps-art-size${offShape||small?" is-warn":""}`}>
+          {loaded.w}&times;{loaded.h}
+          {offShape&&" · Not the 1200×630 shape: shown whole at its own shape"}
+          {!offShape&&small&&" · Smaller than 1200×630"}
+        </div>
+      )}
+    </>
+  );
+}
+
+// What a phone's share sheet sends for a finished game of this puzzle, from
+// the same formatter and the same image choice players get: the wide
+// artwork, else the square poster, with the short text; with neither, the
+// full text alone. The result is an example (alternating answers).
+function PhoneSharePreview({game}){
+  const total = game.questions?.length || 12;
+  const answers = Array.from({length:total}, (_, i)=>({questionIndex:i, correct:i%4!==1}));
+  const record = {score:answers.filter(a=>a.correct).length, totalQuestions:total, answers};
+  const image = game.wideImage || game.headerImage || "";
+  const text = image ? buildImageShareText({record}) : buildResultsShareText({game, record});
+  const note = game.wideImage ? "Phones attach the wide artwork."
+    : game.headerImage ? "No wide artwork, so phones attach the square poster."
+    : "No artwork, so phones share the full text only.";
+  return(
+    <div className="ps-share-phone-wrap">
+      <div className="ps-label">Phone share preview</div>
+      <div className="ps-hint">{note} Example result. Desktops copy the full text instead.</div>
+      <div className="ps-share-phone" aria-label="Phone share preview">
+        {image&&<img src={image} alt="" className="ps-share-phone-img"/>}
+        <div className="ps-share-phone-text">{text}</div>
+      </div>
+    </div>
+  );
+}
+
+// The wide artwork, separate from the square poster: the image phones
+// attach when sharing, Home's Up Next, and Home's poster on short phone
+// screens. Stored in wideImage.
+function WideArtwork({game, set, trackImage}){
+  return(
+    <section className="ps-panel ps-card" aria-labelledby="ps-wide-title">
+      <CardHead icon="image" title={<span id="ps-wide-title">Wide artwork</span>} sub="Attached when players share, shown in Home's Up Next before the puzzle's day, and used as Home's poster on short phone screens."/>
+      <div className="ps-artwork ps-artwork-wide">
+        <div className="ps-artwork-field">
+          <ImageField label="Wide artwork" value={game.wideImage||""} onChange={v=>set("wideImage",v)} preset="wide"
+                      onBusyChange={trackImage("wideImage")} fieldId="img-field-wideImage" layout="wide"/>
+          <ul className="ps-art-guide" aria-label="Wide artwork guidelines">
+            <li>Landscape, 1200&times;630 (about 1.9:1)</li>
+            <li>PNG, JPG or WebP</li>
+            <li>Shown whole at its own shape: never cropped or stretched</li>
+            <li>Keep important text and subjects away from the outer edges</li>
+          </ul>
+        </div>
+        <div className="ps-home-preview">
+          <div className="ps-label">Preview</div>
+          {game.wideImage?(
+            <WideArtworkPreview src={game.wideImage} title={game.themeTitle||"Untitled puzzle"}/>
+          ):(
+            <div className="ps-home-empty">
+              <strong>No wide artwork uploaded yet.</strong>
+              <span>Shares and Up Next use the square poster instead, and short phone screens keep the square poster.</span>
+            </div>
+          )}
+        </div>
+      </div>
+      <PhoneSharePreview game={game}/>
     </section>
   );
 }
@@ -311,6 +402,7 @@ export default function SetupTab({game, set, games, trackImage, onDelete, onReti
       <Topics game={game} set={set}/>
       <CategoryAppearance game={game} set={set} trackImage={trackImage}/>
       <Artwork game={game} set={set} trackImage={trackImage}/>
+      <WideArtwork game={game} set={set} trackImage={trackImage}/>
       {onDelete&&(
         <div className="ps-danger">
           <span>{isDraft

@@ -16,7 +16,7 @@ import { PlayerChromeContext } from "./playerChrome.js";
 // (playerChrome.js), so no screen builds its own copy:
 //   current  id of the nav link for the screen being shown, or null
 //   nav      [{id, label, onClick}] (Play -- the Home page --, Archive,
-//            How to Play)
+//            Stats, How to Play)
 //   sound    the sound engine ({muted, setMuted})
 //   account  {signedIn, label, title, onClick}
 //   admin    {onClick, icon} or null (the dev-only Admin entry)
@@ -28,7 +28,11 @@ import { PlayerChromeContext } from "./playerChrome.js";
 // sticky: pinned to the top while the page scrolls (Home and Archive). Only
 // the cream bar is opaque; around it the frame is transparent, so the page
 // shows naturally beside and above the bar. Only the class changes, so the
-// header is never remounted between screens.
+// header is never remounted between screens. The ad slot is never part of
+// the pinned frame: on sticky screens it sits just after it, in the page's
+// own flow, so only the navigation stays on screen while the page scrolls.
+// (The frame is always the first element, so moving the slot never
+// remounts the header.)
 export default function PlayerHeader({ pending = false, compact = false, sticky = false }) {
   const chrome = useContext(PlayerChromeContext);
   if (!chrome) return null;
@@ -39,15 +43,19 @@ export default function PlayerHeader({ pending = false, compact = false, sticky 
   let frame = compact ? "ph-top ph-compact" : "ph-top";
   if (sticky) frame += " ph-sticky";
   return (
-    <div className={frame}>
-      {pending ? <div className="ph-pending" inert>{header}</div> : header}
-      <AdSlot/>
-    </div>
+    <>
+      <div className={frame}>
+        {pending ? <div className="ph-pending" inert>{header}</div> : header}
+        {!sticky && <AdSlot/>}
+      </div>
+      {sticky && <AdSlot/>}
+    </>
   );
 }
 
 // The future advertisement position, directly under the header and above
-// the page (the matchup banner, during a game). There is no ad network yet:
+// the page (the matchup banner, during a game), and outside the pinned
+// frame on Home and Archive. There is no ad network yet:
 // with no ad it renders nothing at all, so it takes no height. In
 // development only, localStorage "wtf-dev-ad" = "show" draws the quiet
 // ADVERTISEMENT placeholder for screenshots; that check sits behind

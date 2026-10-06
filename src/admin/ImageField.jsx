@@ -18,7 +18,7 @@ import { isAccessProblem, uploadFailureMessage } from "./adminAccess.js";
 // Uploading needs a signed-in admin account. While the Studio can't write
 // (canWrite false: a guest, a non-admin, or still checking) no upload is
 // started, and a refused upload says so instead of blaming the connection.
-const UPLOAD_FOLDERS = {header:"headers", question:"questions", category:"categories"};
+const UPLOAD_FOLDERS = {header:"headers", wide:"wide", question:"questions", category:"categories"};
 const UPLOAD_STAGE_COPY = {checking:"Checking image…", optimizing:"Optimizing image…", uploading:"Uploading…"};
 const UPLOAD_ACCEPT = "image/jpeg,image/png,image/webp";
 function roughBytes(n){return n<1024*1024?`${Math.max(1,Math.round(n/1024))} KB`:`${(n/1024/1024).toFixed(1)} MB`;}

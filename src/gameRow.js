@@ -21,6 +21,11 @@ import { normalizeTags } from "./topics.js";
 // labels on the two answer-choice buttons; blank means "use the category
 // name" (answerButtonName). Same rule again. None of these display names
 // touch answers: a question's correctCategory is always "A" or "B".
+//
+// Wide artwork (supabase/wide_artwork.sql) is the optional ~1200x630 image
+// kept beside the square poster in header_image. The same rule applies: it
+// is sent when the puzzle has one, or when its row came back with the
+// column (so removing it saves null).
 function trimmedShareName(value){
   return typeof value==="string" && value.trim() ? value.trim() : null;
 }
@@ -32,6 +37,7 @@ export function gameToRow(g){
   const btnA = trimmedShareName(g.categoryAButtonName);
   const btnB = trimmedShareName(g.categoryBButtonName);
   const tags = normalizeTags(g.tags);
+  const wide = trimmedShareName(g.wideImage);
   return {
     id: g.id,
     date: g.date,
@@ -48,7 +54,8 @@ export function gameToRow(g){
     ...(shareA||shareB||g.shareNameColumns ? {category_a_share_name:shareA, category_b_share_name:shareB} : {}),
     ...(subA||subB||g.subtitleColumns ? {category_a_subtitle:subA, category_b_subtitle:subB} : {}),
     ...(btnA||btnB||g.buttonNameColumns ? {category_a_button_name:btnA, category_b_button_name:btnB} : {}),
-    ...(tags.length||g.tagsColumn ? {tags} : {})
+    ...(tags.length||g.tagsColumn ? {tags} : {}),
+    ...(wide||g.wideImageColumn ? {wide_image:wide} : {})
   };
 }
 export function rowToGame(r){
@@ -63,6 +70,8 @@ export function rowToGame(r){
     categoryAImage: r.category_a_image,
     categoryBImage: r.category_b_image,
     headerImage: r.header_image,
+    wideImage: r.wide_image||"",
+    wideImageColumn: "wide_image" in r,
     categoryAShareName: r.category_a_share_name||"",
     categoryBShareName: r.category_b_share_name||"",
     shareNameColumns: "category_a_share_name" in r,

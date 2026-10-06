@@ -6,11 +6,13 @@
    same formatter the Results page copies from. The share sheet gets
    no title, so apps don't repeat the header.
 
-   When the puzzle has Home & Share artwork, the share sheet gets that
-   poster as an image file plus the short image text (the poster shows
-   the header and categories). Anything that stops the poster going
-   (no artwork, the download fails, the device can't share that file,
-   the file share errors) falls back to the full text alone.
+   When the puzzle has artwork, the share sheet gets it as an image file
+   plus the short image text (the artwork shows the header and
+   categories): the wide artwork first, else the square poster (missing,
+   failed to download, or not a file this device's share sheet takes).
+   Anything that stops every image going (no artwork, the downloads fail,
+   the device can't share those files, the file share errors) falls back
+   to the full text alone, then to the clipboard.
    ============================================================ */
 
 import { usableMediaUrl } from "./mediaPreloader.js";
@@ -36,13 +38,15 @@ const usesShareSheet = (nav) => isPhoneOrTablet(nav) && typeof nav.share === "fu
 //   "copied"    the full text is on the clipboard (desktop, or the share
 //               sheet is missing or failed for a reason other than cancelling)
 //   "failed"    the clipboard write failed
-// `text` is the full share text; `imageText` goes with the poster at
-// `imageUrl` (both optional: without them only the full text is shared).
-// On phones the poster goes first, then the full text alone, then the
+// `text` is the full share text; `imageText` goes with the first image of
+// `imageUrls` (in preference order; `imageUrl` is one on its own) that this
+// device can share. All optional: without them only the full text is shared.
+// On phones the image goes first, then the full text alone, then the
 // clipboard; a cancel at either sheet ends it there.
-export async function shareResult({ text, imageText, imageUrl }, nav, { fetchImpl } = {}) {
+export async function shareResult({ text, imageText, imageUrl, imageUrls }, nav, { fetchImpl } = {}) {
   if (usesShareSheet(nav)) {
-    const file = imageUrl && imageText ? await shareImageFile(imageUrl, nav, fetchImpl) : null;
+    const urls = imageUrls || (imageUrl ? [imageUrl] : []);
+    const file = imageText ? await prepareShareImages(urls, nav, fetchImpl) : null;
     if (file) {
       try {
         await nav.share({ files: [file], text: imageText });
@@ -93,10 +97,14 @@ const IMAGE_EXTENSIONS = { "image/jpeg": "jpg", "image/png": "png", "image/webp"
 const MIME_BY_EXTENSION = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", avif: "image/avif" };
 
 // The poster's type: the response's own image type, else (for servers that
-// send none or a generic one) the URL's extension. Null for anything else.
+// send none or a generic binary one) the URL's extension. Null for anything
+// else, including a page served in the image's place (a dev server's or
+// host's HTML fallback for a missing file), whatever the URL says.
+const GENERIC_TYPES = new Set(["", "application/octet-stream", "binary/octet-stream"]);
 export function shareImageType(blobType, url) {
   const type = String(blobType || "").split(";")[0].trim().toLowerCase();
   if (IMAGE_EXTENSIONS[type]) return type;
+  if (!GENERIC_TYPES.has(type)) return null;
   const ext = /\.([a-z0-9]+)(?:[?#]|$)/i.exec(String(url || ""))?.[1]?.toLowerCase();
   return MIME_BY_EXTENSION[ext] || null;
 }
@@ -130,7 +138,8 @@ export function prepareShareImage(url, nav, fetchImpl) {
     const fetcher = fetchImpl || globalThis.fetch?.bind(globalThis);
     if (!fetcher) return null;
     const pending = loadImageFile(url, fetcher).then((file) => {
-      if (!file) imageFiles.delete(url);
+      if (file) failedImages.delete(url);
+      else { imageFiles.delete(url); failedImages.add(url); }
       return file;
     });
     imageFiles.set(url, pending);
@@ -138,7 +147,27 @@ export function prepareShareImage(url, nav, fetchImpl) {
   return imageFiles.get(url);
 }
 
-// The poster file, if this device's share sheet accepts it; otherwise null.
+// Images whose last download failed on this page. A preference list skips
+// them while a later choice remains, so Share goes straight to the fallback
+// instead of waiting on the network again.
+const failedImages = new Set();
+
+// The first image of `urls` (in preference order) that downloads and that
+// this device's share sheet accepts, or null. Each is only fetched once the
+// one before it has failed, and each download is shared with
+// prepareShareImage, so calling this early (when today is finished) is what
+// makes Share instant. Null, without fetching, where files can't be shared.
+export function prepareShareImages(urls, nav, fetchImpl) {
+  const list = [...new Set((urls || []).filter(Boolean))];
+  if (!list.length || !usesShareSheet(nav) || typeof nav.canShare !== "function") return null;
+  return list.reduce((prev, url, i) => prev.then((file) => {
+    if (file) return file;
+    if (i < list.length - 1 && failedImages.has(url) && !imageFiles.has(url)) return null;
+    return shareImageFile(url, nav, fetchImpl);
+  }), Promise.resolve(null));
+}
+
+// The image file, if this device's share sheet accepts it; otherwise null.
 async function shareImageFile(url, nav, fetchImpl) {
   const file = await prepareShareImage(url, nav, fetchImpl);
   if (!file) return null;
@@ -149,13 +178,26 @@ async function shareImageFile(url, nav, fetchImpl) {
   }
 }
 
-// Test hook: forget every downloaded poster.
+// Test hook: forget every downloaded image and failure.
 export function clearShareImages() {
   imageFiles.clear();
+  failedImages.clear();
 }
 
-// The puzzle's Home & Share poster: its stored artwork URL (the field is
-// still called headerImage), or null when it has none or it isn't usable.
+// The puzzle's square poster (Home's centrepiece): its stored URL (the field
+// is still called headerImage), or null when it has none or it isn't usable.
 export function puzzleArtworkUrl(game) {
   return usableMediaUrl(game?.headerImage);
+}
+
+// The puzzle's wide artwork (~1200x630), or null when it has none or it
+// isn't usable.
+export function wideArtworkUrl(game) {
+  return usableMediaUrl(game?.wideImage);
+}
+
+// The images a share may attach, in preference order: the wide artwork,
+// then the square poster. Empty when the puzzle has neither.
+export function shareArtworkUrls(game) {
+  return [wideArtworkUrl(game), puzzleArtworkUrl(game)].filter(Boolean);
 }

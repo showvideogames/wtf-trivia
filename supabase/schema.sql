@@ -34,6 +34,7 @@ create table if not exists public.games (
   category_a_image text,
   category_b_image text,
   header_image text,
+  wide_image text,
   category_a_share_name text,
   category_b_share_name text,
   category_a_subtitle text,

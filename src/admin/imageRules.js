@@ -38,15 +38,27 @@ export const PROFILES = {
     minLongEdge: 960,
     smallLongEdge: 600,
   },
-  // Home & Share artwork (the headerImage field): a square poster, shown
-  // whole on Home (up to 680 x 680 CSS px) and sent as the share image.
+  // The square poster (the headerImage field), shown whole on Home (up to
+  // 680 x 680 CSS px) and sent as the share image when there's no wide art.
   header: {
-    label: "Home & Share artwork",
+    label: "square poster",
     maxWidth: 1800,
     maxHeight: 1800,
     targetBytes: 500 * KB,
     minLongEdge: 1400,
     smallLongEdge: 900,
+  },
+  // Wide artwork (the wideImage field), meant as 1200 x 630: the share image,
+  // Home's Up Next and Home's poster on short phone screens (up to ~680 CSS
+  // px wide). Scaled proportionally like every profile, never cropped, and
+  // never shrunk below the intended 1200px width to save bytes.
+  wide: {
+    label: "wide artwork",
+    maxWidth: 2400,
+    maxHeight: 1260,
+    targetBytes: 400 * KB,
+    minLongEdge: 1200,
+    smallLongEdge: 800,
   },
   // Answer-button squares (128 CSS px on phones) and the split fallback art
   // (up to ~420 x 305 CSS px per half).

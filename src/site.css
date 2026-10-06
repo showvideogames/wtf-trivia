@@ -342,6 +342,12 @@ html:has(.ph-sticky) { scroll-padding-top: calc(max(12px, env(safe-area-inset-to
   .ph-top .sh-icon-btn { width: 38px; height: 38px; font-size: 17px; }
   .ph-top .sh-account { min-height: 38px; padding: 0 14px; font-size: 14px; }
 }
+/* The narrowest desktops: four page links (Play, Archive, Stats, How to
+   Play) need a little less padding to stay clear of the centred logo. */
+@media (min-width: 900px) and (max-width: 999px) {
+  .ph-top .sh-nav { gap: 2px; }
+  .ph-top .sh-link { padding: 9px 10px; }
+}
 /* Admin Preview's phone-width stage: always the compact phone row, whatever
    the window width (the stage already provides the gutters). */
 .ph-top.ph-compact { max-width: none; padding: 0; }

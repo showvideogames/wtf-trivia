@@ -24,7 +24,8 @@ import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from 
 import { archivePuzzleImages, describeImageWarning, failureReason, imageName, isWarningResolved } from "./admin/publishImages.js";
 import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor, shareTextsFor } from "./crowdStats.js";
 import { gameToRow, rowToGame } from "./gameRow.js";
-import { copyText, prepareShareImage, puzzleArtworkUrl, shareResult } from "./homeShare.js";
+import { copyText, prepareShareImages, puzzleArtworkUrl, shareArtworkUrls, shareResult, wideArtworkUrl } from "./homeShare.js";
+import { nextPuzzle, releaseTime } from "./upNext.js";
 import { normalizeShareLabel } from "./share.js";
 import { answerButtonName } from "./categoryNames.js";
 import PlayerHeader from "./PlayerHeader.jsx";
@@ -38,7 +39,7 @@ import ResultsNerdMode from "./ResultsNerdMode.jsx";
 import ResultsScore from "./ResultsScore.jsx";
 import CandyPageShell from "./CandyPageShell.jsx";
 import CategoryArtImage from "./CategoryArtImage.jsx";
-import { HomeBigButton, HomeCandyArt, HomeDonePanel, HomeFoot, HomeHeading, HomeHero, HomeLinks, HomePage } from "./Home.jsx";
+import { HomeBigButton, HomeCandyArt, HomeDonePanel, HomeFoot, HomeHeading, HomeHero, HomeLinks, HomePage, HomeUpNext } from "./Home.jsx";
 import { ARCHIVE_FILTERS, archivePuzzles, archiveTopicCounts, filterArchive, sortArchive, sortAvailable } from "./archiveList.js";
 import { emptyFavorites, toggleFavorite } from "./archiveFavorites.js";
 import ArchiveTopicFilter from "./ArchiveTopicFilter.jsx";
@@ -1968,6 +1969,7 @@ async function dbLoadPublishedGames(){
 }
 const IMAGE_SAVE_OPTIONS = {
   header:{folder:"headers", preset:"header"},
+  wide:{folder:"wide", preset:"wide"},
   category:{folder:"categories", preset:"category"},
   question:{folder:"questions", preset:"question"}
 };
@@ -1995,7 +1997,7 @@ async function dbSaveGame(game){
     const confirmed = Array.isArray(saved) && saved.some(r=>r.id===row.id && r.date===row.date && r.status===row.status);
     if(!confirmed) throw new Error("The database didn't confirm the save.");
   }
-  // A save that carried share names, subtitles, button names or tags proves the columns
+  // A save that carried share names, subtitles, button names, tags or wide artwork proves the columns
   // exist, so later saves from this editor always send them (clearing a name
   // then saves null, and removing the last tag saves []).
   const saved = {
@@ -2003,7 +2005,8 @@ async function dbSaveGame(game){
     ...("category_a_share_name" in row ? {shareNameColumns:true} : {}),
     ...("category_a_subtitle" in row ? {subtitleColumns:true} : {}),
     ...("category_a_button_name" in row ? {buttonNameColumns:true} : {}),
-    ...("tags" in row ? {tagsColumn:true} : {})
+    ...("tags" in row ? {tagsColumn:true} : {}),
+    ...("wide_image" in row ? {wideImageColumn:true} : {})
   };
   return { game: saved, imageFailures: failures };
 }
@@ -2021,6 +2024,7 @@ function describeSaveError(e){
   if(msg.includes("_share_name")) return "the database doesn't have the share-name columns yet (run supabase/category_display_names.sql). Clear both share names to save without them.";
   if(msg.includes("_subtitle")) return "the database doesn't have the category subtitle columns yet (run supabase/category_display_names.sql). Clear both subtitles to save without them.";
   if(msg.includes("_button_name")) return "the database doesn't have the answer button name columns yet (run supabase/category_display_names.sql). Clear both button names to save without them.";
+  if(msg.includes("wide_image")) return "the database doesn't have the wide artwork column yet (run supabase/wide_artwork.sql). Remove the wide artwork to save without it.";
   if(msg.includes("'tags' column")) return "the database doesn't have the topic tags column yet (supabase/puzzle_tags.sql). Deselect every topic to save without it.";
   if(msg.includes("games_one_published_per_date")) return "another published puzzle already has that date. Pick another day.";
   if(msg.includes("game_records_puzzle_id_fkey")) return "players have already played this puzzle, so it can't be deleted. Retire it instead.";
@@ -2786,25 +2790,30 @@ function HomePuzzleArt({game}){
   );
 }
 
-// Home: today's Home & Share poster (or, without one, the category matchup),
-// then one big action -- Play (or Keep going! for a game in progress), or,
-// once today is finished, the score panel with See my results and Share.
-// Stats and Archive sit underneath. With no puzzle scheduled today it points
-// at the Archive instead. `game` is null then. The header is App's shared
-// PlayerHeader.
-function HomeScreen({game,gameRecord,stats,player,onPlay,onNav,onHelp,onShare}){
+// Home: today's poster (square by default, the wide artwork on short phone
+// screens, the category matchup without either), then one big action --
+// Play (or Keep going! for a game in progress), or, once today is finished,
+// the score panel with See my results and Share -- then Up Next, when a
+// published puzzle is scheduled after today. With no puzzle scheduled today
+// it points at the Archive instead. `game` is null then. Stats and Archive
+// are in App's shared PlayerHeader.
+function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onShare,onNextDay}){
   const answered = gameRecord?.answers?.length||0;
   const total = gameRecord?.totalQuestions||game?.questions.length||0;
   const done = Boolean(gameRecord?.completed);
   const inProgress = Boolean(gameRecord && !gameRecord.completed && answered>0);
   const signedIn = player && !player.isGuest;
   const artworkUrl = game ? puzzleArtworkUrl(game) : null;
-  // Once today is finished, have the poster ready for a phone's share sheet.
-  useEffect(()=>{ if(done&&artworkUrl) prepareShareImage(artworkUrl, navigator); },[done,artworkUrl]);
-  const links = [
-    {id:"stats", label:"Stats", tone:"teal", icon:<FI name="chart" size={30}/>, onClick:()=>onNav("stats")},
-    {id:"archive", label:"Archive", tone:"orange", icon:<FI name="cal" size={30}/>, onClick:()=>onNav("archive")},
-  ];
+  const wideUrl = game ? wideArtworkUrl(game) : null;
+  const shareUrls = game ? shareArtworkUrls(game).join("\n") : "";
+  // Once today is finished, have the share image ready for a phone's share
+  // sheet (the wide artwork, else the square poster).
+  useEffect(()=>{ if(done&&shareUrls) prepareShareImages(shareUrls.split("\n"), navigator); },[done,shareUrls]);
+  const opensAt = upNext ? releaseTime(upNext.date)?.getTime() : null;
+  const next = upNext&&opensAt&&(
+    <HomeUpNext game={upNext} colors={categoryColors(upNext)} wideUrl={wideArtworkUrl(upNext)} squareUrl={puzzleArtworkUrl(upNext)}
+      opensAt={opensAt} onOpen={onNextDay}/>
+  );
   const foot = (stats.currentStreak>0||!signedIn)&&(
     <HomeFoot>
       {stats.currentStreak>0&&(
@@ -2818,7 +2827,7 @@ function HomeScreen({game,gameRecord,stats,player,onPlay,onNav,onHelp,onShare}){
     <HomePage>
       {game?(
         <>
-          <HomeHero game={game} colors={categoryColors(game)} artworkUrl={artworkUrl} eyebrow={<>Today&rsquo;s puzzle</>}/>
+          <HomeHero game={game} colors={categoryColors(game)} artworkUrl={artworkUrl} wideUrl={wideUrl} eyebrow={<>Today&rsquo;s puzzle</>}/>
           {done?(
             <HomeDonePanel score={gameRecord.score} total={gameRecord.totalQuestions}
               message={scoreMsg(gameRecord.score, gameRecord.totalQuestions||1)}
@@ -2831,7 +2840,7 @@ function HomeScreen({game,gameRecord,stats,player,onPlay,onNav,onHelp,onShare}){
               </HomeBigButton>
             </div>
           )}
-          <HomeLinks links={links}/>
+          {next}
         </>
       ):(
         <>
@@ -2841,6 +2850,7 @@ function HomeScreen({game,gameRecord,stats,player,onPlay,onNav,onHelp,onShare}){
           <div className="hm-cta">
             <HomeBigButton onClick={()=>onNav("archive")}>BROWSE THE ARCHIVE</HomeBigButton>
           </div>
+          {next}
           <HomeLinks links={[{id:"help", label:"How to Play", tone:"cream", chevron:false, onClick:onHelp}]}/>
         </>
       )}
@@ -4418,13 +4428,14 @@ function AdminPreview({game,onBack}){
   const[showHelp,setShowHelp]=useState(false);
   const onComplete=final=>{setPr(final);setView("score");};
   // The player's own header, as every player screen shows it. Play returns
-  // to the preview's start card; Archive and Sign in have nothing to show in
-  // a preview, so they do nothing here.
+  // to the preview's start card; Archive, Stats and Sign in have nothing to
+  // show in a preview, so they do nothing here.
   const previewChrome={
     current: showHelp ? "help" : view==="score" ? null : "play",
     nav: [
       {id:"play", label:"Play", onClick:()=>setView("home")},
       {id:"archive", label:"Archive", onClick:()=>{}},
+      {id:"stats", label:"Stats", onClick:()=>{}},
       {id:"help", label:"How to Play", onClick:()=>setShowHelp(true)},
     ],
     sound: dummySound,
@@ -4518,6 +4529,10 @@ export default function WhatTheFudgeTrivia(){
   const authUserIdRef = useRef(null);
 
   const sound=useSoundEngine();
+  // The game day is read on every render. When Home's Up Next countdown
+  // reaches the next puzzle's opening (local midnight), it re-renders the app
+  // through this tick, so the new day loads (loadAppData depends on today).
+  const[,setDayTick]=useState(0);
   const today=getLocalGameDay();
 
   const loadAppData = useCallback(async(sessionOverride=null,{recoverAuth=false}={})=>{
@@ -4633,6 +4648,9 @@ export default function WhatTheFudgeTrivia(){
   },[loadAppData]);
 
   const todayGame = games.find(g=>g.date===today&&g.status==="published") || null;
+  // Home's Up Next: the soonest published puzzle after today. Drafts and
+  // retired puzzles never show there (upNext.js).
+  const upNextGame = nextPuzzle(games, today);
   // The player's record counts as today's only if it belongs to today's
   // puzzle: if the puzzle on today's date changes, another puzzle's result
   // is never shown, resumed or shared as today's.
@@ -4914,12 +4932,13 @@ export default function WhatTheFudgeTrivia(){
   };
 
   // Share today's result from the homepage: the same full text Results
-  // copies, or on phones the puzzle's poster plus the short image text.
-  // Resolves to shareResult's outcome; HomeScreen shows the feedback.
+  // copies, or on phones the puzzle's wide artwork (else its square poster)
+  // plus the short image text. Resolves to shareResult's outcome;
+  // HomeScreen shows the feedback.
   const handleShareToday = async() => {
     if(!todayRecord?.completed) return null;
     const { text, imageText } = shareTextsFor(todayGame, todayRecord, crowd);
-    return shareResult({ text, imageText, imageUrl: puzzleArtworkUrl(todayGame) }, navigator);
+    return shareResult({ text, imageText, imageUrls: shareArtworkUrls(todayGame) }, navigator);
   };
 
   // Replay
@@ -4947,10 +4966,11 @@ export default function WhatTheFudgeTrivia(){
     // to Home (where the game in progress resumes), not as "you are here".
     // While How to Play is open it is the one marked link; closing it
     // restores the page's own.
-    current: showHelp ? "help" : view==="home" ? "play" : view==="archive" ? "archive" : null,
+    current: showHelp ? "help" : view==="home" ? "play" : view==="archive" ? "archive" : view==="stats" ? "stats" : null,
     nav: [
       {id:"play", label:"Play", onClick:()=>goTo("home")},
       {id:"archive", label:"Archive", onClick:()=>goTo("archive")},
+      {id:"stats", label:"Stats", onClick:()=>goTo("stats")},
       {id:"help", label:"How to Play", onClick:()=>setShowHelp(true)},
     ],
     sound,
@@ -5009,12 +5029,13 @@ export default function WhatTheFudgeTrivia(){
         <PlayerHeader sticky={view==="home"||view==="archive"}/>
         <div className="main">
           {view==="home"&&(
-            <HomeScreen game={todayGame} gameRecord={todayRecord} stats={stats}
+            <HomeScreen game={todayGame} gameRecord={todayRecord} upNext={upNextGame} stats={stats}
               player={player}
               onPlay={handlePlay}
               onNav={v=>{sound.play("click");setView(v);}}
               onHelp={()=>setShowHelp(true)}
               onShare={handleShareToday}
+              onNextDay={()=>setDayTick(t=>t+1)}
             />
           )}
 

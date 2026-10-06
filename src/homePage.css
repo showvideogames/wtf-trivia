@@ -198,8 +198,33 @@
   background: var(--cs-cream);
   box-shadow: 0 6px 0 var(--black);
 }
-/* The narrower column still fits Stats and Archive side by side. */
-.hm-main:has(> .hm-artwork) .hm-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* The wide artwork in the poster's place (short phone screens, or a puzzle
+   with only wide artwork): the column's width, its height from the image's
+   own proportions, so it is shown whole, never cropped, stretched or boxed
+   into a square. 1200:630 holds its place until the image loads. Like the
+   square, it narrows when even its own height wouldn't leave the action on
+   screen (phones turned sideways), but never below 320px. */
+.hm-artwork.is-wide {
+  width: min(100%, 680px, max(320px, (100svh - var(--hm-reserve)) * 1.9));
+  aspect-ratio: auto;
+}
+.hm-artwork.is-wide img {
+  position: static;
+  width: 100%;
+  height: auto;
+  aspect-ratio: auto 1200 / 630;
+}
+/* Measures, in svh only, the height left for the poster (see useShortHero
+   in Home.jsx). Fixed and invisible, so it never takes space or scrolls. */
+.hm-art-probe {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: max(0px, 100svh - var(--hm-reserve));
+  visibility: hidden;
+  pointer-events: none;
+}
 /* Positioned, so the image's own proportions can never resize the square. */
 .hm-artwork img {
   position: absolute;
@@ -434,6 +459,113 @@
   border: 0;
 }
 
+/* ===== UP NEXT =====
+   A compact block under today's action: the label, the countdown (the
+   Results "Next game in" capsule, with each unit on its own glowing tile),
+   then the next puzzle's artwork whole at its own shape. Narrower than the
+   hero, so today's poster and action stay the centrepiece. */
+.hm-next {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: min(var(--hm-hero-w), 420px);
+  margin-top: 34px;
+}
+.hm-next-title {
+  margin: 0;
+  font-family: 'Fredoka One', cursive;
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 1.2;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--teal-dark, #0F9488);
+}
+.hm-next-clock {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 16px 9px;
+  border: 3px solid var(--black);
+  border-radius: 18px;
+  background: linear-gradient(160deg, #1A1A2E 0%, #1A1A1A 100%);
+  box-shadow: 0 5px 0 var(--black);
+  transform: rotate(-1.5deg);
+}
+/* The capsule's gloss, as on the Results countdown. */
+.hm-next-clock::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  left: 12px;
+  right: 12px;
+  height: 25%;
+  border-radius: 12px 12px 50% 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+}
+.hm-next-group { display: inline-flex; align-items: flex-start; gap: 4px; }
+.hm-next-group + .hm-next-group:not(:has(.hm-next-colon)) { margin-left: 8px; }
+.hm-next-cell { display: grid; justify-items: center; gap: 3px; }
+.hm-next-num {
+  min-width: 1.35em;
+  padding: 3px 5px 2px;
+  border-radius: 10px;
+  background: rgba(45, 212, 191, 0.12);
+  box-shadow: inset 0 0 0 1.5px rgba(45, 212, 191, 0.35);
+  font-family: 'Fredoka One', cursive;
+  font-size: 32px;
+  line-height: 1;
+  letter-spacing: 1px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 0 18px rgba(45, 212, 191, 0.55);
+}
+.hm-next-unit {
+  font-family: 'Fredoka One', cursive;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--teal, #2DD4BF);
+}
+.hm-next-colon {
+  padding-top: 4px;
+  font-family: 'Fredoka One', cursive;
+  font-size: 28px;
+  line-height: 1;
+  color: var(--cs-pink, #FF6FA3);
+  animation: hmTick 1s steps(1, end) infinite;
+}
+@keyframes hmTick {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.35; }
+}
+/* The artwork, whole: the wide image at the block's width, its height from
+   its own proportions (1200:630 until it loads); a square poster smaller;
+   the category matchup as the last resort. */
+.hm-next-art {
+  width: 100%;
+  margin-top: 6px;
+  overflow: hidden;
+  border: 3px solid var(--black);
+  border-radius: 22px;
+  background: var(--cs-cream);
+  box-shadow: 0 5px 0 var(--black);
+}
+.hm-next-art img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: auto 1200 / 630;
+}
+.hm-next-art.is-square { width: min(100%, 240px); }
+.hm-next-art.is-square img { aspect-ratio: auto 1 / 1; }
+.hm-next-art.is-matchup { overflow: visible; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.hm-next-art .hm-matchup { width: 100%; aspect-ratio: 2 / 1; margin-top: 0; }
+
 /* ===== CANDY ARTWORK (no puzzle, loading, error) ===== */
 .hm-candy-art {
   display: flex;
@@ -519,6 +651,14 @@
   .hm-done-btn { min-height: 54px; font-size: 20px; }
   .hm-candy-art { aspect-ratio: 2.4 / 1; border-radius: 22px; }
   .hm-candy-art.is-busy { aspect-ratio: 1.3 / 1; }
+  .hm-artwork.is-wide { border-radius: 20px; }
+  .hm-next { margin-top: 28px; gap: 8px; }
+  .hm-next-title { font-size: 13px; }
+  .hm-next-clock { padding: 8px 12px 7px; border-radius: 16px; }
+  .hm-next-num { font-size: 27px; border-radius: 9px; }
+  .hm-next-colon { font-size: 24px; }
+  .hm-next-unit { font-size: 10px; }
+  .hm-next-art { border-radius: 20px; box-shadow: 0 4px 0 var(--black); }
 }
 /* Short phones: a little less height everywhere so Play stays on screen. */
 @media (max-width: 599px) and (max-height: 700px) {
@@ -535,4 +675,5 @@
   .hm-play, .hm-link, .hm-done-btn { transition: none; }
   .hm-play:active, .hm-link:active, .hm-done-btn:active { transform: none; }
   .hm-candy-art.is-busy .hm-candy-dots img { animation: none; opacity: 0.9; }
+  .hm-next-colon { animation: none; }
 }
