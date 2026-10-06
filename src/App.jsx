@@ -1,5 +1,13 @@
 import { Fragment, useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, useId } from "react";
-import { createClient } from "@supabase/supabase-js";
+// [accounts] The project is configuration (src/game/config.js) and the one
+// Supabase client lives in src/account/supabaseClient.js. The shared sign-in
+// is src/account/platformSignIn.js; the guest handoff is guestHandoff.js.
+// Every touch point in this file is marked "[accounts]".
+import { SUPABASE_URL as SB_URL, SUPABASE_KEY as SB_KEY, SUPABASE_CONFIGURED as SUPABASE_READY, ACCOUNTS_ENABLED, announceConfiguration } from "./game/config.js";
+import { supabase } from "./account/supabaseClient.js";
+import { checkIsAdmin, deleteMyAccount, ensureAccount, signInWithPlatform, signOutOfWtf } from "./account/platformSignIn.js";
+import { declinePendingHandoff, importPendingHandoff, resolvePendingHandoff } from "./account/guestHandoff.js";
+import ImportPrompt from "./account/ImportPrompt.jsx";
 import "./home.css";
 import "./game.css";
 import "./site.css";
@@ -1633,20 +1641,12 @@ function useConfetti() {
 // ============================================================
 // SUPABASE CLIENT
 // ============================================================
-const SB_URL = import.meta.env.VITE_SUPABASE_URL?.trim() || "";
-const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() || "";
-const SUPABASE_READY = Boolean(SB_URL && SB_KEY);
-
+// [accounts] SB_URL / SB_KEY / SUPABASE_READY and the client itself come from
+// src/game/config.js and src/account/supabaseClient.js (imported above).
 // LOCAL DEV ONLY: with no Supabase key, serve a demo puzzle so the UI can be
 // viewed offline. Vite strips this from production builds.
 const OFFLINE_PREVIEW = import.meta.env.DEV && !SUPABASE_READY;
-const supabase = SUPABASE_READY ? createClient(SB_URL, SB_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true
-  }
-}) : null;
+announceConfiguration();
 const AUTH_TIMEOUT_MS = 8000;
 const APP_BOOT_TIMEOUT_MS = 14000;
 
@@ -1694,55 +1694,45 @@ async function authEnsureSession({recover=false}={}){
     clearSupabaseAuthCache();
   }
   if(existing?.user) return existing;
-  const { data, error } = await withTimeout(
+  // [accounts] One anonymous sign-in at a time. Boot, the auth-change
+  // handler and a dev StrictMode double-mount can all ask for a guest session
+  // in the same instant; without this each call minted its own anonymous
+  // user and the player row was then written under the wrong token (403).
+  anonymousSignIn ??= withTimeout(
     supabase.auth.signInAnonymously(),
     AUTH_TIMEOUT_MS,
     "Guest sign-in timed out."
-  );
+  ).finally(()=>{ anonymousSignIn = null; });
+  const { data, error } = await anonymousSignIn;
   if(error) throw error;
   return data.session;
 }
-async function authSendMagicLink(email){
-  if(!supabase) throw new Error("Supabase Auth is not configured.");
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: window.location.origin }
-  });
-  if(error) throw error;
+let anonymousSignIn = null;
+// [accounts] The one sign-in: the shared account (platformSignIn.js). A guest
+// with history mints its handoff code on the way out. Resolves to an error
+// message, or null when the browser is leaving for the sign-in page.
+async function authSignInWithPlatform(player){
+  if(OFFLINE_PREVIEW || !supabase) return "Sign-in needs a configured Supabase project.";
+  return signInWithPlatform({isGuest: player?.isGuest !== false});
 }
-async function authCreatePasswordAccount(email, password){
-  if(!supabase) throw new Error("Supabase Auth is not configured.");
-  const existing = await getAuthSession();
-  if(isAnonymousUser(existing?.user)){
-    const { error: signOutError } = await supabase.auth.signOut();
-    if(signOutError) throw signOutError;
-  }
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password
-  });
-  if(error) throw error;
-  return data.user;
-}
-async function authSignInWithPassword(email, password){
-  if(!supabase) throw new Error("Supabase Auth is not configured.");
-  const existing = await getAuthSession();
-  if(isAnonymousUser(existing?.user)){
-    const { error: signOutError } = await supabase.auth.signOut();
-    if(signOutError) throw signOutError;
-  }
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password
-  });
-  if(error) throw error;
-  return data.user;
-}
+// [accounts] LOCAL sign-out (this game, this browser; the shared session and
+// other games are untouched), then a brand-new anonymous guest for this browser.
 async function authSignOutToGuest(){
   if(!supabase) return null;
-  const { error } = await supabase.auth.signOut();
-  if(error) throw error;
+  await signOutOfWtf();
   return authEnsureSession();
+}
+// [accounts] Once a session is known: an anonymous session is a guest, full
+// stop. Any other session must be confirmed by the server as a WTF account
+// (ensure_account). One that is not (an old email/password beta user, a
+// stray signup) is signed out locally and the browser carries on as a fresh
+// guest. "unavailable" keeps the session so the next load can try again.
+async function authResolveAccount(session){
+  if(OFFLINE_PREVIEW || !session?.user || isAnonymousUser(session.user)) return { session, account:null, notice:null };
+  const result = await ensureAccount();
+  if(result.ok) return { session, account: result.account, notice:null };
+  if(result.reason==="not_platform_linked") return { session: await authEnsureSession(), account:null, notice: result.message };
+  return { session, account:null, notice: result.message };
 }
 function authSubscribe(onChange){
   if(OFFLINE_PREVIEW) return { data: { subscription: { unsubscribe(){} } } };
@@ -1969,7 +1959,7 @@ function describeSaveError(e){
   const msg = String(e?.message||"");
   if(/Failed to fetch|NetworkError|Load failed/i.test(msg)) return "the database couldn't be reached. Check your connection.";
   const status = msg.match(/Supabase error (\d{3})/)?.[1];
-  if(status==="401"||status==="403") return "the database refused the change (permission denied).";
+  if(status==="401"||status==="403") return "the database refused the change (permission denied). Puzzle Studio saves need a signed-in admin account.";
   if(msg.includes("_share_name")) return "the database doesn't have the share-name columns yet (run supabase/category_display_names.sql). Clear both share names to save without them.";
   if(msg.includes("_subtitle")) return "the database doesn't have the category subtitle columns yet (run supabase/category_display_names.sql). Clear both subtitles to save without them.";
   if(msg.includes("_button_name")) return "the database doesn't have the answer button name columns yet (run supabase/category_display_names.sql). Clear both button names to save without them.";
@@ -3507,13 +3497,13 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
 }
 
 // ---- STATS ----
-function StatsScreen({stats,onNav}){
+function StatsScreen({stats,onNav,signedIn=false}){
   const s=stats;
   const pct=s.totalQuestions>0?Math.round(s.totalCorrect/s.totalQuestions*100):0;
   return(
     <div>
       <div className="sec-head"><FI name="chart" size={52} style={{marginRight:10,verticalAlign:"middle"}}/>Your Stats</div>
-      <div className="sec-sub">All stored on this device. Play every day!</div>
+      <div className="sec-sub">{signedIn?"Saved to your account. Play every day!":"All stored on this device. Play every day!"}</div>
       <div className="card">
         <div className="stats-grid">
           <div className="stat-tile"><div className="stat-val"><FI name="flame" size={64} style={{marginBottom:4}}/><br/>{s.currentStreak}</div><div className="stat-lbl">Streak</div></div>
@@ -3821,188 +3811,94 @@ function ArchiveScreen({games,playerId,onReplay,onPlayToday}){
   );
 }
 
-function AccountScreen({player,onNav,onUpgrade,onMagicLink,onSignOut,authBusy,authMode}){
-  const[email,setEmail]=useState(player?.email||"");
-  const guest = player?.isGuest;
-  const isCreating = authBusy&&authMode==="create";
-  const isMagicLink = authBusy&&authMode==="magic";
+// ---- ACCOUNT ----
+// [accounts] One sign-in: the shared account (src/account/platformSignIn.js).
+// Guest: a Sign in button (the hosted sign-in page does the rest). Signed in:
+// the account's CURRENT email as the server reports it, Sign out (local:
+// this game, this browser) and Delete account with a confirmation. With
+// accounts off (no discovery URL / kill switch) the screen says so.
+function AccountScreen({player,accountsOn,notice,onNav,onSignIn,onSignOut,onDelete,onDismissNotice,authBusy,authMode}){
+  const guest = player?.isGuest !== false;
+  const[confirming,setConfirming]=useState(false);
+  const isSigningIn = authBusy&&authMode==="signin";
   const isSigningOut = authBusy&&authMode==="signout";
-
-  const submitUpgrade=()=>{
-    const trimmed = email.trim();
-    if(trimmed) onUpgrade(trimmed);
-  };
-  const submitMagic=()=>{
-    const trimmed = email.trim();
-    if(trimmed) onMagicLink(trimmed);
-  };
-
-  return(
-    <div>
-      <div className="sec-head">Account</div>
-      <div className="sec-sub">Play as a guest first, then lock in your streak whenever you want.</div>
-      <div className="card">
-        <div style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Fredoka One',cursive",fontSize:12,padding:"6px 14px",borderRadius:999,border:"2px solid var(--black)",boxShadow:"var(--shadow-sm)",background:guest?"linear-gradient(180deg,#FFF176 0%,#FFE347 55%,#E6C800 100%)":"linear-gradient(180deg,#C084FC 0%,#A855F7 55%,#7E22CE 100%)",color:guest?"var(--black)":"white",marginBottom:14}}>
-          {guest?"Guest Mode":"Account Ready"}
-        </div>
-        <div style={{fontSize:14,fontWeight:800,color:"var(--black)",marginBottom:8}}>
-          {guest?"You're playing as a guest right now.":"You're signed in and your progress can follow you across devices."}
-        </div>
-        <div style={{fontSize:13,fontWeight:700,color:"#666",lineHeight:1.5,marginBottom:16}}>
-          {guest?"Save this guest profile to an email so you can keep your streak across devices.":"Magic links let you hop back into this same account without a password."}
-        </div>
-
-        <div className="adm-field" style={{marginBottom:12}}>
-          <label>Email</label>
-          <input className="adm-input" value={email} placeholder="you@example.com" onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submitUpgrade()}/>
-        </div>
-
-        {guest?(
-          <>
-            <button className="btn btn-yellow" onClick={submitUpgrade} disabled={authBusy||!email.trim()} style={{marginBottom:10}}>
-              {isUpgrading?"Sending guest-save email...":"Save This Guest To My Email"}
-            </button>
-            <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",marginBottom:16}}>
-              We'll send a confirmation email that saves this guest progress to that address. It does not set or change a password.
-            </div>
-            <div style={{borderTop:"2px dashed rgba(45,212,191,0.3)",paddingTop:14}}>
-              <div style={{fontFamily:"'Fredoka One',cursive",fontSize:13,color:"var(--teal-dark)",marginBottom:8}}>Already have an account?</div>
-              <button className="btn btn-teal" onClick={submitMagic} disabled={authBusy||!email.trim()}>
-                {isMagicLink?"Sending magic link..." :"Email Me A Magic Link"}
-              </button>
-              <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",marginTop:10}}>
-                Use this if that email already has a trivia account and you want to sign back into it.
-              </div>
-            </div>
-          </>
-        ):(
-          <>
-            <div style={{fontSize:14,fontWeight:900,color:"var(--black)",marginBottom:14}}>{player?.email||"Signed in"}</div>
-            <button className="btn btn-pink" onClick={onSignOut} disabled={authBusy}>
-              {isSigningOut?"Switching to guest mode..." :"Sign Out To Guest Mode"}
-            </button>
-          </>
-        )}
-      </div>
-      <div style={{marginTop:12}}><button className="btn-sm" onClick={()=>onNav("home")}>← Back</button></div>
-    </div>
+  const isDeleting = authBusy&&authMode==="delete";
+  const pill = (bg,color,text)=>(
+    <div style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Fredoka One',cursive",fontSize:12,padding:"6px 14px",borderRadius:999,border:"2px solid var(--black)",boxShadow:"var(--shadow-sm)",background:bg,color,marginBottom:16}}>{text}</div>
   );
-}
-
-function AccountScreenV2({player,onNav,onCreateAccount,onPasswordSignIn,onMagicLink,onSignOut,authBusy,authMode}){
-  const[email,setEmail]=useState(player?.email||"");
-  const[password,setPassword]=useState("");
-  const[accountMode,setAccountMode]=useState("signin");
-  const guest = player?.isGuest;
-  const isCreating = authBusy&&authMode==="create";
-  const isPasswordSignIn = authBusy&&authMode==="password";
-  const isMagicLink = authBusy&&authMode==="magic";
-  const isSigningOut = authBusy&&authMode==="signout";
-
-  const submitCreate=()=>{
-    const trimmed = email.trim();
-    if(trimmed&&password.trim()) onCreateAccount(trimmed,password);
-  };
-  const submitPasswordSignIn=()=>{
-    const trimmed = email.trim();
-    if(trimmed&&password.trim()) onPasswordSignIn(trimmed,password);
-  };
-  const submitEmailLink=()=>{
-    const trimmed = email.trim();
-    if(trimmed) onMagicLink(trimmed);
-  };
-
   return(
     <div>
       <div className="sec-head">{guest?"Sign In":"Account"}</div>
-      <div className="sec-sub">{guest?"Sign in to save your streak and sync it across devices.":"You're signed in, so your stats can follow you across devices."}</div>
+      <div className="sec-sub">{guest?"Sign in to save your streak and play from any device.":"You're signed in, so your stats follow you across devices."}</div>
       <div className="card">
-        {guest?(
-          <div style={{maxWidth:430,margin:"0 auto",textAlign:"center"}}>
-            <div style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Fredoka One',cursive",fontSize:12,padding:"6px 14px",borderRadius:999,border:"2px solid var(--black)",boxShadow:"var(--shadow-sm)",background:"linear-gradient(180deg,#FFF176 0%,#FFE347 55%,#E6C800 100%)",color:"var(--black)",marginBottom:16}}>
-              Not Signed In
-            </div>
-            <div style={{fontFamily:"'Fredoka One',cursive",fontSize:32,lineHeight:1.15,color:"var(--black)",marginBottom:14}}>
-              Save your stats
-              <br/>
-              with an account
-            </div>
-            <div style={{fontSize:14,fontWeight:700,color:"#666",lineHeight:1.6,margin:"0 auto 18px",maxWidth:380}}>
-              Use your email and password to sign in or create an account. Your streak and stats will sync anywhere you're signed in.
-            </div>
-            <div style={{display:"flex",gap:8,marginBottom:12}}>
-              <button className={`btn ${accountMode==="signin"?"btn-teal":"btn-pink"}`} style={{flex:1,fontSize:16}} onClick={()=>setAccountMode("signin")}>
-                Sign In
+        <div style={{maxWidth:430,margin:"0 auto",textAlign:"center"}}>
+          {guest?(
+            <>
+              {pill("linear-gradient(180deg,#FFF176 0%,#FFE347 55%,#E6C800 100%)","var(--black)","Not Signed In")}
+              <div style={{fontFamily:"'Fredoka One',cursive",fontSize:32,lineHeight:1.15,color:"var(--black)",marginBottom:14}}>
+                Save your stats
+                <br/>
+                with an account
+              </div>
+              {accountsOn?(
+                <>
+                  <div style={{fontSize:14,fontWeight:700,color:"#666",lineHeight:1.6,margin:"0 auto 18px",maxWidth:380}}>
+                    One account works for every one of our games. Your streak, stats and favorites will sync anywhere you're signed in.
+                  </div>
+                  <button className="btn btn-teal" data-testid="platform-sign-in" onClick={onSignIn} disabled={authBusy} style={{fontSize:24,marginBottom:12}}>
+                    {isSigningIn?"Opening sign-in...":"Sign In"}
+                  </button>
+                  <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",lineHeight:1.5}}>
+                    You'll be taken to our shared sign-in page and brought straight back. If this browser has played as a guest, you'll be asked whether to bring that progress along.
+                  </div>
+                </>
+              ):(
+                <div style={{fontSize:14,fontWeight:700,color:"#666",lineHeight:1.6,margin:"0 auto 18px",maxWidth:380}}>
+                  Sign-in isn't available in this build yet. You can keep playing as a guest; your progress stays on this device.
+                </div>
+              )}
+            </>
+          ):(
+            <>
+              {pill("linear-gradient(180deg,#C084FC 0%,#A855F7 55%,#7E22CE 100%)","white","Signed In")}
+              <div style={{fontFamily:"'Fredoka One',cursive",fontSize:30,lineHeight:1.15,color:"var(--black)",marginBottom:14}}>
+                Your stats are
+                <br/>
+                locked in
+              </div>
+              <div style={{fontSize:14,fontWeight:700,color:"#666",lineHeight:1.6,margin:"0 auto 18px",maxWidth:360}}>
+                You're signed in as <strong style={{color:"var(--black)"}} data-testid="account-email">{player?.email||"this account"}</strong>. Your progress follows you across devices and across our games.
+              </div>
+              <button className="btn btn-pink" data-testid="sign-out" onClick={onSignOut} disabled={authBusy} style={{marginBottom:10}}>
+                {isSigningOut?"Signing out...":"Sign Out"}
               </button>
-              <button className={`btn ${accountMode==="create"?"btn-yellow":"btn-pink"}`} style={{flex:1,fontSize:16}} onClick={()=>setAccountMode("create")}>
-                Create Account
-              </button>
+              <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",lineHeight:1.5,marginBottom:18}}>
+                Signing out only affects this game in this browser. You can still play here as a guest afterwards.
+              </div>
+              {!confirming?(
+                <button className="btn-sm" onClick={()=>setConfirming(true)} disabled={authBusy}>Delete account...</button>
+              ):(
+                <div style={{border:"2px solid var(--black)",borderRadius:14,padding:"12px 14px",background:"#FFF4C2"}}>
+                  <div style={{fontSize:13,fontWeight:800,lineHeight:1.5,marginBottom:10}}>
+                    Delete your account for this game, with its plays, stats and favorites? Your shared sign-in stays; you can sign in again later with a clean slate.
+                  </div>
+                  <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+                    <button className="btn btn-pink" data-testid="delete-account" disabled={authBusy} onClick={async()=>{ if(await onDelete()) setConfirming(false); }} style={{fontSize:16}}>
+                      {isDeleting?"Deleting...":"Delete"}
+                    </button>
+                    <button className="btn btn-yellow" onClick={()=>setConfirming(false)} disabled={authBusy} style={{fontSize:16}}>Keep it</button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+          {notice&&(
+            <div className="wtf-notice" role="status" data-testid="account-message" style={{marginTop:16}}>
+              <span>{notice}</span>
+              <button type="button" className="wtf-notice-x" aria-label="Dismiss" onClick={onDismissNotice}>×</button>
             </div>
-            <input
-              className="adm-input"
-              value={email}
-              placeholder="Email address"
-              onChange={e=>setEmail(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&(accountMode==="create"?submitCreate():submitPasswordSignIn())}
-              style={{textAlign:"center",fontSize:18,fontWeight:900,padding:"18px 16px",marginBottom:12}}
-            />
-            <input
-              className="adm-input"
-              type="password"
-              value={password}
-              placeholder={accountMode==="create"?"Create a password":"Password"}
-              onChange={e=>setPassword(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&(accountMode==="create"?submitCreate():submitPasswordSignIn())}
-              style={{textAlign:"center",fontSize:18,fontWeight:900,padding:"18px 16px",marginBottom:12}}
-            />
-            <button
-              className={`btn ${accountMode==="create"?"btn-yellow":"btn-teal"}`}
-              onClick={accountMode==="create"?submitCreate:submitPasswordSignIn}
-              disabled={authBusy||!email.trim()||!password.trim()}
-              style={{fontSize:24,marginBottom:12}}
-            >
-              {accountMode==="create"
-                ? (isCreating?"Creating account...":"Create Account")
-                : (isPasswordSignIn?"Signing in...":"Sign In")}
-            </button>
-            <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",lineHeight:1.5,marginBottom:18}}>
-              {accountMode==="create"
-                ? "New accounts start here. We can add smarter device-progress carryover next."
-                : "If you already have an account, sign in here with your email and password."}
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-              <div style={{flex:1,height:2,background:"rgba(26,26,26,.12)"}}/>
-              <div style={{fontFamily:"'Fredoka One',cursive",fontSize:13,color:"rgba(26,26,26,.55)"}}>email link</div>
-              <div style={{flex:1,height:2,background:"rgba(26,26,26,.12)"}}/>
-            </div>
-            <button className="btn btn-pink" onClick={submitEmailLink} disabled={authBusy||!email.trim()} style={{marginBottom:10}}>
-              {isMagicLink?"Sending magic link..." :"Continue with existing account"}
-            </button>
-            <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",lineHeight:1.5}}>
-              Prefer not to type a password? We'll email you a sign-in link instead.
-            </div>
-          </div>
-        ):(
-          <div style={{maxWidth:430,margin:"0 auto",textAlign:"center"}}>
-            <div style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Fredoka One',cursive",fontSize:12,padding:"6px 14px",borderRadius:999,border:"2px solid var(--black)",boxShadow:"var(--shadow-sm)",background:"linear-gradient(180deg,#C084FC 0%,#A855F7 55%,#7E22CE 100%)",color:"white",marginBottom:16}}>
-              Signed In
-            </div>
-            <div style={{fontFamily:"'Fredoka One',cursive",fontSize:30,lineHeight:1.15,color:"var(--black)",marginBottom:14}}>
-              Your stats are
-              <br/>
-              locked in
-            </div>
-            <div style={{fontSize:14,fontWeight:700,color:"#666",lineHeight:1.6,margin:"0 auto 18px",maxWidth:360}}>
-              You're signed in as <strong style={{color:"var(--black)"}}>{player?.email||"this account"}</strong>. Your progress can now follow you across devices.
-            </div>
-            <button className="btn btn-pink" onClick={onSignOut} disabled={authBusy} style={{marginBottom:10}}>
-              {isSigningOut?"Signing out..." :"Sign Out"}
-            </button>
-            <div style={{fontSize:12,fontWeight:800,color:"rgba(26,26,26,.65)",lineHeight:1.5}}>
-              After signing out, you can still play on this device without being signed in.
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
       <div style={{marginTop:12}}><button className="btn-sm" onClick={()=>onNav("home")}>{"<- Back"}</button></div>
     </div>
@@ -4517,6 +4413,12 @@ export default function WhatTheFudgeTrivia(){
   const[error,setError]=useState(null);
   const[authBusy,setAuthBusy]=useState(false);
   const[authMode,setAuthMode]=useState(null);
+  // [accounts] a sentence for the Account screen (sign-in unavailable, not an
+  // account, ...), whether the account may edit content, and the pending
+  // "Bring your progress with you?" summary (null = nothing to ask).
+  const[accountNotice,setAccountNotice]=useState(null);
+  const[isAdmin,setIsAdmin]=useState(false);
+  const[handoff,setHandoff]=useState(null);
   const authUserIdRef = useRef(null);
 
   const sound=useSoundEngine();
@@ -4524,10 +4426,22 @@ export default function WhatTheFudgeTrivia(){
 
   const loadAppData = useCallback(async(sessionOverride=null,{recoverAuth=false}={})=>{
     const session = sessionOverride || await authEnsureSession({recover:recoverAuth});
-    const p = await dbGetOrCreatePlayer(session?.user);
+    // [accounts] a non-guest session must be a WTF account; see authResolveAccount.
+    const resolved = await authResolveAccount(session);
+    if(resolved.notice) setAccountNotice(resolved.notice);
+    const p = await dbGetOrCreatePlayer(resolved.session?.user);
     if(!p?.id) throw new Error("Player session could not be created.");
+    if(resolved.account){
+      // The account's email is identity-first (account_email on the server); never auth.users.email.
+      p.isGuest = false;
+      p.email = resolved.account.email || p.email;
+      p.globalUserId = resolved.account.global_user_id;
+    }
     authUserIdRef.current = p?.id || null;
     setPlayer(p);
+    setIsAdmin(resolved.account ? await checkIsAdmin() : false);
+    // [accounts] first sign-in from a browser whose guest had history: ask once.
+    setHandoff(resolved.account ? await resolvePendingHandoff().catch(()=>null) : null);
     const [allGames, playerStats] = await Promise.all([
       dbLoadGames(),
       dbGetStats(p.id)
@@ -4654,46 +4568,53 @@ export default function WhatTheFudgeTrivia(){
 
   const showToast = m => { setToast(m); setTimeout(()=>setToast(null),2100); };
 
-  const handleCreateAccount = async(email,password) => {
+  // [accounts] Sign in with the shared account: the browser leaves for the
+  // hosted sign-in page and comes back through /auth/callback. On success the
+  // busy state stays on until the page unloads; a refusal shows a sentence.
+  const handleSignIn = async() => {
+    setAccountNotice(null);
+    setAuthMode("signin");
+    setAuthBusy(true);
     try{
-      setAuthMode("create");
-      setAuthBusy(true);
-      await authCreatePasswordAccount(email,password);
-      showToast("Account created.");
+      const err = await authSignInWithPlatform(player);
+      if(err){ setAccountNotice(err); setAuthBusy(false); setAuthMode(null); }
     }catch(e){
-      showToast(formatAuthError(e));
+      setAccountNotice(formatAuthError(e));
+      setAuthBusy(false);
+      setAuthMode(null);
+    }
+  };
+
+  // [accounts] Delete the local account (plays, stats, favorites, the auth
+  // user). The shared identity survives; the next sign-in starts clean. The
+  // SIGNED_OUT event then reloads this browser as a new guest.
+  const handleDeleteAccount = async() => {
+    setAuthMode("delete");
+    setAuthBusy(true);
+    try{
+      const res = await deleteMyAccount();
+      if(!res.ok){ showToast(res.message||"Couldn't delete the account."); return false; }
+      setView("home");
+      showToast("Account deleted.");
+      return true;
     }finally{
       setAuthBusy(false);
       setAuthMode(null);
     }
   };
 
-  const handlePasswordSignIn = async(email,password) => {
-    try{
-      setAuthMode("password");
-      setAuthBusy(true);
-      await authSignInWithPassword(email,password);
-      showToast("Signed in.");
-    }catch(e){
-      showToast(formatAuthError(e));
-    }finally{
-      setAuthBusy(false);
-      setAuthMode(null);
-    }
+  // [accounts] The guest handoff decision. Add: the guest's rows move onto the
+  // account and everything is reloaded. Start fresh: nothing moves.
+  const handleAddProgress = async() => {
+    const res = await importPendingHandoff();
+    setHandoff(null);
+    if(!res.ok){ showToast(res.message||"Couldn't add your progress."); return; }
+    showToast("Your progress is on your account.");
+    try{ await loadAppData(null); }catch(e){ console.error("[handoff] reload failed", e); }
   };
-
-  const handleMagicLink = async email => {
-    try{
-      setAuthMode("magic");
-      setAuthBusy(true);
-      await authSendMagicLink(email);
-      showToast("Magic link sent! Check your email.");
-    }catch(e){
-      showToast(formatAuthError(e));
-    }finally{
-      setAuthBusy(false);
-      setAuthMode(null);
-    }
+  const handleStartFresh = async() => {
+    setHandoff(null);
+    await declinePendingHandoff();
   };
 
   const handleSignOut = async() => {
@@ -4874,7 +4795,8 @@ export default function WhatTheFudgeTrivia(){
       title: signedIn ? (player.email||"Account") : "Sign in",
       onClick: ()=>setView("account"),
     },
-    admin: SHOW_ADMIN_LINK ? {onClick:openAdmin, icon:<FI name="gear" size={22}/>} : null,
+    // [accounts] the Admin gear also shows for a signed-in admin account (the database enforces the rule regardless)
+    admin: (SHOW_ADMIN_LINK||isAdmin) ? {onClick:openAdmin, icon:<FI name="gear" size={22}/>} : null,
   };
 
   // Loading and boot failure: Home's own frame (see HomeLoadingPage), under
@@ -4956,8 +4878,8 @@ export default function WhatTheFudgeTrivia(){
             />
           )}
 
-          {view==="stats"&&<StatsScreen stats={stats} onNav={setView}/>}
-          {view==="account"&&<AccountScreenV2 player={player} onNav={setView} onCreateAccount={handleCreateAccount} onPasswordSignIn={handlePasswordSignIn} onMagicLink={handleMagicLink} onSignOut={handleSignOut} authBusy={authBusy} authMode={authMode}/>}
+          {view==="stats"&&<StatsScreen stats={stats} onNav={setView} signedIn={signedIn}/>}
+          {view==="account"&&<AccountScreen player={player} accountsOn={ACCOUNTS_ENABLED} notice={accountNotice} onNav={setView} onSignIn={handleSignIn} onSignOut={handleSignOut} onDelete={handleDeleteAccount} onDismissNotice={()=>setAccountNotice(null)} authBusy={authBusy} authMode={authMode}/>}
 
           {view==="archive"&&(
             <ArchiveScreen
@@ -4971,6 +4893,8 @@ export default function WhatTheFudgeTrivia(){
 
         {toast&&<Toast message={toast} onDone={()=>setToast(null)}/>}
         {showHelp&&<HowToPlay onClose={()=>setShowHelp(false)} onPlay={()=>{setShowHelp(false);goTo("home");}}/>}
+        {/* [accounts] asked once, after the first sign-in from a browser whose guest had history */}
+        {handoff&&<ImportPrompt summary={handoff} onAdd={handleAddProgress} onStartFresh={handleStartFresh}/>}
       </div>
     </PlayerChromeContext.Provider>
   );

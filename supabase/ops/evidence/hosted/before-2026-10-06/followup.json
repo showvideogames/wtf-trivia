@@ -1,0 +1,276 @@
+{
+  "pg_triggers": [
+    {
+      "table_name": "game_records",
+      "tgname": "game_records_assign_puzzle",
+      "tgenabled": "O",
+      "def": "CREATE TRIGGER game_records_assign_puzzle BEFORE INSERT OR UPDATE ON public.game_records FOR EACH ROW EXECUTE FUNCTION game_records_assign_puzzle()"
+    },
+    {
+      "table_name": "game_records",
+      "tgname": "game_records_completed_stats",
+      "tgenabled": "O",
+      "def": "CREATE TRIGGER game_records_completed_stats AFTER INSERT OR DELETE OR UPDATE ON public.game_records FOR EACH ROW EXECUTE FUNCTION handle_completed_game_record()"
+    },
+    {
+      "table_name": "games",
+      "tgname": "games_set_updated_at",
+      "tgenabled": "O",
+      "def": "CREATE TRIGGER games_set_updated_at BEFORE UPDATE ON public.games FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "table_name": "player_stats",
+      "tgname": "player_stats_set_updated_at",
+      "tgenabled": "O",
+      "def": "CREATE TRIGGER player_stats_set_updated_at BEFORE UPDATE ON public.player_stats FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "table_name": "puzzle_favorites",
+      "tgname": "puzzle_favorites_count",
+      "tgenabled": "O",
+      "def": "CREATE TRIGGER puzzle_favorites_count AFTER INSERT OR DELETE ON public.puzzle_favorites FOR EACH ROW EXECUTE FUNCTION puzzle_favorites_count()"
+    },
+    {
+      "table_name": "puzzle_stats",
+      "tgname": "puzzle_stats_set_updated_at",
+      "tgenabled": "O",
+      "def": "CREATE TRIGGER puzzle_stats_set_updated_at BEFORE UPDATE ON public.puzzle_stats FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    }
+  ],
+  "relacl": [
+    {
+      "relname": "game_records",
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "owner": "postgres"
+    },
+    {
+      "relname": "game_records_id_seq",
+      "relacl": "{postgres=rwU/postgres,anon=rwU/postgres,authenticated=rwU/postgres,service_role=rwU/postgres}",
+      "owner": "postgres"
+    },
+    {
+      "relname": "games",
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "owner": "postgres"
+    },
+    {
+      "relname": "player_stats",
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "owner": "postgres"
+    },
+    {
+      "relname": "players",
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "owner": "postgres"
+    },
+    {
+      "relname": "puzzle_favorite_counts",
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,anon=r/postgres,authenticated=r/postgres}",
+      "owner": "postgres"
+    },
+    {
+      "relname": "puzzle_favorites",
+      "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,authenticated=ard/postgres}",
+      "owner": "postgres"
+    },
+    {
+      "relname": "puzzle_stats",
+      "relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "owner": "postgres"
+    }
+  ],
+  "proacl": [
+    {
+      "proname": "bump_jsonb_array_value",
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "owner": "postgres"
+    },
+    {
+      "proname": "bump_jsonb_object_count",
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "owner": "postgres"
+    },
+    {
+      "proname": "game_records_assign_puzzle",
+      "proacl": "{postgres=X/postgres,service_role=X/postgres}",
+      "owner": "postgres"
+    },
+    {
+      "proname": "handle_completed_game_record",
+      "proacl": "{postgres=X/postgres,service_role=X/postgres}",
+      "owner": "postgres"
+    },
+    {
+      "proname": "puzzle_favorites_count",
+      "proacl": "{postgres=X/postgres,service_role=X/postgres}",
+      "owner": "postgres"
+    },
+    {
+      "proname": "rebuild_puzzle_stats",
+      "proacl": "{postgres=X/postgres,service_role=X/postgres}",
+      "owner": "postgres"
+    },
+    {
+      "proname": "rebuild_puzzle_stats_for",
+      "proacl": "{postgres=X/postgres,service_role=X/postgres}",
+      "owner": "postgres"
+    },
+    {
+      "proname": "set_puzzle_favorite",
+      "proacl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "owner": "postgres"
+    },
+    {
+      "proname": "set_updated_at",
+      "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "owner": "postgres"
+    }
+  ],
+  "deb_user_rows": [
+    {
+      "id": "ee7a6f4b-d9e7-443d-951e-0906e13eab66",
+      "players_rows": 1,
+      "plays": 0
+    }
+  ],
+  "player_stats_owner_kind": [
+    {
+      "player_id": "2c7b7a3e-604c-45ac-b4f4-076a9d5b233d",
+      "is_anonymous": true,
+      "has_email": false,
+      "total_played": 1,
+      "current_streak": 1,
+      "updated_at": "2026-10-04 07:00:09.232+00"
+    },
+    {
+      "player_id": "69a67c57-a5da-4c4f-b5c4-0ae3e6976e46",
+      "is_anonymous": true,
+      "has_email": false,
+      "total_played": 1,
+      "current_streak": 1,
+      "updated_at": "2026-10-03 16:50:09.052+00"
+    },
+    {
+      "player_id": "379fa2c0-7a39-4f0a-a6c5-b1c2f4624d33",
+      "is_anonymous": true,
+      "has_email": false,
+      "total_played": 1,
+      "current_streak": 1,
+      "updated_at": "2026-10-01 21:00:12.299+00"
+    },
+    {
+      "player_id": "20cad036-6b1f-4f90-9b44-145305f5f009",
+      "is_anonymous": true,
+      "has_email": false,
+      "total_played": 1,
+      "current_streak": 1,
+      "updated_at": "2026-09-28 14:32:07.367+00"
+    },
+    {
+      "player_id": "a123a75f-fb28-4911-9749-936b6e605c95",
+      "is_anonymous": true,
+      "has_email": false,
+      "total_played": 1,
+      "current_streak": 1,
+      "updated_at": "2026-09-28 14:10:07.284+00"
+    }
+  ],
+  "players_vs_auth": [
+    {
+      "players_without_auth_user": 0,
+      "anon_users_without_player": 1,
+      "anon_players": 150,
+      "synthetic_players": 50
+    }
+  ],
+  "real_player_activity": [
+    {
+      "real_players_with_plays": 0,
+      "real_plays": 0
+    }
+  ],
+  "synthetic_plays": [
+    {
+      "synthetic_plays": 750
+    }
+  ],
+  "cutover_info": [
+    {
+      "taken_at": "2026-09-28 14:01:33.81421+00"
+    }
+  ],
+  "storage_bucket": [
+    {
+      "id": "wtf-images",
+      "public": true,
+      "file_size_limit": null,
+      "allowed_mime_types": null,
+      "created_at": "2026-04-12 07:11:44.735187+00"
+    }
+  ],
+  "auth_schema_identities_cols": [
+    {
+      "column_name": "provider_id"
+    },
+    {
+      "column_name": "user_id"
+    },
+    {
+      "column_name": "identity_data"
+    },
+    {
+      "column_name": "provider"
+    },
+    {
+      "column_name": "last_sign_in_at"
+    },
+    {
+      "column_name": "created_at"
+    },
+    {
+      "column_name": "updated_at"
+    },
+    {
+      "column_name": "email"
+    },
+    {
+      "column_name": "id"
+    }
+  ],
+  "auth_config": {
+    "site_url": "https://wtf-trivia.vercel.app",
+    "uri_allow_list": "http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:4173",
+    "mailer_autoconfirm": true,
+    "external_email_enabled": true,
+    "external_anonymous_users_enabled": true,
+    "security_manual_linking_enabled": false,
+    "disable_signup": false,
+    "jwt_exp": 3600,
+    "mailer_secure_email_change_enabled": true,
+    "smtp_host": null,
+    "password_min_length": 6,
+    "external_phone_enabled": false,
+    "mfa_max_enrolled_factors": 10,
+    "rate_limit_anonymous_users": 30,
+    "security_captcha_enabled": false
+  },
+  "api_key_names": [
+    {
+      "name": "anon",
+      "type": "legacy"
+    },
+    {
+      "name": "service_role",
+      "type": "legacy"
+    },
+    {
+      "name": "default",
+      "type": "publishable"
+    },
+    {
+      "name": "default",
+      "type": "secret"
+    }
+  ],
+  "pg_config_status": 200
+}
