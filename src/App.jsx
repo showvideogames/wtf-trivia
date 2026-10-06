@@ -2883,12 +2883,27 @@ function GameMatchup({game,label}){
   // One size for every line of the banner: the smallest that any name or
   // subtitle needs, so a subtitle reads as the second line of the same
   // label rather than smaller supporting text, and the halves match.
-  const fits=[nameFit.A,nameFit.B,...(withSub?[subFit.A,subFit.B]:[])];
+  const fits=[nameFit.A,nameFit.B,...sides.filter(x=>x.sub).map(x=>subFit[x.cat])];
   const lineSize=fits.every(Boolean)?Math.min(...fits):undefined;
+  // Each half centres its own text block: its name's lines plus its subtitle
+  // if it has one. In the long layout a name that still fits on one line
+  // gets the ordinary one-line box rather than the two-line one, so it sits
+  // on the middle of the other half's two-line block, not its first line.
+  // Marked straight on the element (data-one-line, which React doesn't
+  // manage), since it is a measurement of the rendered text.
+  const barRef=useRef(null);
+  useLayoutEffect(()=>{
+    for(const half of barRef.current?.querySelectorAll(".gp-mu-half")||[]){
+      const el=half.querySelector(".gp-mu-name .fit-text-content");
+      const lh=el&&parseFloat(getComputedStyle(el).lineHeight);
+      const one=Boolean(longName&&lineSize&&lh&&el.getBoundingClientRect().height<lh*1.5);
+      half.toggleAttribute("data-one-line",one);
+    }
+  },[longName,lineSize,game.categoryA,game.categoryB]);
   return(
     <section className="gp-mu" aria-labelledby={id}>
       <p className="gp-mu-label" id={id}>{label}</p>
-      <div className={`gp-mu-bar${withSub?" has-sub":""}${longName?" is-long":""}`}>
+      <div ref={barRef} className={`gp-mu-bar${withSub?" has-sub":""}${longName?" is-long":""}`}>
         {sides.map((x,i)=>(
           <Fragment key={x.cat}>
             {i===1&&<span className="gp-sr"> or </span>}
@@ -2896,9 +2911,9 @@ function GameMatchup({game,label}){
                  style={{"--mu-bg":x.color.mid,"--mu-edge":x.color.dark,"--mu-ink":x.color.isDark?"#fff":"var(--black)"}}>
               <FitText className="gp-mu-name" min={11} max={roomy?26:20} oneLine={withSub&&!longName} buffer={2}
                 onFit={size=>setNameFit(f=>shared(f,x.cat,size))} forceSize={lineSize}>{x.name}</FitText>
-              {withSub&&(
+              {x.sub&&(
                 <FitText className="gp-mu-sub" min={11} max={roomy?26:20} oneLine buffer={2}
-                  onFit={size=>setSubFit(f=>shared(f,x.cat,size))} forceSize={lineSize}>{x.sub||" "}</FitText>
+                  onFit={size=>setSubFit(f=>shared(f,x.cat,size))} forceSize={lineSize}>{x.sub}</FitText>
               )}
             </div>
           </Fragment>

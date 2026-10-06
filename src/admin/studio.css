@@ -550,7 +550,6 @@
   font-family: 'Fredoka One', cursive; font-size: 15px; line-height: 1.15;
   text-align: center; overflow-wrap: anywhere;
 }
-.ps-np-half span { white-space: pre-wrap; }
 .ps-np-or {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   padding: 3px 6px; border-radius: 8px;
