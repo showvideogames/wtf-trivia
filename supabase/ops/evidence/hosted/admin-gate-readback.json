@@ -1,0 +1,59 @@
+{
+ "ledger": [
+  {
+   "v": "0001,0002,0003"
+  }
+ ],
+ "games_policies": [
+  {
+   "policyname": "games_admin_delete",
+   "cmd": "DELETE",
+   "roles": "authenticated"
+  },
+  {
+   "policyname": "games_admin_insert",
+   "cmd": "INSERT",
+   "roles": "authenticated"
+  },
+  {
+   "policyname": "games_admin_update",
+   "cmd": "UPDATE",
+   "roles": "authenticated"
+  },
+  {
+   "policyname": "games_read_all",
+   "cmd": "SELECT",
+   "roles": "anon,authenticated"
+  }
+ ],
+ "storage_policies": [
+  {
+   "policyname": "Admins can delete images",
+   "cmd": "DELETE",
+   "roles": "authenticated"
+  },
+  {
+   "policyname": "Admins can upload images",
+   "cmd": "INSERT",
+   "roles": "authenticated"
+  },
+  {
+   "policyname": "Anyone can read images",
+   "cmd": "SELECT",
+   "roles": "public"
+  }
+ ],
+ "games_acl": [
+  {
+   "relacl": null
+  },
+  {
+   "relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,anon=r/postgres,authenticated=arwd/postgres}"
+  }
+ ],
+ "admins": [
+  {
+   "n": 1
+  }
+ ]
+}
