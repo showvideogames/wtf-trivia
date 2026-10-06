@@ -141,9 +141,12 @@ kept, Try again. Handoff RPC failing → the prompt is asked again next load
 
 Supabase Auth on the hosted project (state after hosted Phase 2, 2026-10-06):
 the custom provider `custom:platform` installed by `tools/workos.mjs hosted
-register/wire` (WorkOS Staging application `wtf-trivia-beta`); Site URL = the
-live origin; the redirect allow-list holds the preview branch's
-`/auth/callback` (the live `/auth/callback` is added at promotion);
+register/wire` (WorkOS Staging application `wtf-trivia-beta`); Site URL =
+`https://whatthefudge.gg` (the canonical live origin since 2026-10-06); the
+redirect allow-list holds `/auth/callback` for `whatthefudge.gg`,
+`wtf-trivia.vercel.app` (the old live origin, still serves the site) and the
+preview branch (`www` 308-redirects to the apex before the app loads, so it
+needs no entry);
 **Anonymous sign-ins ON (must stay on: guests need it)**; manual linking OFF;
 email autoconfirm OFF (Confirm email ON, decision D2: WorkOS is the only
 account authority, Supabase sends no player-facing verification). Ledger
