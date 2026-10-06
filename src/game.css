@@ -248,9 +248,12 @@
    shared size fits both. */
 .gp-mu-bar.has-sub .gp-mu-name { height: 24px; flex: none; }
 .gp-mu-sub { height: 24px; flex: none; }
-/* A long name with a subtitle: two lines for the name, then the subtitle. */
+/* A long name with a subtitle: two lines for the name, then the subtitle.
+   A name that still fits on one line keeps the one-line box, so each half's
+   block (name lines plus any subtitle) is centred on its own. */
 .gp-mu-bar.is-long { height: 80px; }
 .gp-mu-bar.has-sub.is-long .gp-mu-name { height: 44px; }
+.gp-mu-bar.has-sub.is-long .gp-mu-half[data-one-line] .gp-mu-name { height: 24px; }
 .gp-mu-or {
   position: absolute;
   left: 50%;
@@ -1218,6 +1221,7 @@
   .gp-mu-sub { height: 29px; }
   .gp-mu-bar.is-long { height: 94px; }
   .gp-mu-bar.has-sub.is-long .gp-mu-name { height: 51px; }
+  .gp-mu-bar.has-sub.is-long .gp-mu-half[data-one-line] .gp-mu-name { height: 29px; }
   .gp-mu-or { width: 50px; height: 50px; font-size: 19px; }
   .gp-progress { margin-top: 16px; gap: 8px; }
   .gp-qpill { font-size: 14px; padding: 4px 16px 3px; }
