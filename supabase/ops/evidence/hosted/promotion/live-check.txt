@@ -1,0 +1,35 @@
+PASS  home loads (200, has #root)  — HTTP 200
+PASS  /auth/callback is served by the app (SPA rewrite)  — HTTP 200
+PASS  /admin is served by the app (SPA rewrite)  — HTTP 200
+PASS  bundle found  — 3652036 bytes
+PASS  bundle points at the hosted project
+PASS  bundle carries the Staging discovery URL (accounts ON)
+PASS  bundle names no Production AuthKit domain
+PASS  bundle names no local address
+PASS  bundle has no email/password sign-in screen left
+PASS  content readable by the game (every status)  — 31 games / 349 questions
+PASS  content counts match the latest snapshot  — snapshot 31 / 349
+PASS  every snapshot id is still present
+PASS  community stats readable  — HTTP 200
+PASS  favorite counts readable  — HTTP 200
+PASS  anon cannot read players  — HTTP 401
+PASS  anon cannot read game_records  — HTTP 401
+PASS  anon cannot read player_stats  — HTTP 401
+PASS  anon cannot read puzzle_favorites  — HTTP 401
+PASS  anon cannot read accounts  — HTTP 401
+PASS  anon cannot read admins  — HTTP 401
+PASS  anon cannot read guest_handoffs  — HTTP 401
+PASS  anon cannot call ensure_account  — HTTP 401
+PASS  anon cannot call my_account  — HTTP 401
+PASS  anon cannot call delete_my_account  — HTTP 401
+PASS  anon cannot call offer_guest_history  — HTTP 401
+PASS  anon cannot call resolve_guest_handoff  — HTTP 401
+PASS  anon cannot call import_guest_history  — HTTP 401
+PASS  anon cannot call decline_guest_history  — HTTP 401
+PASS  anon can ping  — HTTP 200
+PASS  anon cannot write content (admin gate ON)  — HTTP 401
+PASS  anon cannot delete content (admin gate ON)  — HTTP 401
+PASS  hosted authorize redirects to the Staging sign-in  — HTTP 302 → https://detailed-pink-69-staging.authkit.app/oauth2/authorize?client_id=client_01M48ZCZDMT
+PASS  …with PKCE and the project's own GoTrue callback  — redirect_uri present
+
+33/33 checks passed
