@@ -7,6 +7,7 @@ import { SUPABASE_URL as SB_URL, SUPABASE_KEY as SB_KEY, SUPABASE_CONFIGURED as 
 import { supabase } from "./account/supabaseClient.js";
 import { checkIsAdmin, deleteMyAccount, ensureAccount, signInWithPlatform, signOutOfWtf } from "./account/platformSignIn.js";
 import { declinePendingHandoff, importPendingHandoff, resolvePendingHandoff } from "./account/guestHandoff.js";
+import { createGuestSessionGuard } from "./account/guestSession.js";
 import ImportPrompt from "./account/ImportPrompt.jsx";
 import "./home.css";
 import "./game.css";
@@ -1700,20 +1701,28 @@ async function authEnsureSession({recover=false}={}){
     clearSupabaseAuthCache();
   }
   if(existing?.user) return existing;
-  // [accounts] One anonymous sign-in at a time. Boot, the auth-change
-  // handler and a dev StrictMode double-mount can all ask for a guest session
-  // in the same instant; without this each call minted its own anonymous
-  // user and the player row was then written under the wrong token (403).
-  anonymousSignIn ??= withTimeout(
-    supabase.auth.signInAnonymously(),
-    AUTH_TIMEOUT_MS,
-    "Guest sign-in timed out."
-  ).finally(()=>{ anonymousSignIn = null; });
-  const { data, error } = await anonymousSignIn;
-  if(error) throw error;
-  return data.session;
+  // [accounts] One guest for the whole browser. Boot, the auth-change handler,
+  // a dev StrictMode double-mount AND every other open tab (a sign-out in one
+  // tab reaches them all through the shared stored session) can ask for a
+  // guest in the same instant. guestSession.js serialises them with a
+  // cross-tab lock and re-reads the stored session inside it, so exactly one
+  // anonymous user is created and every tab adopts it.
+  const { session } = await guestSession();
+  return session;
 }
-let anonymousSignIn = null;
+// [accounts] see src/account/guestSession.js
+const guestSession = supabase ? createGuestSessionGuard({
+  getSession: ()=>getAuthSession(),
+  signInAnonymously: async()=>{
+    const { data, error } = await withTimeout(
+      supabase.auth.signInAnonymously(),
+      AUTH_TIMEOUT_MS,
+      "Guest sign-in timed out."
+    );
+    if(error) throw error;
+    return data.session;
+  },
+}) : null;
 // [accounts] The one sign-in: the shared account (platformSignIn.js). A guest
 // with history mints its handoff code on the way out. Resolves to an error
 // message, or null when the browser is leaving for the sign-in page.
@@ -1986,6 +1995,14 @@ async function dbDeleteGame(id){
 // ===== DB FUNCTIONS — PLAYERS =====
 async function dbGetOrCreatePlayer(user){
   if(OFFLINE_PREVIEW) return devCurrentPlayer();
+  // [accounts] Write the row for the user whose session will sign the request.
+  // Another tab may have replaced the stored session since `user` was read
+  // (a sign-out elsewhere, a guest created by a sibling tab); sbFetch always
+  // sends the stored session's token, so the id must come from the same place.
+  try{
+    const live = await getAuthSession();
+    if(live?.user) user = live.user;
+  }catch{ /* keep the user we were given */ }
   if(!user) return null;
   try{
     await sbFetch("/rest/v1/players", {
@@ -4524,8 +4541,21 @@ export default function WhatTheFudgeTrivia(){
             "Auth reload timed out."
           );
         }catch(e){
-          setError("Couldn't connect to server. Check your connection.");
-          console.error("[auth change] reload failed", e);
+          // [accounts] A sign-out in another tab can land here while the
+          // browser's tabs are still agreeing on the new guest. Ask once more
+          // for the (now shared) guest before giving up on the page.
+          console.error("[auth change] reload failed, retrying once", e);
+          try{
+            if(!active) return;
+            await withTimeout(
+              loadAppData(null,{recoverAuth:true}),
+              APP_BOOT_TIMEOUT_MS,
+              "Auth reload retry timed out."
+            );
+          }catch(retryError){
+            setError("Couldn't connect to server. Check your connection.");
+            console.error("[auth change] retry failed", retryError);
+          }
         }
       },0);
     });

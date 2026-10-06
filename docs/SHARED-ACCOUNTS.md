@@ -64,6 +64,7 @@ Auth users** who already own server rows (`players`, `game_records`,
 | `src/account/supabaseClient.js` | the one Supabase client (PKCE, no URL session detection) |
 | `src/account/platformSignIn.js` | sign-in (reachability probe, then the handoff offer, then the redirect), callback handling, provider-token removal, `ensureAccount`, `checkIsAdmin`, local sign-out, deletion |
 | `src/account/guestHandoff.js` | the pending code in sessionStorage; offer / resolve / import / decline |
+| `src/account/guestSession.js` | one guest per browser: guest creation serialised across tabs with the Web Locks API, re-reading the stored session inside the lock (fixes the multi-tab sign-out race; `guestSession.test.js` is the regression check) |
 | `src/account/safePath.js` | same-origin return path for the round trip |
 | `src/account/AuthCallback.jsx`, `ImportPrompt.jsx`, `account.css` | the callback page and the "Bring your progress with you?" prompt |
 | `src/main.jsx` | renders `AuthCallback` on `/auth/callback`, the game everywhere else |
@@ -109,7 +110,12 @@ refreshed on every sign-in). Never `auth.users.email`, never a key.
 
 **Sign out.** Local only (`signOut({scope:'local'})`); the WorkOS session and
 other games are untouched. Any pending handoff is forgotten. The browser then
-signs in anonymously again: a brand-new guest.
+signs in anonymously again: a brand-new guest. Every open tab of the game
+shares the stored session, so a sign-out reaches them all at once; they agree
+on ONE new guest (`guestSession.js`: a cross-tab lock, and the stored session
+is re-read inside it), the player row is written for the user whose session
+signs the request, and a reload that still fails is retried once before the
+error page is shown.
 
 **Delete account.** `delete_my_account()` removes favorites, plays, counters,
 admin rights, the account, the player and the auth user, then rebuilds the
