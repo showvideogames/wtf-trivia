@@ -4865,8 +4865,10 @@ export default function WhatTheFudgeTrivia(){
       <div className={`app${usesGameBackdrop?" cbd-page":""}${isGameplay?" gp-fullscreen":""}`}>
         {(isGameplay||usesGameBackdrop)&&<GameBackdrop/>}
         {/* One header for every player screen, never remounted between them,
-            so the bar and its logo never move. */}
-        <PlayerHeader/>
+            so the bar and its logo never move. Home and Archive pin it to
+            the top while they scroll; gameplay, Results and the rest keep
+            it in the normal flow. */}
+        <PlayerHeader sticky={view==="home"||view==="archive"}/>
         <div className="main">
           {view==="home"&&(
             <HomeScreen game={todayGame} gameRecord={todayRecord} stats={stats}
