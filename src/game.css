@@ -170,47 +170,13 @@
 @media (min-width: 600px) and (max-width: 1099px) { .gpd-tb { display: block; } }
 @media (max-width: 599px) { .gpd-ph { display: block; } }
 
-/* ===== REPLAY STATUS STRIP =====
-   Supporting status, not a button: one thin line that never wraps at 360px. */
-.gp-replay {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 5px 12px;
-  margin-bottom: 8px;
-  /* Status, not identity: a lighter, flatter strip than the matchup banner
-     below it, so the two never read as a matched pair of buttons. */
-  background: linear-gradient(180deg, #E4FBF7 0%, #CDF5EE 100%);
-  border: 1.5px solid rgba(15, 148, 136, 0.55);
-  border-radius: 999px;
-  font-family: 'Fredoka One', cursive;
-  font-size: 12.5px;
-  line-height: 1.2;
-  color: #0B5F57;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
 /* ===== MATCHUP BANNER =====
-   The puzzle's identity above the question: a small label, then one rounded,
-   outlined banner split between the two categories' saved colours (set
+   The puzzle's identity above the question (its label is visually hidden):
+   one rounded, outlined banner split between the two categories' saved colours (set
    inline as --mu-bg / --mu-ink), each name with its optional subtitle as a
    second line of the same half, and the yellow OR badge over the division.
    The halves have fixed heights so FitText (GameMatchup) can fit long names
    and subtitles to them instead of overflowing. */
-.gp-mu-label {
-  margin: 0 0 6px;
-  font-family: 'Fredoka One', cursive;
-  font-size: 13px;
-  line-height: 1.15;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  text-align: center;
-  color: var(--black);
-}
 .gp-mu-bar {
   position: relative;
   display: grid;
@@ -248,9 +214,12 @@
    shared size fits both. */
 .gp-mu-bar.has-sub .gp-mu-name { height: 24px; flex: none; }
 .gp-mu-sub { height: 24px; flex: none; }
-/* A long name with a subtitle: two lines for the name, then the subtitle. */
+/* A long name with a subtitle: two lines for the name, then the subtitle.
+   A name that still fits on one line keeps the one-line box, so each half's
+   block (name lines plus any subtitle) is centred on its own. */
 .gp-mu-bar.is-long { height: 80px; }
 .gp-mu-bar.has-sub.is-long .gp-mu-name { height: 44px; }
+.gp-mu-bar.has-sub.is-long .gp-mu-half[data-one-line] .gp-mu-name { height: 24px; }
 .gp-mu-or {
   position: absolute;
   left: 50%;
@@ -357,10 +326,11 @@
 .gp-clue-text.xs { font-size: clamp(22px, 6.6vw, 28px); }
 
 /* ===== QUESTION MODULE =====
-   Under the question: the mystery panel, then the two choices. Both have
-   fixed responsive sizes, never sized from the leftover screen height, so a
-   tall phone shows the same game as a normal one (with backdrop below) and a
-   very short phone simply scrolls rather than squashing anything.
+   Under the question: the mystery panel, then the two choices. The choices
+   have one height per viewport, so they never change between questions; the
+   mystery panel is the one part that gives way when the screen is short (see
+   QUESTION ON ONE SCREEN below). A tall screen shows the same game as a
+   normal one, with backdrop below.
 
    The mystery panel is a supporting placeholder for the media the reveal
    will show: a short, full-width outlined cream panel with the rays and the
@@ -550,6 +520,74 @@
   .gp-wrap.gp-q {
     padding-bottom: max(18px, calc(env(safe-area-inset-bottom, 0px) + 8px));
   }
+}
+
+/* ===== QUESTION ON ONE SCREEN =====
+   During a question .app.gp-fullscreen has a hard 100dvh height (App.jsx
+   styles), and the Admin Preview stage fills the window below its header,
+   so .gp-wrap is a flex column with a real ceiling: the header, banner,
+   progress, question and choices keep their natural sizes, and the mystery
+   panel shrinks, down to a small minimum, to absorb whatever is short. The
+   gaps between them also tighten on shorter screens. If even that can't fit
+   (very large text, a tiny window), the stack overflows and the page
+   scrolls; nothing is clipped. */
+.gp-wrap.gp-q {
+  --gp-gap: 11px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.gp-wrap.gp-q > * { flex: 0 0 auto; }
+.gp-wrap.gp-q > .gp-qmod {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.gp-wrap.gp-q .gp-progress { margin-top: var(--gp-gap); }
+.gp-wrap.gp-q .gp-clue-text { margin-top: var(--gp-gap); }
+.gp-wrap.gp-q > .gp-qmod { margin-top: var(--gp-gap); }
+.gp-qmod > .gp-mystery {
+  flex: 0 1 auto;
+  min-height: 56px;
+}
+.gp-wrap .gp-qmod > .ans-btns {
+  flex: none;
+  margin-top: var(--gp-gap);
+}
+/* Height-aware sizes, where the viewport units exist (custom properties
+   don't fall back, so these are kept out of older browsers' way):
+   - the gaps tighten a little on shorter screens;
+   - the answer buttons keep their full height down to 600px of available
+     height (720px from tablet up) and only then step down, to 156px at the
+     least. That is the last resort, after the gaps and the mystery panel;
+     it depends only on the screen, so the buttons never change size from
+     one question to the next. */
+@supports (height: 100dvh) {
+  .gp-wrap.gp-q {
+    --gp-gap: clamp(6px, 1.6dvh, 13px);
+    padding-top: clamp(6px, 1.4dvh, 12px);
+  }
+  .gp-wrap.gp-q .ans-box {
+    --gp-ans-h: clamp(156px, calc(208px - (600px - 100dvh) * 0.6), 208px);
+  }
+  /* The Admin Preview stage is phone-width at every window size, so its
+     buttons follow the phone height, starting to step down a little sooner
+     to allow for the preview's own header and frame. */
+  .adm-preview-stage .gp-wrap.gp-q .ans-box {
+    --gp-ans-h: clamp(156px, calc(208px - (660px - 100dvh) * 0.6), 208px);
+  }
+}
+/* Admin Preview: the stage takes the window below the preview header and
+   passes its height down to the game. */
+.adm-preview:has(.gp-wrap.gp-q) {
+  height: 100vh;
+  height: 100dvh;
+}
+.adm-preview-stage:has(> .gp-wrap.gp-q) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ===== RESULT BANNER ===== */
@@ -1087,7 +1125,6 @@
    it wins on equal specificity; the short-viewport tiers below still refine
    it. */
 @media (max-width: 599px) {
-  .gp-replay { min-height: 0; padding: 3px 10px; margin-bottom: 6px; font-size: 11.5px; }
   .gp-verdict { min-height: 0; padding: 5px 12px; margin-bottom: 7px; border-width: 3px; }
   .gp-verdict.ok { box-shadow: 0 4px 0 #093B1D, 0 10px 16px -10px rgba(9, 59, 29, 0.55); }
   .gp-verdict.no { box-shadow: 0 4px 0 #640A2A, 0 10px 16px -10px rgba(100, 10, 42, 0.5); }
@@ -1112,7 +1149,6 @@
    The density work above is aimed at phones. From tablet up the same layout
    is allowed to relax again. */
 @media (min-width: 600px) {
-  .gp-replay { min-height: 36px; font-size: 14px; margin-bottom: 12px; }
   .gp-dots { gap: 7px; }
   .gp-verdict { padding: 12px 20px; min-height: 60px; margin-bottom: 14px; }
   .gp-media { margin-bottom: 14px; --gp-media-cap: min(400px, 28vh); }
@@ -1152,7 +1188,6 @@
    around it (padding, the two panels' own separate borders) gives the rest of
    the ground. */
 @media (max-height: 700px) and (max-width: 599px) {
-  .gp-replay { margin-bottom: 3px; }
   .gp-media { margin-bottom: 5px; }
   .gp-verdict { padding: 3px 10px; margin-bottom: 5px; }
   .gp-verdict-emoji { font-size: 18px; }
@@ -1191,16 +1226,14 @@
   .gp-wrap { padding: 12px 12px 24px; }
   .gp-wrap .ans-btns { gap: 10px; }
   .gp-dots { gap: 4px; }
-  .gp-replay { font-size: 11.5px; padding: 4px 9px; }
 }
 
-/* Narrow AND short at once (360x640 and similar): the bottom padding and the
-   replay strip's padding above are room the fixed game screen can't always
-   spare. Placed after the narrow-phone block above so it wins on the
-   properties both touch, regardless of which media query matched second. */
+/* Narrow AND short at once (360x640 and similar): the bottom padding is
+   room the fixed game screen can't always spare. Placed after the
+   narrow-phone block above so it wins on the properties both touch,
+   regardless of which media query matched second. */
 @media (max-width: 599px) and (max-height: 700px) {
   .gp-wrap { padding-bottom: 10px; }
-  .gp-replay { padding: 1px 8px; font-size: 10.5px; }
 }
 
 /* ===== DESKTOP AND TABLET GAME STACK =====
@@ -1210,7 +1243,6 @@
    inside the window), centred under the panel. */
 @media (min-width: 600px) {
   .gp-wrap { padding-top: 16px; }
-  .gp-mu-label { font-size: 14px; margin-bottom: 8px; }
   .gp-mu-bar { height: 72px; border-radius: 24px; }
   .gp-mu-half { padding: 4px 32px 4px 16px; }
   .gp-mu-b { padding: 4px 16px 4px 32px; }
@@ -1218,6 +1250,7 @@
   .gp-mu-sub { height: 29px; }
   .gp-mu-bar.is-long { height: 94px; }
   .gp-mu-bar.has-sub.is-long .gp-mu-name { height: 51px; }
+  .gp-mu-bar.has-sub.is-long .gp-mu-half[data-one-line] .gp-mu-name { height: 29px; }
   .gp-mu-or { width: 50px; height: 50px; font-size: 19px; }
   .gp-progress { margin-top: 16px; gap: 8px; }
   .gp-qpill { font-size: 14px; padding: 4px 16px 3px; }
@@ -1239,12 +1272,23 @@
     margin-top: 14px;
   }
   .gp-qmod .ans-box { --gp-ans-h: 240px; }
+  .gp-wrap.gp-q { --gp-gap: 14px; }
+  .gp-qmod > .gp-mystery { min-height: 72px; }
   .gp-reveal { margin-top: 16px; }
 }
-/* Shorter desktop windows (1024x768 and similar): a shallower mystery
-   panel keeps the fixed-size choices on screen. */
-@media (min-width: 600px) and (max-height: 820px) {
-  .gp-qmod > .gp-mystery { height: 150px; }
+@supports (height: 100dvh) {
+  @media (min-width: 600px) {
+    .gp-wrap.gp-q {
+      --gp-gap: clamp(8px, 1.8dvh, 16px);
+      padding-top: clamp(8px, 1.8dvh, 16px);
+    }
+    .gp-wrap.gp-q .ans-box {
+      --gp-ans-h: clamp(176px, calc(240px - (720px - 100dvh) * 0.6), 240px);
+    }
+    .adm-preview-stage .gp-wrap.gp-q .ans-box {
+      --gp-ans-h: clamp(156px, calc(208px - (660px - 100dvh) * 0.6), 208px);
+    }
+  }
 }
 /* The wide desktop buttons carry larger labels (see GameScreen's label
    ceiling), so their label band has room for two lines at that size. */

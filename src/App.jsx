@@ -242,11 +242,17 @@ const styles = `
     align-items: center;
   }
 
-  /* The reveal is one fixed screen on phones: a hard dynamic-viewport height
-     (not the min-height every other screen uses) is what lets the flex chain
-     in game.css shrink the reveal media to fit, so Next stays on screen. The
-     question phase has fixed-size parts and simply scrolls on a very short
-     phone. Desktop/tablet keep the ordinary flow. */
+  /* A hard dynamic-viewport height (not the min-height every other screen
+     uses) is what lets the flex chain in game.css shrink the flexible part of
+     the game to fit the screen actually available, mobile browser toolbars
+     included: the mystery panel during a question (every width), the reveal
+     media on phones. Content that still can't fit (very large text, a tiny
+     window) overflows and the page scrolls, rather than being clipped. */
+  .app.gp-fullscreen:has(.gp-wrap.gp-q) {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+  }
   @media (max-width: 599px) {
     .app.gp-fullscreen:has(.gp-wrap.gp-r) {
       height: 100dvh;
@@ -2832,8 +2838,8 @@ function HomeErrorPage({detail,onRetry}){
 
 // ---- GAME ----
 
-// The puzzle's identity above the question: a small label, then one rounded
-// banner split between the two categories' saved colours, each name on its
+// The puzzle's identity above the question (its label is for screen readers
+// only): one rounded banner split between the two categories' saved colours, each name on its
 // own half with its optional subtitle as a second line ("Led Zeppelin" /
 // "Song"), and the yellow OR badge over the division. Every line is fitted
 // with FitText and all of them show the smallest fitted size, so a name and
@@ -2873,12 +2879,28 @@ function GameMatchup({game,label}){
   // One size for every line of the banner: the smallest that any name or
   // subtitle needs, so a subtitle reads as the second line of the same
   // label rather than smaller supporting text, and the halves match.
-  const fits=[nameFit.A,nameFit.B,...(withSub?[subFit.A,subFit.B]:[])];
+  const fits=[nameFit.A,nameFit.B,...sides.filter(x=>x.sub).map(x=>subFit[x.cat])];
   const lineSize=fits.every(Boolean)?Math.min(...fits):undefined;
+  // Each half centres its own text block: its name's lines plus its subtitle
+  // if it has one. In the long layout a name that still fits on one line
+  // gets the ordinary one-line box rather than the two-line one, so it sits
+  // on the middle of the other half's two-line block, not its first line.
+  // Marked straight on the element (data-one-line, which React doesn't
+  // manage), since it is a measurement of the rendered text.
+  const barRef=useRef(null);
+  useLayoutEffect(()=>{
+    for(const half of barRef.current?.querySelectorAll(".gp-mu-half")||[]){
+      const el=half.querySelector(".gp-mu-name .fit-text-content");
+      const lh=el&&parseFloat(getComputedStyle(el).lineHeight);
+      const one=Boolean(longName&&lineSize&&lh&&el.getBoundingClientRect().height<lh*1.5);
+      half.toggleAttribute("data-one-line",one);
+    }
+  },[longName,lineSize,game.categoryA,game.categoryB]);
   return(
     <section className="gp-mu" aria-labelledby={id}>
-      <p className="gp-mu-label" id={id}>{label}</p>
-      <div className={`gp-mu-bar${withSub?" has-sub":""}${longName?" is-long":""}`}>
+      {/* The label names the banner for assistive tech only. */}
+      <p className="gp-sr" id={id}>{label}</p>
+      <div ref={barRef} className={`gp-mu-bar${withSub?" has-sub":""}${longName?" is-long":""}`}>
         {sides.map((x,i)=>(
           <Fragment key={x.cat}>
             {i===1&&<span className="gp-sr"> or </span>}
@@ -2886,9 +2908,9 @@ function GameMatchup({game,label}){
                  style={{"--mu-bg":x.color.mid,"--mu-edge":x.color.dark,"--mu-ink":x.color.isDark?"#fff":"var(--black)"}}>
               <FitText className="gp-mu-name" min={11} max={roomy?26:20} oneLine={withSub&&!longName} buffer={2}
                 onFit={size=>setNameFit(f=>shared(f,x.cat,size))} forceSize={lineSize}>{x.name}</FitText>
-              {withSub&&(
+              {x.sub&&(
                 <FitText className="gp-mu-sub" min={11} max={roomy?26:20} oneLine buffer={2}
-                  onFit={size=>setSubFit(f=>shared(f,x.cat,size))} forceSize={lineSize}>{x.sub||" "}</FitText>
+                  onFit={size=>setSubFit(f=>shared(f,x.cat,size))} forceSize={lineSize}>{x.sub}</FitText>
               )}
             </div>
           </Fragment>
@@ -3190,11 +3212,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
       <canvas ref={canvasRef} id="confetti-canvas" style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:9999}}/>
       {reaction&&<ReactionOverlay emoji={reaction}/>}
 
-      {isReplay&&(
-        <div className="gp-replay" role="status">
-          <span aria-hidden="true">📼</span> Replay mode — scores aren&rsquo;t saved
-        </div>
-      )}
+      {/* No replay strip here: Results says a replay isn’t saved. */}
 
       {/* One connected stack above the choices or the reveal: the matchup,
           the progress, then the question itself, set straight on the page.

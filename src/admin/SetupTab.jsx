@@ -82,7 +82,6 @@ function NameInput({row, side, game, set, color}){
 // share text, drawn from the same values gameplay and the share formatter use.
 function NamesPreview({game, colorA, colorB}){
   const sides = [["A", colorA], ["B", colorB]];
-  const anySub = sides.some(([s])=>normalizeShareLabel(game[`category${s}Subtitle`]));
   return(
     <div className="ps-names-preview" aria-label="Where the names appear">
       <div className="ps-np-block">
@@ -91,7 +90,7 @@ function NamesPreview({game, colorA, colorB}){
           {sides.map(([s, c])=>(
             <div key={s} className="ps-np-half" style={{"--np-bg":c.mid, "--np-ink":c.isDark?"#fff":"#1A1A1A"}}>
               <span>{game[`category${s}`]||`Category ${s}`}</span>
-              {anySub&&<span>{normalizeShareLabel(game[`category${s}Subtitle`])||" "}</span>}
+              {normalizeShareLabel(game[`category${s}Subtitle`])&&<span>{normalizeShareLabel(game[`category${s}Subtitle`])}</span>}
             </div>
           ))}
           <span className="ps-np-or" aria-hidden="true">OR</span>
