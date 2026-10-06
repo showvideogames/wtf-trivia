@@ -123,6 +123,8 @@ export function failureReason(failure) {
     case "http": return isBrokenLink(failure) ? `The link is broken (the website returned ${failure.status}).` : `The website hosting it returned an error (${failure.status}).`;
     case "not-image": return "The link doesn't point to an image.";
     case "optimize": return failure.reason || "The image couldn't be processed.";
+    case "upload-auth": return "Storage refused the copy because this browser isn't signed in to an admin account. Sign in with your admin account, then publish again.";
+    case "upload-network": return "Image storage couldn't be reached. Check your connection, then publish again.";
     case "upload": return "Saving the copy to storage failed. Publishing again may work.";
     default: return failure.reason || "Unknown error.";
   }

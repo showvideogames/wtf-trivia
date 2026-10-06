@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Icon from "./Icon.jsx";
 import { useStudio } from "./StudioContext.js";
+import { isAccessProblem, uploadFailureMessage } from "./adminAccess.js";
 
 // ============================================================
 // IMAGE FIELD — upload a file or paste a link, with live preview
@@ -13,13 +14,17 @@ import { useStudio } from "./StudioContext.js";
 // With an image already set, the field is a compact card (thumbnail,
 // Replace, Remove). The full uploader opens only when there is no image or
 // Replace is pressed, and closes again once a new image is in.
+//
+// Uploading needs a signed-in admin account. While the Studio can't write
+// (canWrite false: a guest, a non-admin, or still checking) no upload is
+// started, and a refused upload says so instead of blaming the connection.
 const UPLOAD_FOLDERS = {header:"headers", question:"questions", category:"categories"};
 const UPLOAD_STAGE_COPY = {checking:"Checking image…", optimizing:"Optimizing image…", uploading:"Uploading…"};
 const UPLOAD_ACCEPT = "image/jpeg,image/png,image/webp";
 function roughBytes(n){return n<1024*1024?`${Math.max(1,Math.round(n/1024))} KB`:`${(n/1024/1024).toFixed(1)} MB`;}
 
 export default function ImageField({value:rawValue, onChange, label, labelNote, preset="question", allowYouTube=false, onBusyChange, fieldId, layout="row"}){
-  const {uploadBytes, isStoredImage, youtubeEmbedUrl, loadOptimizer} = useStudio();
+  const {uploadBytes, isStoredImage, youtubeEmbedUrl, loadOptimizer, canWrite=true, onAccessProblem} = useStudio();
   const value = typeof rawValue==="string" ? rawValue : "";
   const isUploadedValue = v=>Boolean(v) && (v.startsWith("data:") || v.startsWith("blob:") || isStoredImage(v));
   const[tab,setTab]=useState(value&&!isUploadedValue(value)?"url":"upload");
@@ -58,6 +63,7 @@ export default function ImageField({value:rawValue, onChange, label, labelNote, 
   };
 
   const upload=async job=>{
+    if(!canWrite) return;
     busyRef.current=true;
     setError(null);
     setStage("uploading");
@@ -71,8 +77,11 @@ export default function ImageField({value:rawValue, onChange, label, labelNote, 
       onChange(url);
     }catch(err){
       console.error(err);
+      // A refused upload means the account changed or lost admin access:
+      // the Studio re-checks and pauses writes until it's back.
+      if(isAccessProblem(err?.code)) onAccessProblem?.();
       if(!mountedRef.current) return;
-      setError({message:`Upload failed, so ${value?"your current image is unchanged":"nothing was saved"}. Check your connection and try again.`, retry:true});
+      setError({message:uploadFailureMessage(err, Boolean(value)), retry:true});
     }finally{
       busyRef.current=false;
       if(mountedRef.current) setStage(null);
@@ -80,7 +89,7 @@ export default function ImageField({value:rawValue, onChange, label, labelNote, 
   };
 
   const processFile=async f=>{
-    if(!f||busyRef.current) return;
+    if(!f||busyRef.current||!canWrite) return;
     busyRef.current=true;
     setError(null);
     setStage("checking");
@@ -121,7 +130,7 @@ export default function ImageField({value:rawValue, onChange, label, labelNote, 
     processFile(e.dataTransfer?.files?.[0]);
   };
 
-  const retry=()=>{ if(pending&&!busyRef.current) upload(pending); };
+  const retry=()=>{ if(pending&&!busyRef.current&&canWrite) upload(pending); };
   const dismissError=()=>{ setError(null); replacePending(null); };
   const chooseAnother=()=>{ setError(null); replacePending(null); setTab("upload"); setReplacing(true); fileRef.current?.click(); };
 
@@ -166,7 +175,7 @@ export default function ImageField({value:rawValue, onChange, label, labelNote, 
   return(
     <div id={fieldId} className={`ps-media ps-media-${layout} ps-media-${preset}`}>
       {/* Always mounted, so "Choose another file" can open it from any state. */}
-      <input ref={fileRef} type="file" accept={UPLOAD_ACCEPT} onChange={handleFile} disabled={busy} hidden/>
+      <input ref={fileRef} type="file" accept={UPLOAD_ACCEPT} onChange={handleFile} disabled={busy||!canWrite} hidden/>
       {label&&<div className="ps-label">{label}{labelNote&&<span className="ps-label-note"> {labelNote}</span>}</div>}
 
       {busy&&(
@@ -209,14 +218,14 @@ export default function ImageField({value:rawValue, onChange, label, labelNote, 
           </div>
 
           {tab==="upload"&&(
-            <div className={`ps-drop${dragOver?" is-over":""}`}
+            <div className={`ps-drop${dragOver&&canWrite?" is-over":""}${canWrite?"":" is-locked"}`}
                  onDragOver={e=>{e.preventDefault();if(!dragOver)setDragOver(true);}}
                  onDragLeave={()=>setDragOver(false)}
                  onDrop={handleDrop}>
               <Icon name="image" size={26}/>
               <div className="ps-drop-title">Drag and drop an image here</div>
-              <div className="ps-drop-hint">JPEG, PNG or WebP · Resized and compressed automatically</div>
-              <button type="button" className="ps-btn ps-btn-sm ps-drop-choose" onClick={()=>fileRef.current?.click()}>Choose image</button>
+              <div className="ps-drop-hint">{canWrite?"JPEG, PNG or WebP · Resized and compressed automatically":"Uploads need a signed-in admin account (see the notice above)."}</div>
+              <button type="button" className="ps-btn ps-btn-sm ps-drop-choose" onClick={()=>fileRef.current?.click()} disabled={!canWrite}>Choose image</button>
             </div>
           )}
 
@@ -247,8 +256,8 @@ export default function ImageField({value:rawValue, onChange, label, labelNote, 
         <div className="ps-alert is-error ps-media-error" role="alert">
           <div>{error.message}</div>
           <div className="ps-alert-actions">
-            {error.retry&&pending&&<button type="button" className="ps-btn ps-btn-sm ps-btn-primary" onClick={retry}>Try again</button>}
-            <button type="button" className="ps-btn ps-btn-sm" onClick={chooseAnother}>Choose another file</button>
+            {error.retry&&pending&&<button type="button" className="ps-btn ps-btn-sm ps-btn-primary" onClick={retry} disabled={!canWrite}>Try again</button>}
+            <button type="button" className="ps-btn ps-btn-sm" onClick={chooseAnother} disabled={!canWrite}>Choose another file</button>
             <button type="button" className="ps-btn ps-btn-sm ps-btn-quiet" onClick={dismissError}>Dismiss</button>
           </div>
         </div>

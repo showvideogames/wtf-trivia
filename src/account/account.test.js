@@ -368,3 +368,22 @@ describe("U8 safeInternalPath", () => {
     expect(safeInternalPath("/" + "a".repeat(600), o)).toBe("/");
   });
 });
+
+// ── U10 the Studio's admin check ──
+describe("U10 checkAdminStatus / checkIsAdmin", () => {
+  it("says admin only when the server says true; 'no' and 'no answer' are told apart", async () => {
+    const m = await import("./platformSignIn.js");
+    fake.rpc.mockImplementation(async () => ({ data: true, error: null }));
+    expect(await m.checkAdminStatus()).toBe("admin");
+    expect(await m.checkIsAdmin()).toBe(true);
+    expect(fake.rpc).toHaveBeenCalledWith("is_wtf_admin");
+    fake.rpc.mockImplementation(async () => ({ data: false, error: null }));
+    expect(await m.checkAdminStatus()).toBe("not_admin");
+    expect(await m.checkIsAdmin()).toBe(false);
+    fake.rpc.mockImplementation(async () => ({ data: null, error: { message: "fetch failed" } }));
+    expect(await m.checkAdminStatus()).toBe("unavailable");
+    expect(await m.checkIsAdmin()).toBe(false);
+    fake.rpc.mockImplementation(async () => { throw new TypeError("Failed to fetch"); });
+    expect(await m.checkAdminStatus()).toBe("unavailable");
+  });
+});

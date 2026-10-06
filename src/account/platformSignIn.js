@@ -154,15 +154,25 @@ export async function ensureAccount() {
   return { ok: false, account: null, reason: "unavailable", message: "No account row was returned." };
 }
 
-/** Whether the signed-in account may write official content (the database enforces it regardless). */
-export async function checkIsAdmin() {
-  if (!supabase) return false;
+/**
+ * The server's answer to "may this session write official content?":
+ * "admin" | "not_admin" | "unavailable" (the question didn't get an answer,
+ * which is not the same as "no"). The database enforces it regardless.
+ */
+export async function checkAdminStatus() {
+  if (!supabase) return "unavailable";
   try {
     const { data, error } = await supabase.rpc("is_wtf_admin");
-    return !error && data === true;
+    if (error) return "unavailable";
+    return data === true ? "admin" : "not_admin";
   } catch {
-    return false;
+    return "unavailable";
   }
+}
+
+/** Whether the signed-in account may write official content (the database enforces it regardless). */
+export async function checkIsAdmin() {
+  return (await checkAdminStatus()) === "admin";
 }
 
 /**

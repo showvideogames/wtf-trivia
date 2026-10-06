@@ -186,6 +186,15 @@
 .ps-alert.is-error { background: var(--ps-red-wash); border: 1px solid #EFA69D; color: #7E1A12; }
 .ps-alert-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 
+/* The Studio needs a signed-in admin account (AdminAccessNotice.jsx). */
+.ps-access { color: var(--ps-ink-2); }
+.ps-access.is-gate { max-width: 560px; width: 100%; margin: 24px auto 0; padding: 22px 24px; }
+.ps-access.is-banner { margin-bottom: 18px; padding: 14px 18px; border-radius: 18px; border: 1px solid #E6C35A; background: var(--ps-amber-wash); }
+.ps-access-title { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 800; color: var(--ps-ink); }
+.ps-access-body { margin-top: 6px; font-size: 14px; line-height: 1.45; }
+.ps-access-error { margin-top: 8px; font-size: 14px; font-weight: 700; color: var(--ps-red-ink); }
+.ps-drop.is-locked { opacity: 0.7; }
+
 .ps-warn {
   margin-bottom: 18px;
   padding: 14px 18px;

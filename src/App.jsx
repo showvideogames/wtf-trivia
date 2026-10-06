@@ -5,7 +5,8 @@ import { Fragment, useState, useEffect, useLayoutEffect, useRef, useCallback, us
 // Every touch point in this file is marked "[accounts]".
 import { SUPABASE_URL as SB_URL, SUPABASE_KEY as SB_KEY, SUPABASE_CONFIGURED as SUPABASE_READY, ACCOUNTS_ENABLED, announceConfiguration } from "./game/config.js";
 import { supabase } from "./account/supabaseClient.js";
-import { checkIsAdmin, deleteMyAccount, ensureAccount, signInWithPlatform, signOutOfWtf } from "./account/platformSignIn.js";
+import { checkAdminStatus, deleteMyAccount, ensureAccount, signInWithPlatform, signOutOfWtf } from "./account/platformSignIn.js";
+import { StorageUploadError, canWriteAs, classifyStorageFailure, copyFailureCode } from "./admin/adminAccess.js";
 import { declinePendingHandoff, importPendingHandoff, resolvePendingHandoff } from "./account/guestHandoff.js";
 import { createGuestSessionGuard } from "./account/guestSession.js";
 import { ensurePlayerRow, isAnonymousUser } from "./account/playerRow.js";
@@ -43,9 +44,11 @@ import { emptyFavorites, toggleFavorite } from "./archiveFavorites.js";
 import ArchiveTopicFilter from "./ArchiveTopicFilter.jsx";
 import ArchiveSortMenu from "./ArchiveSortMenu.jsx";
 import ArchiveFavoriteButton from "./ArchiveFavoriteButton.jsx";
-import { normalizeEditorDraft, restoreEditorDraft } from "./admin/editorDraft.js";
+import { editorDraftKey, normalizeEditorDraft, restoreEditorDraft } from "./admin/editorDraft.js";
 import { histogramBuckets } from "./scoreHistogram.js";
 import { StudioContext, paletteColor } from "./admin/StudioContext.js";
+import AdminAccessNotice from "./admin/AdminAccessNotice.jsx";
+import { clearAdminResume, prepareSignInFromEditor, saveEditorDraftVerified, takeAdminResume, writeAdminResume } from "./admin/signInResume.js";
 import { localDateFromISO } from "./admin/adminDates.js";
 import { findDateConflict } from "./admin/dashboardGroups.js";
 import { firstBlankItem, followMove, moveQuestion, questionCountOk, questionKey } from "./admin/questionStatus.js";
@@ -1748,6 +1751,25 @@ async function authResolveAccount(session){
   if(result.reason==="not_platform_linked") return { session: await authEnsureSession(), account:null, notice: result.message };
   return { session, account:null, notice: result.message };
 }
+// [accounts] The Studio's access (admin/adminAccess.js) for a resolved
+// session: only a confirmed WTF account is asked whether it is an admin; a
+// guest is a guest; a non-guest that couldn't be confirmed is "unavailable".
+async function resolveAdminStatus(resolved){
+  if(OFFLINE_PREVIEW) return "admin";
+  if(resolved?.account) return checkAdminStatus();
+  const user = resolved?.session?.user;
+  return user && !isAnonymousUser(user) ? "unavailable" : "guest";
+}
+// The same question for whatever session is stored right now (after a
+// refused write, or Retry). An unconfirmed account reads as not an admin,
+// which is all the server will let it do.
+async function currentAdminStatus(){
+  if(OFFLINE_PREVIEW) return "admin";
+  let session;
+  try{ session = await getAuthSession(); }catch{ return "unavailable"; }
+  if(!session?.user || isAnonymousUser(session.user)) return "guest";
+  return checkAdminStatus();
+}
 function authSubscribe(onChange){
   if(OFFLINE_PREVIEW) return { data: { subscription: { unsubscribe(){} } } };
   if(!supabase) return { data: { subscription: { unsubscribe(){} } } };
@@ -1834,22 +1856,32 @@ async function uploadBytesToStorage(body, mime, folder="images"){
   const cleanMime = mime || "image/png";
   const ext = (cleanMime.split("/")[1] || "png").replace(/[^a-z0-9]/gi,"").replace(/^jpeg$/,"jpg") || "png";
   const filename = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  // Uploads need a signed-in admin account (0003_wtf_admin_gate.sql). A
+  // guest or a missing session can never succeed, so nothing is sent, and
+  // there is no retry with the public key: it is always refused too, and
+  // its error used to replace the real one. Every failure is a tagged
+  // StorageUploadError (admin/adminAccess.js) so the Studio can say why.
   let session = null;
-  try{ session = await getAuthSession(); }catch{}
-  const postWithToken = token=>fetch(`${SB_URL}/storage/v1/object/${STORAGE_BUCKET}/${filename}`, {
-    method:"POST",
-    headers:{
-      "apikey": SB_KEY,
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": cleanMime,
-      // Every upload gets a new, never-reused name, so it can be cached for a year.
-      "Cache-Control": "max-age=31536000"
-    },
-    body
-  });
-  let res = await postWithToken(session?.access_token || SB_KEY);
-  if(!res.ok && session?.access_token) res = await postWithToken(SB_KEY);
-  if(!res.ok) throw new Error(`Image upload failed: ${await res.text()}`);
+  try{ session = await getAuthSession(); }
+  catch(e){ throw new StorageUploadError("network", {detail:e?.message||"Session check failed."}); }
+  if(!session?.access_token || isAnonymousUser(session.user)) throw new StorageUploadError("signed-out", {detail:"No admin account session."});
+  let res;
+  try{
+    res = await fetch(`${SB_URL}/storage/v1/object/${STORAGE_BUCKET}/${filename}`, {
+      method:"POST",
+      headers:{
+        "apikey": SB_KEY,
+        "Authorization": `Bearer ${session.access_token}`,
+        "Content-Type": cleanMime,
+        // Every upload gets a new, never-reused name, so it can be cached for a year.
+        "Cache-Control": "max-age=31536000"
+      },
+      body
+    });
+  }catch(e){
+    throw new StorageUploadError("network", {detail:e?.message||"The request failed."});
+  }
+  if(!res.ok) throw classifyStorageFailure(res.status, await res.text().catch(()=>""));
   return `${STORAGE_PUBLIC_PREFIX}${filename}`;
 }
 // An error from copying one image, tagged so the Admin can say why in plain
@@ -1877,7 +1909,7 @@ async function uploadImage(dataUri, folder="images"){
 }
 async function uploadCopy(body, mime, folder){
   try{ return await uploadBytesToStorage(body, mime, folder); }
-  catch(e){ console.error(e); throw imageCopyError("upload"); }
+  catch(e){ console.error(e); throw imageCopyError(copyFailureCode(e), {status:e?.status??null}); }
 }
 // The admin-only optimizer, fetched the first time an image is processed so
 // it never ships in the player bundle.
@@ -1976,6 +2008,11 @@ async function dbSaveGame(game){
   return { game: saved, imageFailures: failures };
 }
 // A short, plain reason for a failed database write.
+// A database write refused for this account (not a connection problem).
+function isPermissionError(e){
+  const status = String(e?.message||"").match(/Supabase error (\d{3})/)?.[1];
+  return status==="401"||status==="403";
+}
 function describeSaveError(e){
   const msg = String(e?.message||"");
   if(/Failed to fetch|NetworkError|Load failed/i.test(msg)) return "the database couldn't be reached. Check your connection.";
@@ -2298,7 +2335,7 @@ function formatAccountLabel(email){
   if(parts.length!==2) return `${email.slice(0,15)}...`;
   return `${parts[0].slice(0,10)}...@${parts[1]}`;
 }
-function getEditorDraftKey(id){return `wtf-editor-draft:${id||"unsaved"}`;}
+const getEditorDraftKey = editorDraftKey;
 function loadEditorDraft(game){
   if(!game?.id) return game;
   return restoreEditorDraft(game, safeRead(getEditorDraftKey(game.id)));
@@ -3935,6 +3972,10 @@ function AccountScreen({player,accountsOn,notice,onNav,onSignIn,onSignOut,onDele
 // sign-in is remembered for this browser tab, so a refresh stays signed in.
 const ADMIN_PATH = "/admin";
 const ADMIN_SESSION_KEY = "wtf-admin-in";
+// The puzzle open in the editor when the admin left to sign in is reopened
+// on the way back (same tab), its edits restored from the on-device draft
+// (admin/signInResume.js).
+const WRITES_PAUSED = "Saving is paused: Puzzle Studio needs a signed-in admin account. Your changes are still here.";
 const isAdminPath = ()=>window.location.pathname.replace(/\/+$/,"")===ADMIN_PATH;
 const readAdminSession = ()=>{ try { return sessionStorage.getItem(ADMIN_SESSION_KEY)==="1"; } catch { return false; } };
 const writeAdminSession = on=>{ try { if(on) sessionStorage.setItem(ADMIN_SESSION_KEY,"1"); else sessionStorage.removeItem(ADMIN_SESSION_KEY); } catch { /* storage blocked */ } };
@@ -3999,8 +4040,12 @@ function savedAgo(at, now){
 
 const BLANK_QUESTION = {itemText:"",correctCategory:"A",flavorCopy:"",explanationCopy:"",imageUrl:"",imageAlt:"",imageSource:""};
 
-function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
+// access: {canWrite, status, email, busy, error, onSignIn, onSignOut, onRetry}
+// from the root. Without admin access the editor stays open with every edit
+// kept, and Save, Publish, Retire, Delete and uploads are paused.
+function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   const inDb=(games||[]).some(g=>g.id===ig.id);
+  const canWrite=access?.canWrite??true;
   const[game,setGame]=useState(()=>loadEditorDraft(ig));
   const[tab,setTab]=useState("setup");
   const[selected,setSelected]=useState(0); // question index, or null
@@ -4091,6 +4136,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
   // database confirmed it. Saving keeps a published or retired puzzle's status.
   const save=async (publish, retire=false)=>{
     if(saving) return;
+    if(!canWrite){ say("error", WRITES_PAUSED); return; }
     const status = retire ? "retired" : publish||published ? "published" : retired ? "retired" : "draft";
     const s={...game,status};
     if(!s.id)s.id=`g-${Date.now()}`;
@@ -4128,6 +4174,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
     const ask = published||retired
       ? `Delete "${game.themeTitle||"this puzzle"}"? This only works if nobody has played it yet. The puzzle and all its questions will be removed. This can't be undone.`
       : `Delete "${game.themeTitle||"this draft"}"? The puzzle and all its questions will be removed. This can't be undone.`;
+    if(!canWrite){ say("error", WRITES_PAUSED); return; }
     if(!window.confirm(ask)) return;
     try{ await onDelete(game.id); }
     catch(e){ say("error", e?.message || "The puzzle wasn't deleted."); }
@@ -4135,6 +4182,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
   // Once anyone has played a puzzle it can't be deleted (the database
   // refuses): retiring hides it from players and frees its date instead.
   const retireGame=async()=>{
+    if(!canWrite){ say("error", WRITES_PAUSED); return; }
     if(dirty){ say("error","Publish or undo your changes before retiring this puzzle."); return; }
     if(!window.confirm(`Retire "${game.themeTitle||"this puzzle"}"? Players will stop seeing it and its date becomes free. Its plays and stats are kept, and you can publish it again later.`)) return;
     await save(false, true);
@@ -4225,6 +4273,20 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
     });
     return ()=>cancelAnimationFrame(id);
   },[focusImage,selected,tab]);
+  // Signing in leaves the page, so the edits go into the on-device draft
+  // copy first (published puzzles too, just this once) and the root reopens
+  // this puzzle on the way back, where loadEditorDraft restores them. Both
+  // are read back; if either didn't stick, sign-in doesn't start and the
+  // editor stays exactly as it is.
+  const signInKeepingEdits=()=>{
+    const ready = prepareSignInFromEditor({
+      hasEdits: dirty||!inDb,
+      saveDraft: ()=>saveEditorDraftVerified(game),
+      saveResume: ()=>writeAdminResume(ig),
+    });
+    if(!ready.ok){ say("error", ready.message); return; }
+    access?.onSignIn({resume:true});
+  };
   const openWarnings = imageWarning ? imageWarning.items.filter(f=>!isWarningResolved(game,f)) : [];
   const resolvedWarnings = imageWarning ? imageWarning.items.filter(f=>isWarningResolved(game,f)) : [];
   useEffect(()=>{
@@ -4245,7 +4307,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
     : inDb ? {tone:"saved", text:"No unsaved changes"}
     : {tone:"idle", text:"Not saved yet"};
   const actions = (
-    <EditorActions published={published} retired={retired} saving={saving} imagesBusy={imagesBusy} canPublish={canPublish}
+    <EditorActions published={published} retired={retired} saving={saving} imagesBusy={imagesBusy} canPublish={canPublish} writable={canWrite}
                    onSaveDraft={dftSafe} onPublish={pubSafe} onPreview={openPreview}/>
   );
   const noticeBar = <NoticeBar notice={notice} onDismiss={()=>setNotice(null)}/>;
@@ -4262,6 +4324,10 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
             <Icon name="download" size={16}/>Export text
           </button>
         </div>
+        {!canWrite&&access&&(
+          <AdminAccessNotice variant="banner" status={access.status} email={access.email} busy={access.busy} error={access.error}
+                             onSignIn={signInKeepingEdits} onSignOut={access.onSignOut} onRetry={access.onRetry}/>
+        )}
         {imageWarning&&(openWarnings.length>0||resolvedWarnings.length>0)&&(
           <div ref={warnRef}>
             <ImageWarningPanel game={game} action={imageWarning.action} open={openWarnings} resolved={resolvedWarnings}
@@ -4412,7 +4478,9 @@ function AdminPreview({game,onBack}){
 // ============================================================
 export default function WhatTheFudgeTrivia(){
   const[view,setView]=useState(()=>isAdminPath()?"admin":"home");
-  const[adminView,setAdminView]=useState(()=>readAdminSession()?"dashboard":"login");
+  // Back from an admin sign-in started in the editor: reopen that puzzle.
+  const[adminResume]=useState(()=>isAdminPath()&&readAdminSession()?takeAdminResume():null);
+  const[adminView,setAdminView]=useState(()=>adminResume?"editor":readAdminSession()?"dashboard":"login");
   const[adminIn,setAdminIn]=useState(readAdminSession);
   // Back/forward between /admin and the site.
   useEffect(()=>{
@@ -4420,7 +4488,7 @@ export default function WhatTheFudgeTrivia(){
     window.addEventListener("popstate",onPop);
     return ()=>window.removeEventListener("popstate",onPop);
   },[]);
-  const[editGame,setEditGame]=useState(null);
+  const[editGame,setEditGame]=useState(adminResume);
   const[replayGame,setReplayGame]=useState(null);
   const[replayRecord,setReplayRecord]=useState(null);
   const[toast,setToast]=useState(null);
@@ -4440,8 +4508,13 @@ export default function WhatTheFudgeTrivia(){
   // account, ...), whether the account may edit content, and the pending
   // "Bring your progress with you?" summary (null = nothing to ask).
   const[accountNotice,setAccountNotice]=useState(null);
-  const[isAdmin,setIsAdmin]=useState(false);
+  // [accounts] Whether this browser's account may write content: the Studio
+  // offers Save, Publish and Upload only for "admin" (admin/adminAccess.js).
+  const[adminStatus,setAdminStatus]=useState(OFFLINE_PREVIEW?"admin":"checking");
+  const isAdmin = canWriteAs(adminStatus);
   const[handoff,setHandoff]=useState(null);
+  const[adminAuthBusy,setAdminAuthBusy]=useState(false);
+  const[adminAuthError,setAdminAuthError]=useState(null);
   const authUserIdRef = useRef(null);
 
   const sound=useSoundEngine();
@@ -4462,7 +4535,7 @@ export default function WhatTheFudgeTrivia(){
     }
     authUserIdRef.current = p?.id || null;
     setPlayer(p);
-    setIsAdmin(resolved.account ? await checkIsAdmin() : false);
+    setAdminStatus(await resolveAdminStatus(resolved));
     // [accounts] first sign-in from a browser whose guest had history: ask once.
     setHandoff(resolved.account ? await resolvePendingHandoff().catch(()=>null) : null);
     const [allGames, playerStats] = await Promise.all([
@@ -4506,6 +4579,7 @@ export default function WhatTheFudgeTrivia(){
           );
         }catch(retryError){
           setError("Couldn't connect to server. Check your connection.");
+          setAdminStatus(s=>s==="checking"?"unavailable":s);
           console.error("[boot] retry failed", retryError);
         }
       } finally {
@@ -4517,6 +4591,9 @@ export default function WhatTheFudgeTrivia(){
       if(!active) return;
       if(event==="TOKEN_REFRESHED"||event==="INITIAL_SESSION") return;
       if(event==="SIGNED_IN" && session?.user?.id===authUserIdRef.current) return;
+      // The account changed (here or in another tab): no Studio write goes
+      // out until the new one is confirmed as an admin.
+      if(!OFFLINE_PREVIEW) setAdminStatus("checking");
       clearTimeout(authReloadTimer);
       authReloadTimer = setTimeout(async()=>{
         if(!active) return;
@@ -4542,6 +4619,7 @@ export default function WhatTheFudgeTrivia(){
             );
           }catch(retryError){
             setError("Couldn't connect to server. Check your connection.");
+            setAdminStatus("unavailable");
             console.error("[auth change] retry failed", retryError);
           }
         }
@@ -4668,6 +4746,55 @@ export default function WhatTheFudgeTrivia(){
     }
   };
 
+  // [accounts] Puzzle Studio access. The Studio password only opens the
+  // Studio in this tab; writes need an admin account, so the Studio asks for
+  // one (AdminAccessNotice) and re-checks whenever a write is refused.
+  const recheckAdmin = useCallback(async()=>{
+    setAdminAuthError(null);
+    setAdminStatus(await currentAdminStatus());
+  },[]);
+  const handleAdminRetry = async()=>{
+    setAdminAuthBusy(true);
+    setAdminStatus("checking");
+    try{ await recheckAdmin(); }
+    finally{ setAdminAuthBusy(false); }
+  };
+  // resume: the editor has already stored (and checked) the puzzle to reopen
+  // after the round trip (signInKeepingEdits); from the gate there is none.
+  const handleAdminSignIn = async({resume=false}={})=>{
+    setAdminAuthError(null);
+    setAdminAuthBusy(true);
+    if(!resume) clearAdminResume();
+    try{
+      const err = await authSignInWithPlatform(player);
+      if(!err) return; // leaving for the sign-in page
+      setAdminAuthError(err);
+    }catch(e){
+      setAdminAuthError(formatAuthError(e));
+    }
+    clearAdminResume();
+    setAdminAuthBusy(false);
+  };
+  const handleAdminSignOut = async()=>{
+    setAdminAuthError(null);
+    setAdminAuthBusy(true);
+    try{ await authSignOutToGuest(); }
+    catch(e){ setAdminAuthError(formatAuthError(e)); }
+    finally{ setAdminAuthBusy(false); }
+  };
+  const lockAdmin = ()=>{writeAdminSession(false);setAdminIn(false);setAdminView("login");};
+  const adminAccess = {
+    canWrite: isAdmin,
+    status: adminStatus,
+    email: player?.isGuest===false ? player.email : null,
+    busy: adminAuthBusy,
+    error: adminAuthError,
+    onSignIn: handleAdminSignIn,
+    onSignOut: handleAdminSignOut,
+    onRetry: handleAdminRetry,
+  };
+  const studioServices = useMemo(()=>({...STUDIO_SERVICES, canWrite:isAdmin, onAccessProblem:recheckAdmin}),[isAdmin,recheckAdmin]);
+
   // Refresh games from DB (called after admin saves)
   const refreshGames = async() => {
     const allGames = await dbLoadGames();
@@ -4692,6 +4819,7 @@ export default function WhatTheFudgeTrivia(){
       result = await dbSaveGame(sg);
     }catch(e){
       console.error(e);
+      if(isPermissionError(e)) recheckAdmin();
       throw new Error(`The puzzle wasn't saved: ${describeSaveError(e)} Your changes are still here, so you can try again.`);
     }
     let listRefreshed = true;
@@ -4706,6 +4834,7 @@ export default function WhatTheFudgeTrivia(){
       await dbDeleteGame(id);
     }catch(e){
       console.error(e);
+      if(isPermissionError(e)) recheckAdmin();
       throw new Error(`The puzzle wasn't deleted: ${describeSaveError(e)}`);
     }
     try{ await refreshGames(); }catch(e){ console.error(e); }
@@ -4837,6 +4966,14 @@ export default function WhatTheFudgeTrivia(){
 
   // Loading and boot failure: Home's own frame (see HomeLoadingPage), under
   // the same header, inert. Try again reloads the page, as before.
+  // An open editor never unmounts for a reload or a failed one (an account
+  // change in another tab reloads the app data): its unsaved edits would go
+  // with it. Without admin access it pauses writes instead (AdminEditor).
+  const adminEditor = view==="admin" && adminIn && adminView==="editor" && editGame
+    ? <StudioContext.Provider value={studioServices}><style>{styles}</style><CandyBackdrop preset="admin"/><AdminEditor game={editGame} games={games} onSave={handleSave} onDelete={handleDel} onBack={()=>setAdminView("dashboard")} access={adminAccess}/></StudioContext.Provider>
+    : null;
+  if(adminEditor) return adminEditor;
+
   if(loading||error) return(
     <PlayerChromeContext.Provider value={playerChrome}>
       <style>{styles}</style>
@@ -4854,8 +4991,9 @@ export default function WhatTheFudgeTrivia(){
   // Admin branch
   if(view==="admin"){
     if(!adminIn)return <><style>{styles}</style><CandyBackdrop preset="admin"/><AdminLogin onLogin={()=>{writeAdminSession(true);setAdminIn(true);setAdminView("dashboard");}} onExit={exitAdmin}/></>;
-    if(adminView==="dashboard")return <StudioContext.Provider value={STUDIO_SERVICES}><style>{styles}</style><CandyBackdrop preset="admin"/><Dashboard games={games} today={getLocalGameDay()} onNew={()=>{setEditGame({id:`g-${Date.now()}`,date:"",themeTitle:"",categoryA:"",categoryB:"",status:"draft",questions:[],tags:[]});setAdminView("editor");}} onEdit={g=>{setEditGame(g);setAdminView("editor");}} onLogout={()=>{writeAdminSession(false);setAdminIn(false);setAdminView("login");}} onExit={exitAdmin}/></StudioContext.Provider>;
-    if(adminView==="editor")return <StudioContext.Provider value={STUDIO_SERVICES}><style>{styles}</style><CandyBackdrop preset="admin"/><AdminEditor game={editGame} games={games} onSave={handleSave} onDelete={handleDel} onBack={()=>setAdminView("dashboard")}/></StudioContext.Provider>;
+    // The password opened the Studio; only an admin account gets past here.
+    if(!isAdmin)return <StudioContext.Provider value={studioServices}><style>{styles}</style><CandyBackdrop preset="admin"/><AdminAccessNotice variant="gate" {...adminAccess} onSignIn={()=>handleAdminSignIn()} onLock={lockAdmin} onExit={exitAdmin}/></StudioContext.Provider>;
+    if(adminView==="dashboard")return <StudioContext.Provider value={studioServices}><style>{styles}</style><CandyBackdrop preset="admin"/><Dashboard games={games} today={getLocalGameDay()} onNew={()=>{setEditGame({id:`g-${Date.now()}`,date:"",themeTitle:"",categoryA:"",categoryB:"",status:"draft",questions:[],tags:[]});setAdminView("editor");}} onEdit={g=>{setEditGame(g);setAdminView("editor");}} onLogout={lockAdmin} onExit={exitAdmin}/></StudioContext.Provider>;
   }
 
   // Player app

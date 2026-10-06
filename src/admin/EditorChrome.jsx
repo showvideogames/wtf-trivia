@@ -20,17 +20,19 @@ function SaveStatus({status}){
 // Save draft (drafts; "Save" for a retired puzzle, which stays retired),
 // Publish / Publish changes. Both run the editor's existing save path;
 // Publish stays pressable when the puzzle isn't ready so it can say why.
-export function EditorActions({published, retired=false, saving, imagesBusy, canPublish, onSaveDraft, onPublish, onPreview}){
-  const held = saving||imagesBusy;
+// writable false (no admin account): both are off until access is back.
+export function EditorActions({published, retired=false, saving, imagesBusy, canPublish, writable=true, onSaveDraft, onPublish, onPreview}){
+  const held = saving||imagesBusy||!writable;
+  const locked = writable ? undefined : "Needs a signed-in admin account";
   return(
     <div className="ps-actions">
       <button type="button" className="ps-btn" onClick={onPreview}><Icon name="eye" size={18}/>Preview</button>
       {!published&&(
-        <button type="button" className="ps-btn" onClick={onSaveDraft} disabled={held} aria-busy={held||undefined}>
+        <button type="button" className="ps-btn" onClick={onSaveDraft} disabled={held} aria-busy={(saving||imagesBusy)||undefined} title={locked}>
           {imagesBusy?"Uploading image…":retired?"Save":"Save draft"}
         </button>
       )}
-      <button type="button" className={`ps-btn ps-btn-publish${canPublish?"":" is-unready"}`} onClick={onPublish} disabled={held} aria-busy={held||undefined}>
+      <button type="button" className={`ps-btn ps-btn-publish${canPublish?"":" is-unready"}`} onClick={onPublish} disabled={held} aria-busy={(saving||imagesBusy)||undefined} title={locked}>
         {saving?"Saving…":published?"Publish changes":"Publish"}
       </button>
     </div>
