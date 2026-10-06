@@ -32,6 +32,10 @@ This repo is configured for Vercel with [vercel.json](vercel.json), which forces
 
 Add the same environment variables in Vercel for Production, Preview, and Development.
 
+Production address: `https://whatthefudge.gg` (Vercel project `wtf-trivia`, not `wtf-triviaold`). `www.whatthefudge.gg` redirects to it with a 308. `wtf-trivia.vercel.app` keeps serving the app so guests who started there keep their session.
+
+Brand icons live in `public/` (`favicon.ico` with 16/32/48, `favicon-96x96.png`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `site.webmanifest`). The approved source artwork is `design/brand-icon-master.webp`.
+
 ## Supabase setup
 
 The schema lives in `supabase/migrations/` (the CLI applies it to a local stack
