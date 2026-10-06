@@ -167,7 +167,13 @@ describe("warnings", () => {
     expect(imageName({ kind: "question", itemText: "  ", questionIndex: 4 }, g)).toBe("“Question 5”");
   });
   it("gives a plain reason for every failure code", () => {
-    for (const code of ["blocked", "timeout", "not-image", "upload", "optimize", "mystery"]) expect(failureReason(f({ code, reason: "x" })).length).toBeGreaterThan(0);
+    for (const code of ["blocked", "timeout", "not-image", "upload", "upload-auth", "upload-network", "optimize", "mystery"]) expect(failureReason(f({ code, reason: "x" })).length).toBeGreaterThan(0);
+  });
+  it("tells a refused copy (sign-in) apart from an unreachable store (connection)", () => {
+    expect(failureReason(f({ code: "upload-auth" }))).toMatch(/admin account/);
+    expect(failureReason(f({ code: "upload-auth" }))).not.toMatch(/connection/);
+    expect(failureReason(f({ code: "upload-network" }))).toMatch(/connection/);
+    expect(failureReason(f({ code: "upload-network" }))).not.toMatch(/admin/);
   });
 
   it("14. resolves once the field holds a different image, and not before", () => {
