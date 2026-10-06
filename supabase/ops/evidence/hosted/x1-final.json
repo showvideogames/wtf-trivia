@@ -1,0 +1,28 @@
+{
+ "rainbow": [
+  {
+   "local_user_id": "0679c454-e8ba-4e9b-bf9e-b58ec32e9d52",
+   "global_user_id": "user_01M3SV4ZFENGMPAXH8NRTYYKH4",
+   "accounts_total": 1
+  }
+ ],
+ "cluevoyance": [
+  {
+   "local_user_id": "e1dd3d7b-b2f3-4533-b11a-43cb7d6cbe9c",
+   "global_user_id": "user_01M3SV4ZFENGMPAXH8NRTYYKH4",
+   "accounts_total": 1
+  }
+ ],
+ "wtf": [
+  {
+   "local_user_id": "ad0f8ffe-eb69-40fe-b2fd-c8e668e2c0b9",
+   "global_user_id": "user_01M3SV4ZFENGMPAXH8NRTYYKH4",
+   "accounts_total": 1
+  }
+ ],
+ "wtf_admins": [
+  {
+   "user_id": "ad0f8ffe-eb69-40fe-b2fd-c8e668e2c0b9"
+  }
+ ]
+}
