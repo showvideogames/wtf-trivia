@@ -5,6 +5,8 @@ import Icon from "./Icon.jsx";
 import ImageField from "./ImageField.jsx";
 import { paletteColor, useStudio } from "./StudioContext.js";
 import { TOPICS, normalizeTags, toggleTag } from "../topics.js";
+import { answerButtonName } from "../categoryNames.js";
+import { SHARE_OR, normalizeShareLabel, shareCategoryName } from "../share.js";
 
 function CardHead({icon, title, sub}){
   return(
@@ -28,28 +30,118 @@ function TextField({id, label, value, placeholder, onChange, hint}){
   );
 }
 
-const SUBTITLE_HINT = "Optional. A second line under the name in the gameplay matchup banner, e.g. Song. Leave blank for none.";
-const SHARE_HINT = "Optional. Only changes the copied Results text, emoji included. Leave blank to use the category name.";
-
 function PuzzleBasics({game, set, games}){
   return(
     <section className="ps-panel ps-card" aria-labelledby="ps-basics-title">
-      <CardHead icon="doc" title={<span id="ps-basics-title">Puzzle basics</span>} sub="The date, title and the two categories players sort items into."/>
+      <CardHead icon="doc" title={<span id="ps-basics-title">Puzzle basics</span>} sub="The date and the puzzle's overall title."/>
       <div className="ps-grid-2">
         <DatePicker value={game.date||""} onChange={v=>set("date",v)} games={games} currentGameId={game.id}/>
-        <TextField id="ps-theme" label="Theme title" value={game.themeTitle} placeholder="Board Game or Nicolas Cage Movie?" onChange={v=>set("themeTitle",v)}/>
-        <TextField id="ps-cat-a" label="Category A" value={game.categoryA} placeholder="Board Game" onChange={v=>set("categoryA",v)}/>
-        <TextField id="ps-cat-b" label="Category B" value={game.categoryB} placeholder="Nicolas Cage Movie" onChange={v=>set("categoryB",v)}/>
-        <TextField id="ps-sub-a" label="Category A subtitle" value={game.categoryASubtitle} placeholder="e.g. Song"
-                   onChange={v=>set("categoryASubtitle",v)} hint={SUBTITLE_HINT}/>
-        <TextField id="ps-sub-b" label="Category B subtitle" value={game.categoryBSubtitle} placeholder="e.g. Song"
-                   onChange={v=>set("categoryBSubtitle",v)} hint={SUBTITLE_HINT}/>
-        {/* Placeholders show the fallback a blank share name uses. */}
-        <TextField id="share-name-a" label="Share name for Category A" value={game.categoryAShareName} placeholder={game.categoryA||"Same as Category A"}
-                   onChange={v=>set("categoryAShareName",v)} hint={SHARE_HINT}/>
-        <TextField id="share-name-b" label="Share name for Category B" value={game.categoryBShareName} placeholder={game.categoryB||"Same as Category B"}
-                   onChange={v=>set("categoryBShareName",v)} hint={SHARE_HINT}/>
+        <TextField id="ps-theme" label="Puzzle title" value={game.themeTitle} placeholder="Board Game or Nicolas Cage Movie?" onChange={v=>set("themeTitle",v)}
+                   hint="The puzzle's overall name, shown on Home, Archive and Results."/>
       </div>
+    </section>
+  );
+}
+
+// Each category's names, one row per place a name appears, with Category A
+// and B side by side. Every name is its own field: editing one never writes
+// another. A blank optional name falls back as its placeholder shows, so the
+// fallback is visible rather than silent. Names are display only; answers
+// stay "A" / "B".
+const NAME_ROWS = [
+  {key:"", id:"name", label:"Matchup name",
+   hint:"The category's main name: the gameplay matchup banner, plus Home, Archive and the answer reveal.",
+   placeholder:side=>side==="A"?"Board Game":"Nicolas Cage Movie"},
+  {key:"Subtitle", id:"sub", label:"Matchup subtitle",
+   hint:"Optional second line in the same banner, e.g. Song. Either side can be blank.",
+   placeholder:()=>"Optional"},
+  {key:"ButtonName", id:"btn", label:"Answer button name",
+   hint:"The label on the answer button players tap. Blank uses the matchup name.",
+   placeholder:(side,game)=>game[`category${side}`]||"Same as matchup name"},
+  {key:"ShareName", id:"share", label:"Share name",
+   hint:"The name in copied share text, emoji allowed. Blank uses the matchup name.",
+   placeholder:(side,game)=>game[`category${side}`]||"Same as matchup name"},
+];
+
+function NameInput({row, side, game, set, color}){
+  const field = `category${side}${row.key}`;
+  const id = `ps-${row.id}-${side.toLowerCase()}`;
+  return(
+    <div className="ps-name-input" style={{"--cat":color.mid}}>
+      <label className="ps-name-side" htmlFor={id}>
+        <span className="ps-name-letter" aria-hidden="true">{side}</span>
+        <span className="ps-sr">Category {side} {row.label.toLowerCase()}</span>
+      </label>
+      <input id={id} className="ps-input" value={game[field]||""} placeholder={row.placeholder(side, game)}
+             aria-describedby={`ps-${row.id}-hint`} onChange={e=>set(field, e.target.value)}/>
+    </div>
+  );
+}
+
+// A small picture of where each name lands: the banner, the buttons and the
+// share text, drawn from the same values gameplay and the share formatter use.
+function NamesPreview({game, colorA, colorB}){
+  const sides = [["A", colorA], ["B", colorB]];
+  const anySub = sides.some(([s])=>normalizeShareLabel(game[`category${s}Subtitle`]));
+  return(
+    <div className="ps-names-preview" aria-label="Where the names appear">
+      <div className="ps-np-block">
+        <div className="ps-np-label">Matchup banner</div>
+        <div className="ps-np-banner">
+          {sides.map(([s, c])=>(
+            <div key={s} className="ps-np-half" style={{"--np-bg":c.mid, "--np-ink":c.isDark?"#fff":"#1A1A1A"}}>
+              <span>{game[`category${s}`]||`Category ${s}`}</span>
+              {anySub&&<span>{normalizeShareLabel(game[`category${s}Subtitle`])||" "}</span>}
+            </div>
+          ))}
+          <span className="ps-np-or" aria-hidden="true">OR</span>
+        </div>
+      </div>
+      <div className="ps-np-block">
+        <div className="ps-np-label">Answer buttons</div>
+        <div className="ps-np-buttons">
+          {sides.map(([s, c])=>(
+            <span key={s} className="ps-np-button" style={{"--np-bg":c.mid, "--np-edge":c.dark, "--np-ink":c.isDark?"#fff":"#1A1A1A"}}>
+              {answerButtonName(game, s)||`Category ${s}`}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="ps-np-block">
+        <div className="ps-np-label">Share text</div>
+        <div className="ps-np-share">
+          <div>{shareCategoryName(game.categoryAShareName, game.categoryA, "Category A")}</div>
+          <div>{SHARE_OR.trim()}</div>
+          <div>{shareCategoryName(game.categoryBShareName, game.categoryB, "Category B")}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CategoryNames({game, set}){
+  const {palette} = useStudio();
+  const colorA = paletteColor(palette, game.categoryAColor||"teal", 0);
+  const colorB = paletteColor(palette, game.categoryBColor||"pink", 1);
+  return(
+    <section className="ps-panel ps-card" aria-labelledby="ps-names-title">
+      <CardHead icon="pencil" title={<span id="ps-names-title">Category names</span>}
+                sub="The two categories players sort items into. Each name below is edited on its own."/>
+      <div className="ps-names">
+        {NAME_ROWS.map(row=>(
+          <div key={row.id} className="ps-names-row" role="group" aria-labelledby={`ps-${row.id}-label`}>
+            <div className="ps-names-head">
+              <div className="ps-label" id={`ps-${row.id}-label`}>
+                {row.label}
+              </div>
+              <div className="ps-hint" id={`ps-${row.id}-hint`}>{row.hint}</div>
+            </div>
+            <NameInput row={row} side="A" game={game} set={set} color={colorA}/>
+            <NameInput row={row} side="B" game={game} set={set} color={colorB}/>
+          </div>
+        ))}
+      </div>
+      <NamesPreview game={game} colorA={colorA} colorB={colorB}/>
     </section>
   );
 }
@@ -216,6 +308,7 @@ export default function SetupTab({game, set, games, trackImage, onDelete, onReti
   return(
     <div className="ps-setup">
       <PuzzleBasics game={game} set={set} games={games}/>
+      <CategoryNames game={game} set={set}/>
       <Topics game={game} set={set}/>
       <CategoryAppearance game={game} set={set} trackImage={trackImage}/>
       <Artwork game={game} set={set} trackImage={trackImage}/>
