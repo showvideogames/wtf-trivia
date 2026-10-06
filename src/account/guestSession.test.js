@@ -75,7 +75,8 @@ describe("multi-tab sign-out: one guest for every tab", () => {
   it("without Web Locks the in-tab guard still collapses concurrent callers in one tab", async () => {
     const b = makeBrowser();
     const t = b.tab("solo");
-    t.ensureGuestSession = createGuestSessionGuard({ getSession: t.getSession, signInAnonymously: t.signInAnonymously, locks: undefined });
+    // null, not undefined: undefined would fall back to the function's default (navigator.locks)
+    t.ensureGuestSession = createGuestSessionGuard({ getSession: t.getSession, signInAnonymously: t.signInAnonymously, locks: null });
     await t.signOutLocal();
     const results = await Promise.all([t.ensureGuestSession(), t.ensureGuestSession(), t.ensureGuestSession()]);
     expect(b.createdCount()).toBe(1);

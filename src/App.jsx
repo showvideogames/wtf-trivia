@@ -8,6 +8,7 @@ import { supabase } from "./account/supabaseClient.js";
 import { checkIsAdmin, deleteMyAccount, ensureAccount, signInWithPlatform, signOutOfWtf } from "./account/platformSignIn.js";
 import { declinePendingHandoff, importPendingHandoff, resolvePendingHandoff } from "./account/guestHandoff.js";
 import { createGuestSessionGuard } from "./account/guestSession.js";
+import { ensurePlayerRow, isAnonymousUser } from "./account/playerRow.js";
 import ImportPrompt from "./account/ImportPrompt.jsx";
 import "./home.css";
 import "./game.css";
@@ -1677,9 +1678,7 @@ function clearSupabaseAuthCache(){
   keys.forEach(key=>safeRemove(key));
 }
 
-function isAnonymousUser(user){
-  return Boolean(user?.is_anonymous ?? (!user?.email && (!Array.isArray(user?.identities) || user.identities.length===0)));
-}
+// [accounts] isAnonymousUser lives in src/account/playerRow.js (imported above).
 async function getAuthSession(){
   if(!supabase) return null;
   const { data, error } = await withTimeout(
@@ -1775,7 +1774,14 @@ async function sbFetch(path, opts={}){
       session = null;
     }
   }
-  const accessToken = session?.access_token || SB_KEY;
+  return sbFetchWithToken(session?.access_token || SB_KEY, path, opts);
+}
+// [accounts] The request signed with EXACTLY the token it is given. sbFetch
+// resolves the stored session's token for ordinary reads; writes whose row
+// must belong to the signing user (the player row) pass the token from the
+// same session read that supplied the user id (src/account/playerRow.js).
+async function sbFetchWithToken(accessToken, path, opts={}){
+  if(!SUPABASE_READY) throw new Error("Supabase is not configured.");
   const res = await fetch(`${SB_URL}${path}`, {
     ...opts,
     headers:{
@@ -1993,39 +1999,21 @@ async function dbDeleteGame(id){
 }
 
 // ===== DB FUNCTIONS — PLAYERS =====
+// [accounts] The player row is written for the session that signs the request:
+// one session read supplies both the id in the row and the token on the
+// request (src/account/playerRow.js), so a sibling tab replacing the stored
+// session (a sign-out elsewhere, a guest it minted) can never split the two.
+// `user` is only a hint for the caller; the stored session decides.
 async function dbGetOrCreatePlayer(user){
   if(OFFLINE_PREVIEW) return devCurrentPlayer();
-  // [accounts] Write the row for the user whose session will sign the request.
-  // Another tab may have replaced the stored session since `user` was read
-  // (a sign-out elsewhere, a guest created by a sibling tab); sbFetch always
-  // sends the stored session's token, so the id must come from the same place.
-  try{
-    const live = await getAuthSession();
-    if(live?.user) user = live.user;
-  }catch{ /* keep the user we were given */ }
-  if(!user) return null;
-  try{
-    await sbFetch("/rest/v1/players", {
-      method:"POST",
-      headers:{"Prefer":"resolution=ignore-duplicates"},
-      body: JSON.stringify({
-        id: user.id,
-        email: user.email||null,
-        is_guest: isAnonymousUser(user),
-        last_seen_at: new Date().toISOString()
-      })
-    });
-  }catch(e){
-    if(!String(e?.message||"").includes("duplicate key")) throw e;
-  }
-  const rows = await sbFetch(`/rest/v1/players?id=eq.${user.id}&select=*`);
-  const row = rows?.[0];
-  return {
-    id: user.id,
-    email: row?.email ?? user.email ?? null,
-    isGuest: row?.is_guest ?? isAnonymousUser(user),
-    createdAt: row?.created_at ?? user.created_at ?? new Date().toISOString()
-  };
+  if(!user && !supabase) return null;
+  return ensurePlayerRow({
+    getSession: async()=>{
+      const live = await getAuthSession();
+      return live?.user ? live : authEnsureSession();
+    },
+    fetchWithToken: sbFetchWithToken,
+  });
 }
 
 // ===== DB FUNCTIONS — GAME RECORDS =====
