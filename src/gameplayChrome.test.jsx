@@ -67,14 +67,13 @@ describe("shared player header", () => {
     expect(render({ compact: true })).toContain('<div class="ph-top ph-compact">');
   });
 
-  it("pins to the top only when asked (Home and Archive), over a hidden copy of the page canvas", () => {
+  it("pins to the top only when asked (Home and Archive), with nothing drawn behind the bar", () => {
     const html = render({ sticky: true });
-    expect(html).toContain('<div class="ph-top ph-sticky"><div class="ph-canvas" aria-hidden="true"><div class="cps-glow" aria-hidden="true">');
+    expect(html).toContain('<div class="ph-top ph-sticky"><header class="sh-bar">');
+    expect(html).not.toContain("cps-");
     expect(count(html, "<header")).toBe(1);
     for (const props of [{}, { compact: true }, { pending: true }]) {
-      const plain = render(props);
-      expect(plain).not.toContain("ph-sticky");
-      expect(plain).not.toContain("ph-canvas");
+      expect(render(props)).not.toContain("ph-sticky");
     }
   });
 });

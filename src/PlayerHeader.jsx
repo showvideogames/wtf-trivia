@@ -1,6 +1,5 @@
 import { useContext } from "react";
 import SiteHeader from "./SiteHeader.jsx";
-import { CandyCanvas } from "./CandyPageShell.jsx";
 import { PlayerChromeContext } from "./playerChrome.js";
 
 // ---- PLAYER HEADER ----
@@ -26,12 +25,10 @@ import { PlayerChromeContext } from "./playerChrome.js";
 // The header keeps its exact geometry but is inert.
 // compact: always the phone row, whatever the window width -- for Admin
 // Preview, whose stage is a phone-width screen inside a desktop window.
-// sticky: pinned to the top while the page scrolls (Home and Archive). Both
-// pages sit on CandyPageShell, so the frame draws a copy of that canvas and
-// its candy pieces behind the bar, clipped to the frame (.ph-canvas in
-// site.css): at rest it matches the page exactly, and while scrolling
-// nothing shows through above or around the bar. The header element keeps
-// its place either way, so it is never remounted between screens.
+// sticky: pinned to the top while the page scrolls (Home and Archive). Only
+// the cream bar is opaque; around it the frame is transparent, so the page
+// shows naturally beside and above the bar. Only the class changes, so the
+// header is never remounted between screens.
 export default function PlayerHeader({ pending = false, compact = false, sticky = false }) {
   const chrome = useContext(PlayerChromeContext);
   if (!chrome) return null;
@@ -43,7 +40,6 @@ export default function PlayerHeader({ pending = false, compact = false, sticky 
   if (sticky) frame += " ph-sticky";
   return (
     <div className={frame}>
-      {sticky && <div className="ph-canvas" aria-hidden="true"><CandyCanvas/></div>}
       {pending ? <div className="ph-pending" inert>{header}</div> : header}
       <AdSlot/>
     </div>
