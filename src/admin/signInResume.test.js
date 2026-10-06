@@ -6,9 +6,11 @@ import {
   RESUME_NOT_STORED,
   clearAdminResume,
   prepareSignInFromEditor,
+  saveEditorDraftVerified,
   takeAdminResume,
   writeAdminResume,
 } from "./signInResume.js";
+import { editorDraftKey, normalizeEditorDraft } from "./editorDraft.js";
 
 // Signing in from the editor leaves the page. It may only start once the
 // unsaved edits and the puzzle to reopen are both really stored; when
@@ -46,6 +48,41 @@ describe("writeAdminResume / takeAdminResume", () => {
     const blocked = { getItem: () => { throw new Error("SecurityError"); }, removeItem: () => { throw new Error("SecurityError"); } };
     expect(() => clearAdminResume(blocked)).not.toThrow();
     expect(takeAdminResume(blocked)).toBe(null);
+  });
+});
+
+describe("saveEditorDraftVerified", () => {
+  const DRAFT_KEY = editorDraftKey("g-1");
+  const current = { ...PUZZLE, status: "draft", themeTitle: "Farm or Not (edited)", questions: [{ id: "q1", itemText: "Cow" }, { id: "q2", itemText: "Pig" }], tags: [] };
+  const older = { savedAt: 1, game: normalizeEditorDraft({ ...PUZZLE, status: "draft", themeTitle: "Farm or Not", questions: [{ id: "q1", itemText: "Cow" }], tags: [] }) };
+
+  it("stores the complete normalized draft and reads exactly that back", () => {
+    expect(saveEditorDraftVerified(current, localStorage, 42)).toBe(true);
+    expect(JSON.parse(localStorage.getItem(DRAFT_KEY))).toEqual({ savedAt: 42, game: normalizeEditorDraft(current) });
+  });
+
+  it("REGRESSION: an older draft of the same puzzle can't pass when the new write is silently dropped", () => {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(older));
+    const edits = structuredClone(current);
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {}); // drops every write, no error
+    // The old check (same id read back) would have passed here.
+    expect(JSON.parse(localStorage.getItem(DRAFT_KEY)).game.id).toBe(current.id);
+    expect(saveEditorDraftVerified(current)).toBe(false);
+
+    // Sign-in stays blocked, nothing to reopen is stored...
+    const r = prepareSignInFromEditor({ hasEdits: true, saveDraft: () => saveEditorDraftVerified(current), saveResume: () => writeAdminResume(current) });
+    expect(r).toEqual({ ok: false, message: EDITS_NOT_STORED });
+    expect(sessionStorage.getItem(ADMIN_RESUME_KEY)).toBe(null);
+    // ...and the current edits are untouched, while the older draft is just as it was.
+    expect(current).toEqual(edits);
+    expect(JSON.parse(localStorage.getItem(DRAFT_KEY))).toEqual(older);
+  });
+
+  it("an older draft that differs only in content (same id, same shape) is still caught", () => {
+    const stale = { savedAt: 7, game: normalizeEditorDraft({ ...current, themeTitle: "stale" }) };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(stale));
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {});
+    expect(saveEditorDraftVerified(current, localStorage, 7)).toBe(false);
   });
 });
 

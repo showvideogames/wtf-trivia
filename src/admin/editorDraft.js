@@ -3,6 +3,11 @@
 // localStorage reads and writes.
 import { normalizeTags } from "../topics.js";
 
+// Where a puzzle's on-device draft copy lives (localStorage).
+export function editorDraftKey(id){
+  return `wtf-editor-draft:${id||"unsaved"}`;
+}
+
 export function normalizeEditorDraft(game){
   return {
     ...game,

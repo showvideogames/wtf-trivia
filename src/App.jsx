@@ -44,11 +44,11 @@ import { emptyFavorites, toggleFavorite } from "./archiveFavorites.js";
 import ArchiveTopicFilter from "./ArchiveTopicFilter.jsx";
 import ArchiveSortMenu from "./ArchiveSortMenu.jsx";
 import ArchiveFavoriteButton from "./ArchiveFavoriteButton.jsx";
-import { normalizeEditorDraft, restoreEditorDraft } from "./admin/editorDraft.js";
+import { editorDraftKey, normalizeEditorDraft, restoreEditorDraft } from "./admin/editorDraft.js";
 import { histogramBuckets } from "./scoreHistogram.js";
 import { StudioContext, paletteColor } from "./admin/StudioContext.js";
 import AdminAccessNotice from "./admin/AdminAccessNotice.jsx";
-import { clearAdminResume, prepareSignInFromEditor, takeAdminResume, writeAdminResume } from "./admin/signInResume.js";
+import { clearAdminResume, prepareSignInFromEditor, saveEditorDraftVerified, takeAdminResume, writeAdminResume } from "./admin/signInResume.js";
 import { localDateFromISO } from "./admin/adminDates.js";
 import { findDateConflict } from "./admin/dashboardGroups.js";
 import { firstBlankItem, followMove, moveQuestion, questionCountOk, questionKey } from "./admin/questionStatus.js";
@@ -2335,7 +2335,7 @@ function formatAccountLabel(email){
   if(parts.length!==2) return `${email.slice(0,15)}...`;
   return `${parts[0].slice(0,10)}...@${parts[1]}`;
 }
-function getEditorDraftKey(id){return `wtf-editor-draft:${id||"unsaved"}`;}
+const getEditorDraftKey = editorDraftKey;
 function loadEditorDraft(game){
   if(!game?.id) return game;
   return restoreEditorDraft(game, safeRead(getEditorDraftKey(game.id)));
@@ -2346,12 +2346,6 @@ function saveEditorDraft(game){
     savedAt: Date.now(),
     game: normalizeEditorDraft(game)
   });
-}
-// The draft copy, read back: true only if the edits are really on the device.
-function saveEditorDraftVerified(game){
-  if(!saveEditorDraft(game)) return false;
-  const stored = safeRead(getEditorDraftKey(game.id));
-  return stored?.game?.id===game.id;
 }
 function clearEditorDraft(id){
   if(!id) return false;

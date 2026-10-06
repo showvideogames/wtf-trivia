@@ -7,24 +7,47 @@
 // loadEditorDraft restores the edits. Both writes are read back. If either
 // can't be stored (storage full, blocked, private mode), the sign-in does
 // not start: the admin stays in the editor with everything intact.
+import { editorDraftKey, normalizeEditorDraft } from "./editorDraft.js";
 
 export const ADMIN_RESUME_KEY = "wtf-admin-resume";
 
 export const EDITS_NOT_STORED = "Couldn't keep your unsaved edits on this device, so sign-in didn't start (it would leave this page and lose them). Your edits are still here. Export the text to keep a copy, or free up browser storage and try again.";
 export const RESUME_NOT_STORED = "Couldn't remember this puzzle for after sign-in, so sign-in didn't start. Your edits are still here. Free up browser storage and try again.";
 
-const sessionStore = () => (typeof sessionStorage === "undefined" ? null : sessionStorage);
+// Reading the storage objects can itself throw where storage is blocked.
+const sessionStore = () => { try { return typeof sessionStorage === "undefined" ? null : sessionStorage; } catch { return null; } };
+const localStore = () => { try { return typeof localStorage === "undefined" ? null : localStorage; } catch { return null; } };
 
-/** Store the puzzle to reopen after sign-in. True only if it reads back intact. */
-export function writeAdminResume(game, storage = sessionStore()) {
-  if (!game?.id || !storage) return false;
+/**
+ * Write value as JSON and read it back. True only if exactly what was
+ * written is there: a write that was refused, or silently dropped while an
+ * older value sits under the same key, is false.
+ */
+export function writeVerified(storage, key, value) {
+  if (!storage) return false;
   try {
-    const raw = JSON.stringify(game);
-    storage.setItem(ADMIN_RESUME_KEY, raw);
-    return storage.getItem(ADMIN_RESUME_KEY) === raw;
+    const raw = JSON.stringify(value);
+    storage.setItem(key, raw);
+    return storage.getItem(key) === raw;
   } catch {
     return false;
   }
+}
+
+/**
+ * The editor's on-device draft copy (same shape as App.jsx saveEditorDraft),
+ * verified: the complete normalized draft must read back, so an older draft
+ * of the same puzzle can never pass for the current edits.
+ */
+export function saveEditorDraftVerified(game, storage = localStore(), now = Date.now()) {
+  if (!game?.id) return false;
+  return writeVerified(storage, editorDraftKey(game.id), { savedAt: now, game: normalizeEditorDraft(game) });
+}
+
+/** Store the puzzle to reopen after sign-in. True only if it reads back intact. */
+export function writeAdminResume(game, storage = sessionStore()) {
+  if (!game?.id) return false;
+  return writeVerified(storage, ADMIN_RESUME_KEY, game);
 }
 
 export function clearAdminResume(storage = sessionStore()) {
