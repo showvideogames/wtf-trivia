@@ -139,14 +139,17 @@ kept, Try again. Handoff RPC failing → the prompt is asked again next load
 | `VITE_ACCOUNTS_ENABLED` | `"false"` = kill switch |
 | `VITE_ADMIN_PASSWORD` | Studio's client-side password (unchanged) |
 
-Supabase Auth on the hosted project needs: the custom provider installed by
-`tools/workos.mjs hosted register/wire`; Site URL = the live origin; the redirect
-allow-list to include exactly `https://<origin>/auth/callback`; **Anonymous
-sign-ins ON (must stay on: guests need it)**; manual linking OFF (it is).
-Open question for Phase 2: `mailer_autoconfirm` is ON on the hosted project
-(the kit recommends Confirm email ON so GoTrue never auto-links to an
-unconfirmed same-email user); WTF sends no auth email, so turning autoconfirm
-off costs nothing, but it is Deb's call.
+Supabase Auth on the hosted project (state after hosted Phase 2, 2026-10-06):
+the custom provider `custom:platform` installed by `tools/workos.mjs hosted
+register/wire` (WorkOS Staging application `wtf-trivia-beta`); Site URL = the
+live origin; the redirect allow-list holds the preview branch's
+`/auth/callback` (the live `/auth/callback` is added at promotion);
+**Anonymous sign-ins ON (must stay on: guests need it)**; manual linking OFF;
+email autoconfirm OFF (Confirm email ON, decision D2: WorkOS is the only
+account authority, Supabase sends no player-facing verification). Ledger
+`0001,0002,0003`: the account layer, the player lockdown and the admin gate
+are all live on the hosted project; the live site only lacks the build-time
+discovery URL until promotion.
 
 ## Content safety
 
