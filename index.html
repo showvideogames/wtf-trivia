@@ -2,12 +2,30 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Compact brand icon (the pink candy F). The header keeps the full wordmark. -->
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <!-- The gameplay mystery stage shows this the moment play starts. -->
     <link rel="preload" as="image" type="image/webp" href="/mystery-question.webp" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#FFEDA0" />
-    <title>wtf-trivia</title>
+    <title>What The Fudge Trivia</title>
+    <meta name="description" content="Each clue belongs to one of two ridiculous categories. Finish the puzzle, compare scores, and share without spoilers." />
+    <link rel="canonical" href="https://whatthefudge.gg/" />
+    <!-- Link previews for the site itself. Puzzle results are shared as
+         generated images and text, not through these tags. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="What The Fudge Trivia" />
+    <meta property="og:title" content="What The Fudge Trivia" />
+    <meta property="og:description" content="Each clue belongs to one of two ridiculous categories. Finish the puzzle, compare scores, and share without spoilers." />
+    <meta property="og:url" content="https://whatthefudge.gg/" />
+    <meta property="og:image" content="https://whatthefudge.gg/icon-512.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="What The Fudge Trivia: a pink candy letter F" />
+    <meta name="twitter:card" content="summary" />
   </head>
   <body>
     <div id="root"></div>

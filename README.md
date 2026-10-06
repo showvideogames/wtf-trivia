@@ -28,6 +28,10 @@ This repo is configured for Vercel with [vercel.json](C:\Users\leviw\wtf-trivia-
 
 Add the same environment variables in Vercel for Production, Preview, and Development.
 
+Production address: `https://whatthefudge.gg` (Vercel project `wtf-trivia`, not `wtf-triviaold`). `www.whatthefudge.gg` redirects to it with a 308. `wtf-trivia.vercel.app` keeps serving the app so guests who started there keep their session.
+
+Brand icons live in `public/` (`favicon.ico` with 16/32/48, `favicon-96x96.png`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `site.webmanifest`). The approved source artwork is `design/brand-icon-master.webp`.
+
 ## Supabase setup
 
 Run the SQL in [supabase/schema.sql](C:\Users\leviw\wtf-trivia-fix\wtf-trivia\supabase\schema.sql) in the Supabase SQL editor.
@@ -37,7 +41,7 @@ In `Authentication > Providers`, enable:
 - `Anonymous Sign-Ins`
 - `Email` sign-in
 
-In `Authentication > URL Configuration`, add your site URL and any local dev URL you use so magic-link redirects land back in the app.
+In `Authentication > URL Configuration`, set the Site URL to `https://whatthefudge.gg` and allow-list `https://whatthefudge.gg/**`, `https://wtf-trivia.vercel.app/**` and any local dev URL you use so magic-link redirects land back in the app.
 
 This app now uses Supabase Auth from the browser, so Row Level Security is the real ownership boundary. The included schema is designed for:
 
