@@ -94,10 +94,14 @@ export default function QuestionList({questions, catA, catB, colorA, colorB, sel
           const gaps = questionGaps(q, isYouTube);
           const isA = q.correctCategory!=="B";
           const on = selected===i;
+          // Unfinished rows get a coloured edge: amber while anything is
+          // missing, red when the item text is (saving refuses that).
+          const blank = !hasText(q.itemText);
+          const state = blank ? " is-blocking" : gaps.length ? " is-unfinished" : "";
           return(
             <li
               key={questionKey(q,i)}
-              className={`ps-qrow${on?" is-selected":""}${dragFrom===i?" is-dragging":""}${dragOver===i&&dragFrom!==i?" is-over":""}`}
+              className={`ps-qrow${state}${on?" is-selected":""}${dragFrom===i?" is-dragging":""}${dragOver===i&&dragFrom!==i?" is-over":""}`}
               draggable
               onDragStart={e=>startDrag(e,i)}
               onDragOver={e=>overDrag(e,i)}
@@ -113,8 +117,8 @@ export default function QuestionList({questions, catA, catB, colorA, colorB, sel
                     <span className="ps-media-tag"><Icon name={media.icon} size={16}/>{media.label}</span>
                     <CategoryChip letter={isA?"A":"B"} name={isA?catA:catB} color={isA?colorA:colorB}/>
                   </span>
-                  <span className={`ps-qrow-gaps${gaps.length?" is-missing":""}`}>
-                    {gaps.length?missingSummary(gaps):"✓ Complete"}
+                  <span className={`ps-qrow-gaps${blank?" is-blocking":gaps.length?" is-missing":""}`}>
+                    {gaps.length?<><Icon name="warn" size={14}/>{missingSummary(gaps)}{blank&&" · needed to save"}</>:"✓ Complete"}
                   </span>
                 </span>
               </button>
@@ -126,20 +130,8 @@ export default function QuestionList({questions, catA, catB, colorA, colorB, sel
             </li>
           );
         })}
-        {selected==="new"&&(
-          <li className="ps-qrow is-selected is-new">
-            <span className="ps-grip is-off" aria-hidden="true"><Icon name="grip" size={18}/></span>
-            <span className="ps-qrow-main">
-              <span className="ps-qnum" aria-hidden="true">{count+1}</span>
-              <span className="ps-qrow-text">
-                <span className="ps-qrow-title">New question</span>
-                <span className="ps-qrow-gaps">Not added yet</span>
-              </span>
-            </span>
-          </li>
-        )}
       </ol>
-      {count===0&&selected!=="new"&&(
+      {count===0&&(
         <div className="ps-empty">
           <span>No questions yet.</span>
           <button type="button" className="ps-link-btn" onClick={onAdd}>Add the first one</button>

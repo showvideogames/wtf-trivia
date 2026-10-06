@@ -24,14 +24,14 @@ export function mediaKind(url, isYouTube){
 export function questionGaps(q, isYouTube){
   const gaps = [];
   if(!hasText(q?.itemText)) gaps.push("Item text");
-  if(!hasText(q?.explanationCopy)) gaps.push("Actual Info");
   if(!hasText(q?.flavorCopy)) gaps.push("Needless Commentary");
+  if(!hasText(q?.explanationCopy)) gaps.push("Actual Info");
   if(mediaKind(q?.imageUrl, isYouTube)==="image" && !hasText(q?.imageAlt)) gaps.push("Alt text");
   return gaps;
 }
 
 // One short status per question: "Complete", or only what's missing, e.g.
-// "Missing explanation and commentary". Guidance only; nothing is blocked.
+// "Missing commentary and explanation". Guidance only; nothing is blocked.
 const GAP_WORDS = {"Item text":"item text", "Actual Info":"explanation", "Needless Commentary":"commentary", "Alt text":"alt text"};
 export function missingSummary(gaps){
   if(!gaps.length) return "Complete";
