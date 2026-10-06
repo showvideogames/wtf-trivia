@@ -4,6 +4,8 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/admin", "destination": "/index.html" },
-    { "source": "/admin/", "destination": "/index.html" }
+    { "source": "/admin/", "destination": "/index.html" },
+    { "source": "/auth/callback", "destination": "/index.html" },
+    { "source": "/auth/callback/", "destination": "/index.html" }
   ]
 }

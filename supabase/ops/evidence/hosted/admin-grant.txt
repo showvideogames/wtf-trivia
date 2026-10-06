@@ -1,0 +1,12 @@
+content before: 31 games, 349 questions, fingerprint 3226a2997d1e40f0cefb193c6fc71aa7
+APPLYING .runtime/grant-admin.sql (377 chars) to ujhwjxjgrygchtnzwvjk inside one transaction…
+[
+ {
+  "user_id": "ad0f8ffe-eb69-40fe-b2fd-c8e668e2c0b9",
+  "global_user_id": "user_01M3SV4ZFENGMPAXH8NRTYYKH4",
+  "granted_at": "2026-10-06 16:15:50.629577+00"
+ }
+]
+applied.
+content after:  31 games, 349 questions, fingerprint 3226a2997d1e40f0cefb193c6fc71aa7
+CONTENT UNCHANGED by this run.
