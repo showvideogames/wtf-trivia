@@ -51,7 +51,8 @@ check("bundle points at the hosted project", bundle.includes(`${ref}.supabase.co
 check("bundle carries the Staging discovery URL (accounts ON)", /authkit\.app\/\.well-known\/openid-configuration/.test(bundle) && /staging/.test(bundle));
 check("bundle names no Production AuthKit domain", !bundle.includes("obedient-book-17.authkit.app"));
 check("bundle names no local address", !/127\.0\.0\.1:556|localhost:556/.test(bundle));
-check("bundle has no email/password sign-in left", !/signInWithPassword|signInWithOtp/.test(bundle));
+// supabase-js itself carries signInWithPassword/signInWithOtp; the app's old screens had these strings
+check("bundle has no email/password sign-in screen left", !/Magic link sent|Create a password|Continue with existing account/.test(bundle));
 
 // 2. content, through the public key, as the client reads it
 const games = await fetch(`${SB}/rest/v1/games?select=id,status,questions`, { headers: anonHeaders }).then((r) => r.json());
