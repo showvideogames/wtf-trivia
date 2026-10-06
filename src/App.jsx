@@ -7,6 +7,8 @@ import { SUPABASE_URL as SB_URL, SUPABASE_KEY as SB_KEY, SUPABASE_CONFIGURED as 
 import { supabase } from "./account/supabaseClient.js";
 import { checkIsAdmin, deleteMyAccount, ensureAccount, signInWithPlatform, signOutOfWtf } from "./account/platformSignIn.js";
 import { declinePendingHandoff, importPendingHandoff, resolvePendingHandoff } from "./account/guestHandoff.js";
+import { createGuestSessionGuard } from "./account/guestSession.js";
+import { ensurePlayerRow, isAnonymousUser } from "./account/playerRow.js";
 import ImportPrompt from "./account/ImportPrompt.jsx";
 import "./home.css";
 import "./game.css";
@@ -1676,9 +1678,7 @@ function clearSupabaseAuthCache(){
   keys.forEach(key=>safeRemove(key));
 }
 
-function isAnonymousUser(user){
-  return Boolean(user?.is_anonymous ?? (!user?.email && (!Array.isArray(user?.identities) || user.identities.length===0)));
-}
+// [accounts] isAnonymousUser lives in src/account/playerRow.js (imported above).
 async function getAuthSession(){
   if(!supabase) return null;
   const { data, error } = await withTimeout(
@@ -1700,20 +1700,28 @@ async function authEnsureSession({recover=false}={}){
     clearSupabaseAuthCache();
   }
   if(existing?.user) return existing;
-  // [accounts] One anonymous sign-in at a time. Boot, the auth-change
-  // handler and a dev StrictMode double-mount can all ask for a guest session
-  // in the same instant; without this each call minted its own anonymous
-  // user and the player row was then written under the wrong token (403).
-  anonymousSignIn ??= withTimeout(
-    supabase.auth.signInAnonymously(),
-    AUTH_TIMEOUT_MS,
-    "Guest sign-in timed out."
-  ).finally(()=>{ anonymousSignIn = null; });
-  const { data, error } = await anonymousSignIn;
-  if(error) throw error;
-  return data.session;
+  // [accounts] One guest for the whole browser. Boot, the auth-change handler,
+  // a dev StrictMode double-mount AND every other open tab (a sign-out in one
+  // tab reaches them all through the shared stored session) can ask for a
+  // guest in the same instant. guestSession.js serialises them with a
+  // cross-tab lock and re-reads the stored session inside it, so exactly one
+  // anonymous user is created and every tab adopts it.
+  const { session } = await guestSession();
+  return session;
 }
-let anonymousSignIn = null;
+// [accounts] see src/account/guestSession.js
+const guestSession = supabase ? createGuestSessionGuard({
+  getSession: ()=>getAuthSession(),
+  signInAnonymously: async()=>{
+    const { data, error } = await withTimeout(
+      supabase.auth.signInAnonymously(),
+      AUTH_TIMEOUT_MS,
+      "Guest sign-in timed out."
+    );
+    if(error) throw error;
+    return data.session;
+  },
+}) : null;
 // [accounts] The one sign-in: the shared account (platformSignIn.js). A guest
 // with history mints its handoff code on the way out. Resolves to an error
 // message, or null when the browser is leaving for the sign-in page.
@@ -1766,7 +1774,14 @@ async function sbFetch(path, opts={}){
       session = null;
     }
   }
-  const accessToken = session?.access_token || SB_KEY;
+  return sbFetchWithToken(session?.access_token || SB_KEY, path, opts);
+}
+// [accounts] The request signed with EXACTLY the token it is given. sbFetch
+// resolves the stored session's token for ordinary reads; writes whose row
+// must belong to the signing user (the player row) pass the token from the
+// same session read that supplied the user id (src/account/playerRow.js).
+async function sbFetchWithToken(accessToken, path, opts={}){
+  if(!SUPABASE_READY) throw new Error("Supabase is not configured.");
   const res = await fetch(`${SB_URL}${path}`, {
     ...opts,
     headers:{
@@ -1984,31 +1999,21 @@ async function dbDeleteGame(id){
 }
 
 // ===== DB FUNCTIONS — PLAYERS =====
+// [accounts] The player row is written for the session that signs the request:
+// one session read supplies both the id in the row and the token on the
+// request (src/account/playerRow.js), so a sibling tab replacing the stored
+// session (a sign-out elsewhere, a guest it minted) can never split the two.
+// `user` is only a hint for the caller; the stored session decides.
 async function dbGetOrCreatePlayer(user){
   if(OFFLINE_PREVIEW) return devCurrentPlayer();
-  if(!user) return null;
-  try{
-    await sbFetch("/rest/v1/players", {
-      method:"POST",
-      headers:{"Prefer":"resolution=ignore-duplicates"},
-      body: JSON.stringify({
-        id: user.id,
-        email: user.email||null,
-        is_guest: isAnonymousUser(user),
-        last_seen_at: new Date().toISOString()
-      })
-    });
-  }catch(e){
-    if(!String(e?.message||"").includes("duplicate key")) throw e;
-  }
-  const rows = await sbFetch(`/rest/v1/players?id=eq.${user.id}&select=*`);
-  const row = rows?.[0];
-  return {
-    id: user.id,
-    email: row?.email ?? user.email ?? null,
-    isGuest: row?.is_guest ?? isAnonymousUser(user),
-    createdAt: row?.created_at ?? user.created_at ?? new Date().toISOString()
-  };
+  if(!user && !supabase) return null;
+  return ensurePlayerRow({
+    getSession: async()=>{
+      const live = await getAuthSession();
+      return live?.user ? live : authEnsureSession();
+    },
+    fetchWithToken: sbFetchWithToken,
+  });
 }
 
 // ===== DB FUNCTIONS — GAME RECORDS =====
@@ -4524,8 +4529,21 @@ export default function WhatTheFudgeTrivia(){
             "Auth reload timed out."
           );
         }catch(e){
-          setError("Couldn't connect to server. Check your connection.");
-          console.error("[auth change] reload failed", e);
+          // [accounts] A sign-out in another tab can land here while the
+          // browser's tabs are still agreeing on the new guest. Ask once more
+          // for the (now shared) guest before giving up on the page.
+          console.error("[auth change] reload failed, retrying once", e);
+          try{
+            if(!active) return;
+            await withTimeout(
+              loadAppData(null,{recoverAuth:true}),
+              APP_BOOT_TIMEOUT_MS,
+              "Auth reload retry timed out."
+            );
+          }catch(retryError){
+            setError("Couldn't connect to server. Check your connection.");
+            console.error("[auth change] retry failed", retryError);
+          }
         }
       },0);
     });

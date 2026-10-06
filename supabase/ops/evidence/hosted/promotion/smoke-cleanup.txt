@@ -1,0 +1,14 @@
+content before: 31 games, 349 questions, fingerprint 3226a2997d1e40f0cefb193c6fc71aa7
+APPLYING .runtime/smoke-cleanup.sql (1109 chars) to ujhwjxjgrygchtnzwvjk inside one transaction…
+[
+ {
+  "smoke_plays_left": 0,
+  "today_finished_now": 1,
+  "today_histogram": {
+   "9": 1
+  }
+ }
+]
+applied.
+content after:  31 games, 349 questions, fingerprint 3226a2997d1e40f0cefb193c6fc71aa7
+CONTENT UNCHANGED by this run.
