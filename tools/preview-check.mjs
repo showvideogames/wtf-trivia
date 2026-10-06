@@ -80,9 +80,14 @@ for (const [fn, body] of Object.entries(rpcArgs)) {
 }
 const ping = await fetch(`${SB}/rest/v1/rpc/ping`, { method: "POST", headers: anonHeaders, body: "{}" });
 check("anon can ping", ping.status === 200 && (await ping.text()) === "true", `HTTP ${ping.status}`);
-const gameWrite = await fetch(`${SB}/rest/v1/games`, { method: "POST", headers: { ...anonHeaders, Prefer: "return=minimal" }, body: JSON.stringify({ id: "g-preview-probe", date: "2031-01-01", theme_title: "probe", category_a: "A", category_b: "B", status: "draft", questions: [] }) });
-const gateOn = gameWrite.status === 401 || gameWrite.status === 403;
-check(gateOn ? "anon cannot write content (admin gate ON)" : "anon content write status (admin gate not yet applied)", true, `HTTP ${gameWrite.status}${gateOn ? "" : " — remove g-preview-probe if it was created"}`);
+// The content-write probe is OPT-IN (--expect-admin-gate): before 0003 is applied it would
+// succeed and leave a draft row behind, which is exactly what this project must never do.
+if (args.includes("--expect-admin-gate")) {
+  const gameWrite = await fetch(`${SB}/rest/v1/games`, { method: "POST", headers: { ...anonHeaders, Prefer: "return=minimal" }, body: JSON.stringify({ id: "g-preview-probe", date: "2031-01-01", theme_title: "probe", category_a: "A", category_b: "B", status: "draft", questions: [] }) });
+  check("anon cannot write content (admin gate ON)", gameWrite.status === 401 || gameWrite.status === 403, `HTTP ${gameWrite.status}${gameWrite.status < 300 ? " — A ROW WAS CREATED; remove g-preview-probe" : ""}`);
+  const gameDel = await fetch(`${SB}/rest/v1/games?id=eq.g-preview-probe`, { method: "DELETE", headers: anonHeaders });
+  check("anon cannot delete content (admin gate ON)", gameDel.status === 401 || gameDel.status === 403, `HTTP ${gameDel.status}`);
+}
 
 // 4. the guest path: an anonymous sign-in gets its own player row, cannot touch others, is not an account.
 //    Skipped with --no-guest (it creates one anonymous auth user; the browser smoke covers the same path).
