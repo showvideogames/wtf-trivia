@@ -15,6 +15,7 @@ import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats
 import { gameToRow, rowToGame } from "./gameRow.js";
 import { copyText, prepareShareImage, puzzleArtworkUrl, shareResult } from "./homeShare.js";
 import { normalizeShareLabel } from "./share.js";
+import { answerButtonName } from "./categoryNames.js";
 import PlayerHeader from "./PlayerHeader.jsx";
 import GameProgress from "./GameProgress.jsx";
 import { PlayerChromeContext } from "./playerChrome.js";
@@ -1950,13 +1951,14 @@ async function dbSaveGame(game){
     const confirmed = Array.isArray(saved) && saved.some(r=>r.id===row.id && r.date===row.date && r.status===row.status);
     if(!confirmed) throw new Error("The database didn't confirm the save.");
   }
-  // A save that carried share names, subtitles or tags proves the columns
+  // A save that carried share names, subtitles, button names or tags proves the columns
   // exist, so later saves from this editor always send them (clearing a name
   // then saves null, and removing the last tag saves []).
   const saved = {
     ...uploaded,
     ...("category_a_share_name" in row ? {shareNameColumns:true} : {}),
     ...("category_a_subtitle" in row ? {subtitleColumns:true} : {}),
+    ...("category_a_button_name" in row ? {buttonNameColumns:true} : {}),
     ...("tags" in row ? {tagsColumn:true} : {})
   };
   return { game: saved, imageFailures: failures };
@@ -1967,8 +1969,9 @@ function describeSaveError(e){
   if(/Failed to fetch|NetworkError|Load failed/i.test(msg)) return "the database couldn't be reached. Check your connection.";
   const status = msg.match(/Supabase error (\d{3})/)?.[1];
   if(status==="401"||status==="403") return "the database refused the change (permission denied).";
-  if(msg.includes("_share_name")) return "the database doesn't have the share-name columns yet (supabase/share_names.sql). Clear both share names to save without them.";
-  if(msg.includes("_subtitle")) return "the database doesn't have the category subtitle columns yet (supabase/category_subtitles.sql). Clear both subtitles to save without them.";
+  if(msg.includes("_share_name")) return "the database doesn't have the share-name columns yet (run supabase/category_display_names.sql). Clear both share names to save without them.";
+  if(msg.includes("_subtitle")) return "the database doesn't have the category subtitle columns yet (run supabase/category_display_names.sql). Clear both subtitles to save without them.";
+  if(msg.includes("_button_name")) return "the database doesn't have the answer button name columns yet (run supabase/category_display_names.sql). Clear both button names to save without them.";
   if(msg.includes("'tags' column")) return "the database doesn't have the topic tags column yet (supabase/puzzle_tags.sql). Deselect every topic to save without it.";
   if(msg.includes("games_one_published_per_date")) return "another published puzzle already has that date. Pick another day.";
   if(msg.includes("game_records_puzzle_id_fkey")) return "players have already played this puzzle, so it can't be deleted. Retire it instead.";
@@ -2625,6 +2628,24 @@ const PALETTE = [
   {id:"mint",    name:"Peppermint",     light:"#6EE7B7", mid:"#34D399", dark:"#059669", isDark:true},
   {id:"peach",   name:"Peach Fudge",    light:"#FDBA74", mid:"#FB923C", dark:"#9A3412", isDark:true},
   {id:"cream",   name:"Vanilla",        light:"#FEF9C3", mid:"#FEF08A", dark:"#CA8A04", isDark:false},
+  // Added 2026-10: new ids, so no saved puzzle changes colour.
+  {id:"butter",      name:"Butter Yellow",  light:"#FBEBA6", mid:"#F5D867", dark:"#D4A72C", isDark:false},
+  {id:"mint-pastel", name:"Mint",           light:"#B5E9CF", mid:"#83D5AE", dark:"#3FA878", isDark:false},
+  {id:"lavender",    name:"Lavender",       light:"#D3C3F2", mid:"#B49AE5", dark:"#7B5CC8", isDark:false},
+  {id:"rose-pink",   name:"Rose Pink",      light:"#F6CDDB", mid:"#ECA7BF", dark:"#C86A8E", isDark:false},
+  {id:"deep-blue",   name:"Deep Blue",      light:"#5671BE", mid:"#304D9B", dark:"#1F3570", isDark:true},
+  {id:"watermelon",  name:"Watermelon Red", light:"#FBA5A5", mid:"#F77979", dark:"#D94848", isDark:false},
+];
+// The Studio picker's order: by colour family, every id once. Display only;
+// PALETTE's own order (teal and pink first, the defaults) is unchanged.
+const PALETTE_FAMILIES = [
+  {name:"Reds",    ids:["watermelon","red"]},
+  {name:"Oranges", ids:["peach","orange"]},
+  {name:"Yellows", ids:["cream","butter","yellow","amber"]},
+  {name:"Greens",  ids:["lime","green","mint-pastel","mint","teal"]},
+  {name:"Blues",   ids:["sky","blue","deep-blue"]},
+  {name:"Purples", ids:["lavender","purple","violet"]},
+  {name:"Pinks",   ids:["rose-pink","rose","pink"]},
 ];
 // A puzzle's two saved category colours, with the long-standing defaults.
 function categoryColors(game){
@@ -3090,11 +3111,14 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
   const cq=qs[idx];
   const isLast=idx===qs.length-1;
 
+  // The answer buttons' labels: each side's button name, else its category
+  // name. Display only; an answer is always the side, "A" or "B".
+  const btnA=answerButtonName(game,"A"), btnB=answerButtonName(game,"B");
   // Both answer labels share one ceiling, derived from the longer of the two
-  // category names, so the pair reads as a matched set instead of one card
+  // labels, so the pair reads as a matched set instead of one card
   // shouting. Each label still auto-fits below that ceiling, which is what
   // keeps a long name shrinking rather than breaking inside a word.
-  const longestLabel=Math.max(String(game.categoryA||"").length,String(game.categoryB||"").length);
+  const longestLabel=Math.max(btnA.length,btnB.length);
   const baseLabelMax = longestLabel<=8?32:longestLabel<=12?27:longestLabel<=18?22:longestLabel<=26?19:17;
   // The wide desktop answer row (game.css, 1100px and up) has buttons about
   // twice a phone's width, so the ceiling rises there -- by about a third,
@@ -3206,8 +3230,8 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
           </div>
           <div className="ans-btns">
             {[
-              {cat:"A",label:cq._catA,img:game.categoryAImage,color:PALETTE.find(p=>p.id===(game.categoryAColor||"teal"))||PALETTE[0]},
-              {cat:"B",label:cq._catB,img:game.categoryBImage,color:PALETTE.find(p=>p.id===(game.categoryBColor||"pink"))||PALETTE[1]}
+              {cat:"A",label:btnA,img:game.categoryAImage,color:PALETTE.find(p=>p.id===(game.categoryAColor||"teal"))||PALETTE[0]},
+              {cat:"B",label:btnB,img:game.categoryBImage,color:PALETTE.find(p=>p.id===(game.categoryBColor||"pink"))||PALETTE[1]}
             ].map(({cat,label,img,color})=>{
               let boxCls="ans-box";
               if(animBtn?.cat===cat) boxCls+=animBtn.correct?" correct":" wrong";
@@ -4017,6 +4041,7 @@ function AdminLogin({onLogin,onExit}){
 // Everything the Puzzle Studio components (src/admin/) borrow from here.
 const STUDIO_SERVICES = {
   palette: PALETTE,
+  paletteFamilies: PALETTE_FAMILIES,
   uploadBytes: uploadBytesToStorage,
   isStoredImage: isStorageImageUrl,
   youtubeEmbedUrl: getYouTubeEmbedUrl,
@@ -4321,7 +4346,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
         </div>
         <div id="ps-panel-questions" role="tabpanel" aria-labelledby="ps-tab-questions" hidden={tab!=="questions"}>
           <div className={`ps-qlayout${mobileEditing&&editing?" is-editing":""}`}>
-            <QuestionList questions={qs} catA={game.categoryA} catB={game.categoryB} colorA={colorA} colorB={colorB}
+            <QuestionList questions={qs} catA={answerButtonName(game,"A")} catB={answerButtonName(game,"B")} colorA={colorA} colorB={colorB}
                           selected={sel} onSelect={selectQuestion} onAdd={startNew} onMove={moveQ} onDelete={delQ}/>
             {editing?(
               <QuestionEditor
@@ -4329,7 +4354,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
                 question={editing}
                 number={typeof sel==="number"?sel+1:qc+1}
                 isNew={sel==="new"}
-                catA={game.categoryA} catB={game.categoryB} colorA={colorA} colorB={colorB}
+                catA={answerButtonName(game,"A")} catB={answerButtonName(game,"B")} colorA={colorA} colorB={colorB}
                 onChange={patch=>sel==="new"?setNewQ(q=>({...q,...patch})):updQ(sel,patch)}
                 onBusyChange={trackImage("question")}
                 fieldId={`img-field-q-${editingKey}`}

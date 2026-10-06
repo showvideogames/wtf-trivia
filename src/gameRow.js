@@ -16,6 +16,11 @@ import { normalizeTags } from "./topics.js";
 // second line under each name in the gameplay matchup banner ("Song").
 // Same rule as share names: sent when the puzzle has one, or when its row
 // came back with the columns (so clearing one saves null).
+//
+// Answer button names (supabase/category_display_names.sql) are the optional
+// labels on the two answer-choice buttons; blank means "use the category
+// name" (answerButtonName). Same rule again. None of these display names
+// touch answers: a question's correctCategory is always "A" or "B".
 function trimmedShareName(value){
   return typeof value==="string" && value.trim() ? value.trim() : null;
 }
@@ -24,6 +29,8 @@ export function gameToRow(g){
   const shareB = trimmedShareName(g.categoryBShareName);
   const subA = trimmedShareName(g.categoryASubtitle);
   const subB = trimmedShareName(g.categoryBSubtitle);
+  const btnA = trimmedShareName(g.categoryAButtonName);
+  const btnB = trimmedShareName(g.categoryBButtonName);
   const tags = normalizeTags(g.tags);
   return {
     id: g.id,
@@ -40,6 +47,7 @@ export function gameToRow(g){
     questions: g.questions||[],
     ...(shareA||shareB||g.shareNameColumns ? {category_a_share_name:shareA, category_b_share_name:shareB} : {}),
     ...(subA||subB||g.subtitleColumns ? {category_a_subtitle:subA, category_b_subtitle:subB} : {}),
+    ...(btnA||btnB||g.buttonNameColumns ? {category_a_button_name:btnA, category_b_button_name:btnB} : {}),
     ...(tags.length||g.tagsColumn ? {tags} : {})
   };
 }
@@ -61,6 +69,9 @@ export function rowToGame(r){
     categoryASubtitle: r.category_a_subtitle||"",
     categoryBSubtitle: r.category_b_subtitle||"",
     subtitleColumns: "category_a_subtitle" in r,
+    categoryAButtonName: r.category_a_button_name||"",
+    categoryBButtonName: r.category_b_button_name||"",
+    buttonNameColumns: "category_a_button_name" in r,
     tags: normalizeTags(r.tags),
     tagsColumn: "tags" in r,
     status: r.status,
