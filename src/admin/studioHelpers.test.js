@@ -68,7 +68,7 @@ describe("question status", ()=>{
   it("lists missing authoring fields", ()=>{
     expect(questionGaps({itemText:"A", explanationCopy:"x", flavorCopy:"y"}, isYT)).toEqual([]);
     expect(questionGaps({itemText:" ", imageUrl:"https://e.com/a.png"}, isYT))
-      .toEqual(["Item text","Actual Info","Needless Commentary","Alt text"]);
+      .toEqual(["Item text","Needless Commentary","Actual Info","Alt text"]);
     expect(questionGaps({itemText:"A", explanationCopy:"x", flavorCopy:"y", imageUrl:"https://youtu.be/abc"}, isYT)).toEqual([]);
   });
   it("summarises only what is missing", ()=>{

@@ -38,9 +38,10 @@ import { histogramBuckets } from "./scoreHistogram.js";
 import { StudioContext, paletteColor } from "./admin/StudioContext.js";
 import { localDateFromISO } from "./admin/adminDates.js";
 import { findDateConflict } from "./admin/dashboardGroups.js";
-import { firstBlankItem, followMove, hasText, moveQuestion, questionCountOk, questionKey } from "./admin/questionStatus.js";
+import { firstBlankItem, followMove, moveQuestion, questionCountOk, questionKey } from "./admin/questionStatus.js";
 import Dashboard from "./admin/Dashboard.jsx";
 import { EditorActions, EditorHeader, EditorTabs, MobileActionBar, NoticeBar } from "./admin/EditorChrome.jsx";
+import { buildPuzzleExport, downloadTextFile, exportFileName } from "./admin/puzzleExport.js";
 import SetupTab from "./admin/SetupTab.jsx";
 import QuestionList from "./admin/QuestionList.jsx";
 import QuestionEditor from "./admin/QuestionEditor.jsx";
@@ -3287,18 +3288,19 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
 
           <GameRevealMedia question={cq}/>
 
-          {cq.explanationCopy&&(
-            <section className="gp-panel gp-panel-info">
-              <PanelIcon kind="info"/>
-              <h3 className="gp-panel-lbl">Actual info</h3>
-              <p className="gp-panel-body">{cq.explanationCopy}</p>
-            </section>
-          )}
+          {/* Needless commentary first, then the actual info. */}
           {cq.flavorCopy&&(
             <section className="gp-panel gp-panel-fun">
               <PanelIcon kind="fun"/>
               <h3 className="gp-panel-lbl">Needless commentary</h3>
               <p className="gp-panel-body">{cq.flavorCopy}</p>
+            </section>
+          )}
+          {cq.explanationCopy&&(
+            <section className="gp-panel gp-panel-info">
+              <PanelIcon kind="info"/>
+              <h3 className="gp-panel-lbl">Actual info</h3>
+              <p className="gp-panel-body">{cq.explanationCopy}</p>
             </section>
           )}
 
@@ -4082,10 +4084,12 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
   const inDb=(games||[]).some(g=>g.id===ig.id);
   const[game,setGame]=useState(()=>loadEditorDraft(ig));
   const[tab,setTab]=useState("setup");
-  const[selected,setSelected]=useState(0); // question index, "new", or null
+  const[selected,setSelected]=useState(0); // question index, or null
   const[mobileEditing,setMobileEditing]=useState(false); // phones: editor in place of the list
-  const[newQ,setNewQ]=useState(null); // a question being written, not yet added
-  const[addError,setAddError]=useState(null);
+  // The question Add question just appended, until another is selected: its
+  // blank item text is shown as a to-do rather than an error.
+  const[freshKey,setFreshKey]=useState(null);
+  const[focusItem,setFocusItem]=useState(0); // bumped to focus Item text after Add question
   const[notice,setNotice]=useState(null); // {kind:"success"|"info"|"progress"|"error", text}
   const[imageWarning,setImageWarning]=useState(null); // {items, action} after a save with image failures
   const[saving,setSaving]=useState(false); // false | "save" | "publish"
@@ -4139,7 +4143,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
   const validateItems = () => {
     const i = firstBlankItem(qs);
     if(i<0) return true;
-    setTab("questions");setSelected(i);setNewQ(null);setMobileEditing(true);
+    setTab("questions");setSelected(i);setFreshKey(null);setMobileEditing(true);
     say("error",`Question ${i+1} has no item text. Add it, or delete the question, before saving.`);
     return false;
   };
@@ -4228,34 +4232,36 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
     onBack();
   };
   const openPreview=()=>{ if(!waitForImages()) setPreview(true); };
+  // Export text: the puzzle exactly as it is in this editor, unsaved edits
+  // included, downloaded as a .txt file. Never touches the database.
+  const exportText=()=>{
+    const body=buildPuzzleExport(game,{palette:PALETTE,isYouTube:isYouTubeUrl,unsaved:dirty||!inDb});
+    downloadTextFile(exportFileName(game),body);
+    say("success","Puzzle text exported.");
+  };
 
   // ---- questions ----
-  const sel = typeof selected==="number" ? (qc ? Math.min(selected, qc-1) : null) : selected==="new"&&newQ ? "new" : null;
+  const sel = typeof selected==="number"&&qc ? Math.min(selected, qc-1) : null;
   const holdForUpload=()=>{ if(questionBusy){ say("info","Hang on, the question's image is still uploading…"); return true; } return false; };
-  const dropNewDraft=()=>{
-    if(newQ && (hasText(newQ.itemText)||hasText(newQ.explanationCopy)||hasText(newQ.flavorCopy)||hasText(newQ.imageUrl))
-       && !window.confirm("Discard the new question you started?")) return false;
-    setNewQ(null);setAddError(null);
-    return true;
-  };
   const selectQuestion=i=>{
     if(i===sel){ setMobileEditing(true); return; }
-    if(holdForUpload()||!dropNewDraft()) return;
-    setSelected(i);setMobileEditing(true);
-  };
-  const startNew=()=>{
-    if(sel==="new"){ setMobileEditing(true); return; }
     if(holdForUpload()) return;
-    setNewQ({...BLANK_QUESTION});setAddError(null);setSelected("new");setMobileEditing(true);
-    requestAnimationFrame(()=>document.getElementById("ps-q-item")?.focus({preventScroll:true}));
+    setSelected(i);setFreshKey(null);setMobileEditing(true);
   };
-  const addNew=()=>{
-    if(questionBusy){ setAddError("Hang on, the image is still uploading…"); return; }
-    if(!hasText(newQ.itemText)){ setAddError("Add the item text first."); document.getElementById("ps-q-item")?.focus(); return; }
-    setGame(g=>({...g,questions:[...(g.questions??[]),{...newQ,id:`q-${Date.now()}`,orderIndex:(g.questions?.length??0)+1}]}));
-    setNewQ(null);setAddError(null);setSelected(qc);
+  // Add question appends a blank question to this editor's copy of the
+  // puzzle (and so to the on-device draft) and opens it, like any other.
+  // Nothing is saved to the database; the save-time checks still apply.
+  const startNew=()=>{
+    if(holdForUpload()) return;
+    const id=`q-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+    setGame(g=>({...g,questions:[...(g.questions??[]),{...BLANK_QUESTION,id,orderIndex:(g.questions?.length??0)+1}]}));
+    setSelected(qc);setFreshKey(id);setMobileEditing(true);setFocusItem(n=>n+1);
   };
-  const cancelNew=()=>{ if(!dropNewDraft()) return; setSelected(qc?0:null); setMobileEditing(false); };
+  useEffect(()=>{
+    if(!focusItem) return;
+    const id=requestAnimationFrame(()=>document.getElementById("ps-q-item")?.focus());
+    return ()=>cancelAnimationFrame(id);
+  },[focusItem]);
   const updQ=(i,patch)=>setGame(g=>({...g,questions:g.questions.map((q,j)=>j===i?{...q,...patch}:q)}));
   const delQ=i=>{
     const q=qs[i];
@@ -4277,7 +4283,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
     if(f.kind==="question"){
       const idx=f.questionId!=null?qs.findIndex(x=>x.id===f.questionId):f.questionIndex;
       if(idx==null||idx<0||!qs[idx]) return;
-      setNewQ(null);setTab("questions");setSelected(idx);setMobileEditing(true);
+      setTab("questions");setSelected(idx);setFreshKey(null);setMobileEditing(true);
       setFocusImage(`img-field-q-${questionKey(qs[idx],idx)}`);
     }else{
       setTab("setup");
@@ -4310,8 +4316,8 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
 
   const colorA=paletteColor(PALETTE, game.categoryAColor||"teal", 0);
   const colorB=paletteColor(PALETTE, game.categoryBColor||"pink", 1);
-  const editing = sel==="new" ? newQ : typeof sel==="number" ? qs[sel] : null;
-  const editingKey = sel==="new" ? "new" : typeof sel==="number" ? questionKey(qs[sel],sel) : null;
+  const editing = sel!=null ? qs[sel] : null;
+  const editingKey = sel!=null ? questionKey(qs[sel],sel) : null;
 
   const status = saving ? {tone:"saving", text:saving==="publish"?"Publishing…":"Saving…"}
     : dirty&&saveFailed ? {tone:"error", text:"Couldn’t save", detail:!published&&autoSaveState==="saved"?"Draft kept on this device":null}
@@ -4330,7 +4336,13 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
       <EditorHeader heading={inDb?"Edit Puzzle":"New Puzzle"} title={game.themeTitle||"Untitled puzzle"} headerImage={game.headerImage}
                     status={status} onBack={leave} actions={actions} notice={notice?noticeBar:null}/>
       <main className="ps-editor-main">
-        <EditorTabs tab={tab} onTab={setTab} questionsLabel={<>Questions<span className="ps-tab-count"> · {qc}</span></>}/>
+        <div className="ps-tabs-row">
+          <EditorTabs tab={tab} onTab={setTab} questionsLabel={<>Questions<span className="ps-tab-count"> · {qc}</span></>}/>
+          <button type="button" className="ps-btn ps-btn-sm ps-export-btn" onClick={exportText}
+                  title="Download this puzzle as a .txt file, unsaved edits included">
+            <Icon name="download" size={16}/>Export text
+          </button>
+        </div>
         {imageWarning&&(openWarnings.length>0||resolvedWarnings.length>0)&&(
           <div ref={warnRef}>
             <ImageWarningPanel game={game} action={imageWarning.action} open={openWarnings} resolved={resolvedWarnings}
@@ -4352,16 +4364,15 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack}){
               <QuestionEditor
                 key={editingKey}
                 question={editing}
-                number={typeof sel==="number"?sel+1:qc+1}
-                isNew={sel==="new"}
+                number={sel+1}
+                fresh={editingKey===freshKey}
                 catA={answerButtonName(game,"A")} catB={answerButtonName(game,"B")} colorA={colorA} colorB={colorB}
-                onChange={patch=>sel==="new"?setNewQ(q=>({...q,...patch})):updQ(sel,patch)}
+                onChange={patch=>updQ(sel,patch)}
                 onBusyChange={trackImage("question")}
                 fieldId={`img-field-q-${editingKey}`}
-                onAdd={addNew} onCancel={cancelNew} addError={addError}
-                onPrev={typeof sel==="number"&&sel>0?()=>selectQuestion(sel-1):null}
-                onNext={typeof sel==="number"&&sel<qc-1?()=>selectQuestion(sel+1):null}
-                onBackToList={()=>{ if(sel==="new") cancelNew(); else setMobileEditing(false); }}
+                onPrev={sel>0?()=>selectQuestion(sel-1):null}
+                onNext={sel<qc-1?()=>selectQuestion(sel+1):null}
+                onBackToList={()=>setMobileEditing(false)}
               />
             ):(
               <div className="ps-panel ps-qeditor is-empty">

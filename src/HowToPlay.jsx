@@ -66,8 +66,8 @@ export default function HowToPlay({ onClose, onPlay }) {
             <span className="htp-num htp-num-3" aria-hidden="true">3</span>
             <h3 className="htp-step-title">Enjoy the reveal</h3>
             <div className="htp-pic htp-pic-reveal" aria-hidden="true">
-              <span className="htp-strip htp-strip-info"><DocIcon/>Actual info</span>
               <span className="htp-strip htp-strip-comm"><BubbleIcon/>Needless commentary</span>
+              <span className="htp-strip htp-strip-info"><DocIcon/>Actual info</span>
             </div>
           </li>
         </ol>
