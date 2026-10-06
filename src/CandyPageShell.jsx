@@ -103,13 +103,23 @@ function Piece({ d, set }) {
 
 const SETS = [[DECOR_DT, "cps-dt"], [DECOR_TB, "cps-tb"], [DECOR_PH, "cps-ph"]];
 
-export default function CandyPageShell({ className = "", children }) {
+// The canvas and the candy pieces on their own: the page draws them behind
+// itself, and the sticky header draws a copy behind its bar (PlayerHeader).
+export function CandyCanvas() {
   return (
-    <div className={`cps-page ${className}`.trim()}>
+    <>
       <div className="cps-glow" aria-hidden="true"/>
       <div className="cps-decor" aria-hidden="true">
         {SETS.flatMap(([list, set]) => list.map((d, i) => <Piece key={set + i} d={d} set={set}/>))}
       </div>
+    </>
+  );
+}
+
+export default function CandyPageShell({ className = "", children }) {
+  return (
+    <div className={`cps-page ${className}`.trim()}>
+      <CandyCanvas/>
       {children}
     </div>
   );

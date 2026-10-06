@@ -86,6 +86,33 @@
   margin: 0 auto;
   padding: max(12px, env(safe-area-inset-top)) 24px 0;
 }
+/* Home and Archive: the frame stays pinned to the top while the page
+   scrolls. It keeps its place in the flow (sticky, not fixed), so nothing
+   moves when it pins. Behind the bar it carries a copy of the page's own
+   canvas and candy pieces (CandyCanvas): those layers are fixed to the
+   viewport exactly like the page's, and clip-path trims them to the frame,
+   so at rest the copy lines up with the page underneath and can't be seen,
+   and while scrolling the gap above the bar, its gutters and its rounded
+   corners stay opaque. Dialogs (z-index 60 and up) still cover the frame.
+   Gameplay, Results and Admin never get this class. */
+.ph-sticky {
+  position: sticky;
+  top: 0;
+}
+.ph-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  clip-path: inset(0);
+  pointer-events: none;
+}
+/* Keyboard focus, find-in-page and in-page jumps stop below the pinned bar:
+   the gap above it, the bar itself (72px phone row, 70px from 900px) and a
+   little air. */
+html:has(.ph-sticky) { scroll-padding-top: calc(max(12px, env(safe-area-inset-top)) + 72px + 12px); }
+@media (min-width: 900px) {
+  html:has(.ph-sticky) { scroll-padding-top: calc(max(12px, env(safe-area-inset-top)) + 70px + 12px); }
+}
 /* Loading and error: the header holds its place but has nothing behind its
    links yet, and the account button isn't known. */
 .ph-pending .sh-account { visibility: hidden; }
