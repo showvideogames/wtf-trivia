@@ -546,6 +546,22 @@
   overflow-wrap: anywhere;
   font-size: 15px; line-height: 1.4; color: var(--ps-ink);
 }
+/* The link preview card under the message, like a messaging app draws one:
+   a wide picture across the top, or a small square beside the text. */
+.ps-share-card {
+  display: flex; flex-direction: column;
+  margin: 0 10px 10px;
+  overflow: hidden;
+  border: 1px solid var(--ps-line);
+  border-radius: 12px;
+  background: #F6F4EF;
+}
+.ps-share-card:has(.ps-share-card-thumb) { flex-direction: row; align-items: center; }
+.ps-share-card-thumb { flex: none; width: 72px; height: 72px; object-fit: cover; }
+.ps-share-card-text { display: grid; gap: 2px; min-width: 0; padding: 8px 12px 10px; }
+.ps-share-card-title { font-weight: 800; font-size: 14px; line-height: 1.3; color: var(--ps-ink); overflow-wrap: anywhere; }
+.ps-share-card-desc { font-size: 13px; line-height: 1.35; color: var(--ps-ink-2); overflow-wrap: anywhere; }
+.ps-share-card-site { font-size: 12px; color: var(--ps-ink-3); }
 
 /* Category names: one row per place a name appears (its label and hint,
    then Category A and B side by side), and a small preview underneath. */
@@ -612,7 +628,7 @@
   font-size: 14px; font-weight: 700; line-height: 1.4; color: var(--ps-ink);
   overflow-wrap: anywhere;
 }
-.ps-np-share > div:nth-child(2) { padding-left: 2.2em; color: var(--ps-ink-3); }
+.ps-np-share > div:nth-child(2) { color: var(--ps-ink-3); }
 @media (max-width: 1080px) {
   .ps-names-row { grid-template-columns: 1fr 1fr; }
   .ps-names-head { grid-column: 1 / -1; }

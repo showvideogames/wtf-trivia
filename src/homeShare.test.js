@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { isPhoneOrTablet, shareOrCopy } from "./homeShare.js";
-import { shareTextFor } from "./crowdStats.js";
+import { isPhoneOrTablet, shareFeedback, shareResult } from "./homeShare.js";
+import { buildResultsShareText } from "./share.js";
+
+const shareOrCopy = (text, nav) => shareResult({ text }, nav);
 
 const UA = {
   iPhone: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
@@ -40,9 +42,8 @@ describe("isPhoneOrTablet", () => {
   });
 });
 
-describe("shareOrCopy", () => {
-  const TEXT = "What The Fudge Trivia 🍬\n━━━━━━━━━━━━━━━━━━━━━━━━━━\nHarry Potter Character 🧙‍♂️\n     OR\nPro Hockey Player? 🏒\n" +
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━\n🔴🟢\n1/2 • Beat 50% of players\nwhatthefudge.gg";
+describe("shareResult", () => {
+  const TEXT = "🔴🟢\n1/2 ➜ Can you beat my score?!\nhttps://whatthefudge.gg/puzzle/g-hp";
 
   it("copies on desktop without opening the share panel, even when one exists", async () => {
     const nav = fakeNav({ userAgent: UA.windowsChrome, mobile: false, share: vi.fn().mockResolvedValue(undefined) });
@@ -83,22 +84,36 @@ describe("shareOrCopy", () => {
     expect(await shareOrCopy(TEXT, { userAgent: UA.windowsChrome })).toBe("failed");
   });
 
-  it("sends Results' own share text through unchanged", async () => {
-    const game = { categoryA: "Harry Potter Characters", categoryB: "Professional Hockey Players",
-      categoryAShareName: "Harry Potter Character 🧙‍♂️", categoryBShareName: "Pro Hockey Player? 🏒" };
+  it("sends Results' own share text, link included, through unchanged", async () => {
+    const game = { id: "g-hp", categoryA: "Harry Potter Characters", categoryB: "Professional Hockey Players" };
     const answers = [..."0001111100"].map((c, i) => ({ questionIndex: i, correct: c === "1" }));
     const record = { puzzleId: "g-hp", date: "2026-09-27", score: 5, totalQuestions: 10, answers, completed: true };
-    const crowd = { puzzleId: "g-hp", score: 5, status: "ready", stats: { finishedPlayers: 10, scoreHistogram: { 4: 2, 5: 3, 7: 5 } } };
-    const text = shareTextFor(game, record, crowd);
-    expect(text).toBe(
-      "What The Fudge Trivia 🍬\n━━━━━━━━━━━━━━━━━━━━━━━━━━\nHarry Potter Character 🧙‍♂️\n     OR\nPro Hockey Player? 🏒\n" +
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n🔴🔴🔴🟢🟢🟢🟢🟢🔴🔴\n5/10 • Beat 20% of players\nwhatthefudge.gg"
-    );
+    const text = buildResultsShareText({ game, record });
+    expect(text).toBe("🔴🔴🔴🟢🟢🟢🟢🟢🔴🔴\n5/10 ➜ Can you beat my score?!\nhttps://whatthefudge.gg/puzzle/g-hp");
     const phone = fakeNav({ userAgent: UA.iPhone, maxTouchPoints: 5, share: vi.fn().mockResolvedValue(undefined) });
     const desktop = fakeNav({ userAgent: UA.windowsChrome });
     await shareOrCopy(text, phone);
     await shareOrCopy(text, desktop);
     expect(phone.share.mock.calls[0][0].text).toBe(text);
     expect(desktop.clipboard.writeText.mock.calls[0][0]).toBe(text);
+  });
+
+  it("never attaches an image file: the link carries the preview", async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    const nav = { ...fakeNav({ userAgent: UA.iPhone, maxTouchPoints: 5, share }), canShare: vi.fn(() => true) };
+    expect(await shareResult({ text: TEXT, imageUrl: "https://x.test/poster.png" }, nav)).toBe("shared");
+    expect(share).toHaveBeenCalledTimes(1);
+    expect(share.mock.calls[0][0]).toEqual({ text: TEXT });
+    expect(nav.canShare).not.toHaveBeenCalled();
+  });
+});
+
+describe("shareFeedback", () => {
+  it("shows feedback only for a real copy or a failed one", () => {
+    expect(shareFeedback("copied")).toBe("copied");
+    expect(shareFeedback("failed")).toBe("failed");
+    expect(shareFeedback("shared")).toBeNull();
+    expect(shareFeedback("cancelled")).toBeNull();
+    expect(shareFeedback(null)).toBeNull();
   });
 });

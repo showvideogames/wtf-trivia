@@ -213,8 +213,9 @@ function ShareGlyph() {
 
 // Today is finished: the real score, the Results copy for it, See my results
 // and the existing Home Share (onShare resolves to shareResult's outcome).
-// No replay from here.
-export function HomeDonePanel({ score, total, message, onResults, onShare }) {
+// No replay from here. A puzzle link to an earlier puzzle reuses the panel
+// with its own first button (`primaryLabel`, Play again).
+export function HomeDonePanel({ score, total, message, onResults, onShare, primaryLabel = null }) {
   // Share feedback: "copied" flips the button label for a moment; "failed"
   // stays until the next press. Presses while a share sheet is open are ignored.
   const [shareStatus, setShareStatus] = useState(null);
@@ -241,7 +242,7 @@ export function HomeDonePanel({ score, total, message, onResults, onShare }) {
       {message && <p className="hm-done-msg">{message}</p>}
       <div className="hm-done-actions">
         <button type="button" className="hm-done-btn hm-done-results" onClick={onResults}>
-          See my results <span aria-hidden="true">{"\u{1F389}"}</span>
+          {primaryLabel || <>See my results <span aria-hidden="true">{"\u{1F389}"}</span></>}
         </button>
         {/* Both labels sit in one grid cell, so the button is always sized
             for the wider one and "Copied!" moves nothing. */}
@@ -253,7 +254,9 @@ export function HomeDonePanel({ score, total, message, onResults, onShare }) {
       <span className="hm-sr-only" role="status">{shareStatus === "copied" ? "Result copied to clipboard" : ""}</span>
       {shareStatus === "failed" && (
         <p className="hm-share-error" role="alert">
-          Couldn&rsquo;t copy your result. Open &ldquo;See my results&rdquo; and copy the text shown there.
+          {primaryLabel
+            ? <>Couldn&rsquo;t copy your result. Please try again.</>
+            : <>Couldn&rsquo;t copy your result. Open &ldquo;See my results&rdquo; and copy the text shown there.</>}
         </p>
       )}
     </section>

@@ -23,6 +23,7 @@ const APPROVED = [
   ["internet_memes", "Internet & Memes 🌐"],
   ["cars", "Cars 🚗"],
   ["toys", "Toys 🧸"],
+  ["made-up", "Made Up 🙄"],
 ];
 
 describe("topic definitions", () => {
@@ -58,6 +59,15 @@ describe("normalizeTags", () => {
 
   it("drops repeats and ids outside the approved list", () => {
     expect(normalizeTags(["music", "music", "Music", "made_up"])).toEqual(["music"]);
+  });
+
+  it("keeps Made Up under its stable id, after the older topics, without touching them", () => {
+    expect(topicById("made-up")).toEqual({ id: "made-up", label: "Made Up", emoji: "🙄" });
+    expect(normalizeTags(["made-up", "toys", "music"])).toEqual(["music", "toys", "made-up"]);
+    // A selection saved before Made Up existed reads back exactly as saved.
+    expect(normalizeTags(["sports", "board_games", "internet_memes"])).toEqual(["sports", "board_games", "internet_memes"]);
+    expect(toggleTag(["music"], "made-up")).toEqual(["music", "made-up"]);
+    expect(topicLabels(["made-up"])).toEqual(["Made Up"]);
   });
 
   it("has no maximum", () => {

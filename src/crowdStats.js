@@ -1,6 +1,6 @@
 /* ============================================================
-   Crowd stats for today's finished game, used by the Results hero ("You beat N%") and the
-   share text (Results and Home alike).
+   Crowd stats for today's finished game, used by the Results hero ("You
+   beat N%"), its score chart and its stat tiles.
 
    Finishing a game: read the stats once as a baseline (the game can't be
    counted yet: it isn't marked completed), save the finished game, and only
@@ -10,7 +10,7 @@
    does: compared with the baseline, at least one more finisher at the
    player's score and at least one more finisher overall. Otherwise a couple
    of short, bounded re-reads, then "unavailable", which hides Crowd
-   Showdown and leaves the share line at the score alone.
+   Showdown.
 
    Revisiting (the game was completed in the database before this page
    loaded): there is no baseline, so the check is only that someone is at
@@ -20,7 +20,7 @@
    counted twice.
    ============================================================ */
 
-import { buildImageShareText, buildResultsShareText, strictlyBetterPercent } from "./share.js";
+import { strictlyBetterPercent } from "./share.js";
 
 // Waits before the 2nd and 3rd read after the save. Three reads at most,
 // ~1.3s of waiting.
@@ -94,7 +94,7 @@ export function crowdStatsFor(crowd, record) {
     : null;
 }
 
-// The Results hero's "You beat N% of players": the share text's number
+// The Results hero's "You beat N% of players"
 // (strictlyBetterPercent), from stats whose histogram accounts for every
 // finisher. Null (no comparison shown) for missing or inconsistent stats.
 // saved: true (today's saved result) keeps the check that the player is in
@@ -106,21 +106,4 @@ export function crowdBeatPercent(stats, score, { saved = true } = {}) {
   return isConsistent(stats)
     ? strictlyBetterPercent(stats.scoreHistogram, score, { includesPlayer: saved })
     : null;
-}
-
-// The one share text for a finished game, used by Results and Home alike.
-// Its "Beat N%" is the Results hero's own number for today's saved result.
-export function shareTextFor(game, record, crowd) {
-  return shareTextsFor(game, record, crowd).text;
-}
-
-// Both share texts for one finished game: `text`, the full text with its
-// "Beat N%", and `imageText`, the short text (score and dare, no
-// percentage) sent alongside the puzzle's artwork.
-export function shareTextsFor(game, record, crowd) {
-  const beatPercent = crowdBeatPercent(crowdStatsFor(crowd, record), record?.score);
-  return {
-    text: buildResultsShareText({ game, record, beatPercent }),
-    imageText: buildImageShareText({ record }),
-  };
 }

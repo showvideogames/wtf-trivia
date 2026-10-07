@@ -4,35 +4,16 @@
    native share sheet on phones, and the clipboard fallback).
    Pure functions, no DOM or network, so the text can be tested
    exactly. Plain text, one newline between lines, no blank lines,
-   no trailing spaces, nothing centred or sized to fit:
-
-     What The Fudge Trivia 🍬
-     ━━━━━━━━━━━━━━━━━━━━━━━━━━
-     Nicolas Cage Movie 🤩🎬
-          OR
-     Board Game 🎲♟️
-     ━━━━━━━━━━━━━━━━━━━━━━━━━━
-     🟢🟢🔴🔴🟢🟢🔴🔴🟢🟢🟢🟢
-     8/12 • Beat 77% of players
-     whatthefudge.gg
-
-   When a phone's share sheet sends the puzzle's artwork with it (the
-   wide artwork, else the square poster), the artwork already shows the
-   header and both categories, so the text alongside it is three short
-   lines (the image text): the same circles, the score with a dare, and
-   the domain:
+   no trailing spaces: one circle per answer, the score with the
+   dare, and the puzzle's own link (puzzleLink.js), which opens that
+   exact puzzle and shows its artwork in apps that preview links:
 
      🟢🟢🔴🔴🟢🟢🔴🔴🟢🟢🟢🟢
      8/12 ➜ Can you beat my score?!
-     whatthefudge.gg
+     https://whatthefudge.gg/puzzle/g-1759600000000
    ============================================================ */
 
-export const SHARE_HEADER = "What The Fudge Trivia 🍬";
-// Always 26 heavy horizontal lines (U+2501), whatever the labels' length.
-export const SHARE_DIVIDER = "━".repeat(26);
-// Always five ASCII spaces, then OR; never positioned from the labels.
-export const SHARE_OR = "     OR";
-export const SHARE_DOMAIN = "whatthefudge.gg";
+import { SITE_ORIGIN, isPuzzleId, puzzleUrl } from "./puzzleLink.js";
 
 // One label on one line: pasted newlines, tabs and runs of whitespace become
 // one ASCII space, and the ends are trimmed. Emoji and punctuation are kept
@@ -42,13 +23,14 @@ export function normalizeShareLabel(label) {
 }
 
 // A puzzle's optional share name for one category (emoji included), or that
-// category's normal gameplay name when the share name is blank.
+// category's normal gameplay name when the share name is blank. Link
+// previews (puzzleMeta.js) name the categories this way.
 export function shareCategoryName(shareName, categoryName, fallback) {
   return normalizeShareLabel(shareName) || normalizeShareLabel(categoryName) || fallback;
 }
 
 // Share of finishers who scored strictly lower than `score`: the "Beat N% of
-// players" in the share text and in the Results hero. Read from the puzzle's
+// players" in the Results hero. Read from the puzzle's
 // score histogram ({ "<score>": <players> }), which must already
 // include this player's own finished game (see crowdStats.js). Players tied
 // with you are not beaten, so they never count toward the number; everyone,
@@ -79,21 +61,8 @@ export function strictlyBetterPercent(histogram, score, { includesPlayer = true 
   return Math.min(99, Math.floor((lower / total) * 100));
 }
 
-// A "Beat N%" as crowdBeatPercent (crowdStats.js) produces it: a whole
-// number from 0 to 99. Anything else means no percentage is shown.
-const isBeatPercent = (value) => Number.isInteger(value) && value >= 0 && value <= 99;
-
-// The result itself, the part both texts share: one circle per saved answer
-// (`record.answers`, in question order) and the score line, with "Beat N%"
-// only when `beatPercent` is the Results hero's already-validated number
-// (crowdBeatPercent), else the bare score.
-function shareResultLines(record, beatPercent) {
-  const { score, total, circles } = shareResult(record);
-  const scoreLine = isBeatPercent(beatPercent) ? `${score}/${total} • Beat ${beatPercent}% of players` : `${score}/${total}`;
-  return [circles, scoreLine];
-}
-
-// The saved record's score, question count and one circle per saved answer.
+// The saved record's score, question count and one circle per saved answer
+// (`record.answers`, in question order).
 function shareResult(record) {
   const score = Number.isFinite(record?.score) ? record.score : 0;
   const total = Number.isFinite(record?.totalQuestions) ? record.totalQuestions : 0;
@@ -102,31 +71,18 @@ function shareResult(record) {
   return { score, total, circles };
 }
 
-// The image text's score line: the score, then the dare.
+// The score line's dare.
 export const SHARE_DARE = "➜ Can you beat my score?!";
 
-// The full share text: everything shared without the poster (Results'
-// preview and copy, Home's desktop copy, the text-only share sheet and the
-// clipboard fallback). `record` is the finished game record, `game`
-// supplies the share names and category names, `beatPercent` as above.
-export function buildResultsShareText({ game, record, beatPercent = null }) {
-  return [
-    SHARE_HEADER,
-    SHARE_DIVIDER,
-    shareCategoryName(game?.categoryAShareName, game?.categoryA, "Category A"),
-    SHARE_OR,
-    shareCategoryName(game?.categoryBShareName, game?.categoryB, "Category B"),
-    SHARE_DIVIDER,
-    ...shareResultLines(record, beatPercent),
-    SHARE_DOMAIN,
-  ].join("\n");
+// The link for `game`: its own puzzle page, or the site itself for a game
+// without a usable id.
+export function shareLink(game) {
+  return isPuzzleId(game?.id) ? puzzleUrl(game.id) : SITE_ORIGIN;
 }
 
-// The image text: what goes with the artwork in the share sheet. The same
-// circles as the full text, the score with the dare (no percentage), then
-// the domain; no header, dividers, categories or OR, which the artwork
-// already shows.
-export function buildImageShareText({ record }) {
+// The share text for one finished game: `record` is the finished game
+// record (its saved answers and score), `game` the puzzle it belongs to.
+export function buildResultsShareText({ game, record }) {
   const { score, total, circles } = shareResult(record);
-  return [circles, `${score}/${total} ${SHARE_DARE}`, SHARE_DOMAIN].join("\n");
+  return [circles, `${score}/${total} ${SHARE_DARE}`, shareLink(game)].join("\n");
 }

@@ -793,6 +793,10 @@ const DEMO_PUZZLE_STATS = {
   "arc-puppet": { totalFinished: 6, totalScore: 99, totalQuestions: 5 },          // impossible
   "arc-dino": { totalFinished: 9, totalScore: 27, totalQuestions: 5 },            // 60%
   "arc-snack": { totalFinished: 0, totalScore: 0, totalQuestions: 0 },            // empty
+  // Play counts: a tie with arc-dnd (Most played orders it newest first)
+  // and one big enough for the compact "1.2K plays".
+  "arc-long": { totalFinished: 12, totalScore: 30, totalQuestions: 5 },           // 50%
+  "arc-missing": { totalFinished: 1234, totalScore: 3702, totalQuestions: 5 },    // 60%
 };
 
 export async function devArchiveStats() {

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 import { histogramBuckets, histogramSummary, majorAxisScores, showsBucketPercents } from "./scoreHistogram.js";
-import { crowdBeatPercent, crowdStatsFor, shareTextFor } from "./crowdStats.js";
+import { crowdBeatPercent, crowdStatsFor } from "./crowdStats.js";
 import ScoreHistogram from "./ScoreHistogram.jsx";
 import { CrowdPanel } from "./ResultsCrowd.jsx";
 
@@ -114,12 +114,11 @@ describe("ScoreHistogram", () => {
 describe("CrowdPanel", () => {
   const stats = { finishedPlayers: MARIO_TOTAL, averageScore: 4, perfectRate: 0, scoreHistogram: MARIO };
 
-  it("shows the same Beat percentage as today's share text", () => {
+  it("shows crowdBeatPercent's strictly-lower percentage for today's result", () => {
     const record = { puzzleId: "p1", score: 4, totalQuestions: 8, answers: [] };
     const crowd = { status: "ready", puzzleId: "p1", score: 4, stats };
     const beat = crowdBeatPercent(crowdStatsFor(crowd, record), 4);
-    const shared = shareTextFor({}, record, crowd);
-    expect(shared).toContain(`4/8 • Beat ${beat}% of players`);
+    expect(beat).toBe(47); // 25 of 53 finishers scored below 4
     const out = html(createElement(CrowdPanel, {
       state: "ready", beatPercent: beat, chart: histogramBuckets(MARIO, 8), stats, score: 4, total: 8,
     }));

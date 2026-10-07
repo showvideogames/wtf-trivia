@@ -638,7 +638,7 @@
 
 /* The preview is the shared text itself: left-aligned plain lines, spacing
    kept (pre-wrap, from .share-box), exactly as a messaging app shows it.
-   Long labels wrap, and an unbroken run of characters still breaks rather
+   The link wraps, and an unbroken run of characters still breaks rather
    than pushing the box wider. */
 .rs-page .rs-share-preview {
   container-type: inline-size;
@@ -650,16 +650,13 @@
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.rs-page .rs-share-header,
 .rs-page .rs-share-score { font-weight: 900; }
-/* The dividers and the circle row never wrap: they shrink to fit instead. */
-.rs-page .rs-share-divider,
+/* The circle row never wraps: it shrinks to fit instead. */
 .rs-page .rs-share-pips {
   white-space: pre;
   font-size: min(1em, calc(100cqi / var(--fit-ems)));
 }
-.rs-page .rs-share-divider { color: var(--teal-dark); }
-.rs-page .rs-share-url { color: rgba(26, 26, 26, .6); }
+.rs-page .rs-share-url { color: var(--teal-dark); }
 
 /* ===== NERD MODE: question scorecard =====
    Per question, how the audience split between the two categories (A

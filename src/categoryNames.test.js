@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { answerButtonName } from "./categoryNames.js";
 import { gameToRow, rowToGame } from "./gameRow.js";
 import { buildResultsShareText } from "./share.js";
+import { puzzleMeta } from "./puzzleMeta.js";
 import { normalizeEditorDraft, restoreEditorDraft } from "./admin/editorDraft.js";
 import { swatchOrder } from "./admin/StudioContext.js";
 
@@ -38,9 +39,8 @@ describe("category display names", () => {
 
   it("keeps an existing share override, and a blank one still falls back to the category name", () => {
     const game = rowToGame({ ...MIGRATED_ROW, category_a_share_name: "Led Zeppelin 🎸🤘" });
-    const lines = buildResultsShareText({ game, record: RECORD }).split("\n");
-    expect(lines).toContain("Led Zeppelin 🎸🤘");
-    expect(lines).toContain("My Little Pony");
+    // Share names now name the categories in the puzzle link's preview.
+    expect(puzzleMeta(game).description).toMatch(/^Led Zeppelin 🎸🤘 or My Little Pony\? /);
     expect(gameToRow(game).category_a_share_name).toBe("Led Zeppelin 🎸🤘");
   });
 
@@ -49,7 +49,9 @@ describe("category display names", () => {
     const edited = { ...base, categoryAButtonName: "Zeppelin" };
     expect(edited.categoryA).toBe("Led Zeppelin");
     expect(answerButtonName(edited, "A")).toBe("Zeppelin");
-    expect(buildResultsShareText({ game: edited, record: RECORD })).toContain("\nLed Zeppelin\n");
+    expect(puzzleMeta(edited).description).toMatch(/^Led Zeppelin or My Little Pony\? /);
+    // The share text itself names no category: the circles, score and link.
+    expect(buildResultsShareText({ game: edited, record: RECORD })).toBe("🟢🔴\n1/2 ➜ Can you beat my score?!\nhttps://whatthefudge.gg/puzzle/g-1");
 
     const renamed = { ...edited, categoryA: "Led Zep" };
     expect(answerButtonName(renamed, "A")).toBe("Zeppelin");

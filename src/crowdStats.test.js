@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import {
-  CROWD_RETRY_DELAYS_MS, crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor, statsIncludeScore,
+  CROWD_RETRY_DELAYS_MS, crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, statsIncludeScore,
 } from "./crowdStats.js";
+import { buildResultsShareText } from "./share.js";
 
 // Stats shaped like dbGetPuzzleCommunityStats returns them (the fields these
 // tests need).
@@ -41,7 +42,14 @@ const answers = (pattern) => [...pattern].map((c, i) => ({ questionIndex: i, cor
 const record = (pattern, puzzleId = "g-mario-kart") => ({
   puzzleId, date: "2026-09-27", score: [...pattern].filter((c) => c === "1").length, totalQuestions: pattern.length, answers: answers(pattern), completed: true,
 });
-const scoreLine = (game, rec, crowd) => shareTextFor(game, rec, crowd).split("\n")[7];
+// The Results hero's comparison for this record, written out as one line:
+// the score, then "Beat N% of players" when crowdBeatPercent has an honest
+// number. (The share text carries no percentage any more; see share.js.)
+const scoreLine = (game, rec, crowd) => {
+  const beat = crowdBeatPercent(crowdStatsFor(crowd, rec), rec.score);
+  const score = `${rec.score}/${rec.totalQuestions}`;
+  return beat === null ? score : `${score} • Beat ${beat}% of players`;
+};
 
 // What handleComplete does: baseline, save, then read; stored with the
 // record's puzzle and score.
@@ -218,18 +226,15 @@ describe("statsIncludeScore", () => {
 });
 
 describe("9. Results and Home share the same text", () => {
-  it("produces identical text from the same record and crowd stats", async () => {
+  it("produces identical text from the same record, whatever the crowd stats", async () => {
     const rec = record("0001111100");
-    const crowd = await finish(rec, backend({ reads: [stats({ 4: 2, 5: 2, 7: 5 }, 5), stats({ 4: 2, 5: 3, 7: 5 }, 5)] }));
-    // Results passes its record and the app's crowd state; Home passes the
-    // same completed record and the same crowd state.
-    const results = shareTextFor(HP, { ...rec }, crowd);
-    const home = shareTextFor(HP, { ...rec }, crowd);
+    await finish(rec, backend({ reads: [stats({ 4: 2, 5: 2, 7: 5 }, 5), stats({ 4: 2, 5: 3, 7: 5 }, 5)] }));
+    // Results and Home both pass the puzzle and the same completed record.
+    const game = { ...HP, id: rec.puzzleId };
+    const results = buildResultsShareText({ game, record: { ...rec } });
+    const home = buildResultsShareText({ game, record: { ...rec } });
     expect(home).toBe(results);
-    expect(results).toBe(
-      "What The Fudge Trivia 🍬\n━━━━━━━━━━━━━━━━━━━━━━━━━━\nHarry Potter Character 🧙‍♂️\n     OR\nPro Hockey Player? 🏒\n" +
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n🔴🔴🔴🟢🟢🟢🟢🟢🔴🔴\n5/10 • Beat 20% of players\nwhatthefudge.gg"
-    );
+    expect(results).toBe("🔴🔴🔴🟢🟢🟢🟢🟢🔴🔴\n5/10 ➜ Can you beat my score?!\nhttps://whatthefudge.gg/puzzle/g-mario-kart");
   });
 
   it("ignores crowd stats loaded for a different puzzle or score", () => {
@@ -254,9 +259,9 @@ describe("9. Results and Home share the same text", () => {
   });
 });
 
-// Crowd Showdown ("You beat N% of players.") and the share line ("Beat N% of
-// players") must always show the same number.
-describe("10. Crowd Showdown and the share line use one strictly-lower percentage", () => {
+// Crowd Showdown ("You beat N% of players.") and the hero's comparison must
+// always show the same number.
+describe("10. Crowd Showdown and the hero use one strictly-lower percentage", () => {
   const ready = (rec, histogram) => ({ status: "ready", puzzleId: rec.puzzleId, score: rec.score, stats: stats(histogram) });
   const both = (rec, crowd) => ({
     share: scoreLine(HP, rec, crowd),
@@ -271,7 +276,6 @@ describe("10. Crowd Showdown and the share line use one strictly-lower percentag
     ] }));
     expect(crowd.stats.finishedPlayers).toBe(51);
     expect(both(rec, crowd)).toEqual({ share: "8/8 • Beat 94% of players", showdown: 94 }); // floor(48/51)
-    expect(shareTextFor(HP, { ...rec }, crowd)).toBe(shareTextFor(HP, rec, crowd)); // Results and Home
   });
 
   it("only finisher: no comparison anywhere", () => {
