@@ -36,6 +36,19 @@ describe("listPuzzleImages", () => {
     const g = puzzle({ questions: [q("q1", "Cow", { imageUrl: EXT + "cow.jpg" }), q("q2", "Blank", { imageUrl: "" }), q("q3", "None", {}), q("q4", "Null", { imageUrl: null }), q("q5", "Spaces", { imageUrl: "  " })] });
     expect(listPuzzleImages(g).map((t) => t.key)).toEqual(["headerImage", "categoryAImage", "categoryBImage", "question:q1"]);
   });
+  it("lists the wide artwork as its own image, right after the square poster", () => {
+    const targets = listPuzzleImages(puzzle({ wideImage: EXT + "wide.png", questions: [] }));
+    expect(targets.map((t) => t.key)).toEqual(["headerImage", "wideImage", "categoryAImage", "categoryBImage"]);
+    expect(targets[1]).toMatchObject({ kind: "wide", field: "wideImage" });
+  });
+  it("copies the wide artwork on publish, and keeps it on its own when that copy fails", async () => {
+    const ok = await archivePuzzleImages(puzzle({ wideImage: EXT + "wide.png" }), archiver());
+    expect(ok.game.wideImage).toBe(STORE + "wide.png");
+    const bad = await archivePuzzleImages(puzzle({ wideImage: EXT + "wide.png" }), archiver({ [EXT + "wide.png"]: err("blocked") }));
+    expect(bad.game.wideImage).toBe(EXT + "wide.png");
+    expect(bad.game.headerImage).toBe(STORE + "header.png");
+    expect(imageName(bad.failures[0], bad.game)).toBe("The wide artwork");
+  });
   it("returns nothing for a puzzle without images", () => {
     expect(listPuzzleImages(puzzle({ headerImage: "", categoryAImage: null, categoryBImage: undefined, questions: [q("q1", "Cow", {})] }))).toEqual([]);
     expect(listPuzzleImages({})).toEqual([]);
@@ -162,7 +175,7 @@ describe("warnings", () => {
     expect(describeImageWarning([f()], g, "Saved").title).toBe("Saved with 1 image warning");
   });
   it("names header, category and untitled question images", () => {
-    expect(imageName({ kind: "header" }, g)).toBe("The Home & Share artwork");
+    expect(imageName({ kind: "header" }, g)).toBe("The square poster");
     expect(imageName({ kind: "category", slot: "B" }, g)).toBe("The Category B image (Not)");
     expect(imageName({ kind: "question", itemText: "  ", questionIndex: 4 }, g)).toBe("“Question 5”");
   });

@@ -59,3 +59,29 @@ describe("Admin draft copy keeps topic tags", () => {
     expect(published.status).toBe("published");
   });
 });
+
+describe("Admin draft copy keeps the wide artwork", () => {
+  const WIDE = "https://example.supabase.co/storage/v1/object/public/wtf-images/wide/w.webp";
+  const SQUARE = "https://example.supabase.co/storage/v1/object/public/wtf-images/headers/p.webp";
+
+  it("a draft's wide artwork survives the device copy, separately from the square poster", () => {
+    const loaded = rowToGame({ ...ROW, header_image: SQUARE });
+    const reopened = restoreEditorDraft(loaded, storeAndRead({ ...loaded, wideImage: WIDE }));
+    expect(reopened.wideImage).toBe(WIDE);
+    expect(reopened.headerImage).toBe(SQUARE);
+    expect(gameToRow(reopened)).toMatchObject({ wide_image: WIDE, header_image: SQUARE });
+  });
+
+  it("removing it in a draft stays removed; a draft from before wide artwork keeps the puzzle's", () => {
+    const loaded = rowToGame({ ...ROW, wide_image: WIDE });
+    expect(restoreEditorDraft(loaded, storeAndRead({ ...loaded, wideImage: "" })).wideImage).toBe("");
+    const { wideImage: _drop, ...older } = loaded;
+    expect(restoreEditorDraft(loaded, storeAndRead(older)).wideImage).toBe(WIDE);
+  });
+
+  it("the database flag comes from the loaded puzzle, not the draft", () => {
+    const loaded = rowToGame(ROW);
+    const reopened = restoreEditorDraft(loaded, storeAndRead({ ...loaded, wideImageColumn: true }));
+    expect(reopened.wideImageColumn).toBe(false);
+  });
+});

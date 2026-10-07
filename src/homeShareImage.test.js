@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { clearShareImages, prepareShareImage, shareFeedback, shareImageType, shareResult } from "./homeShare.js";
+import { clearShareImages, prepareShareImage, prepareShareImages, shareArtworkUrls, shareFeedback, shareImageType, shareResult } from "./homeShare.js";
 
 // The one share operation behind Home's Share button, with the puzzle's
 // Home & Share poster: the poster plus the short image text on phones that
@@ -10,7 +10,7 @@ const WINDOWS = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 const POSTER = "https://example.supabase.co/storage/v1/object/public/wtf-images/headers/poster.webp";
 const TEXT = "What The Fudge Trivia 🍬\n━━━━━━━━━━━━━━━━━━━━━━━━━━\nLed Zeppelin 🎸\n     OR\nMy Little Pony 🦄\n" +
   "━━━━━━━━━━━━━━━━━━━━━━━━━━\n🟢🟢🔴🟢🔴🟢🟢🔴\n5/8 • Beat 67% of players\nwhatthefudge.gg";
-const IMAGE_TEXT = "🟢🟢🔴🟢🔴🟢🟢🔴\n5/8 • Beat 67% of players\nwhatthefudge.gg";
+const IMAGE_TEXT = "🟢🟢🔴🟢🔴🟢🟢🔴\n5/8 ➜ Can you beat my score?!\nwhatthefudge.gg";
 
 const domError = (name) => Object.assign(new Error(name), { name });
 const phone = ({ share = vi.fn().mockResolvedValue(undefined), canShare = vi.fn(() => true), writeText } = {}) => ({
@@ -52,6 +52,15 @@ describe("shareResult with a Home & Share poster", () => {
       expect(nav.share.mock.calls[0][0].files[0].name).toBe(name);
     }
     expect(shareImageType("application/octet-stream", "https://x.test/poster")).toBeNull();
+    expect(shareImageType("application/octet-stream", "https://x.test/poster.png")).toBe("image/png");
+  });
+
+  it("never shares a page served in the image's place, whatever its URL says", async () => {
+    expect(shareImageType("text/html", "https://x.test/missing.png")).toBeNull();
+    expect(shareImageType("application/json; charset=utf-8", "https://x.test/missing.webp")).toBeNull();
+    const nav = phone();
+    expect(await share(nav, okFetch("text/html"), "https://x.test/missing.png")).toBe("shared");
+    expect(nav.share).toHaveBeenCalledWith({ text: TEXT });
   });
 
   it("shares the full text alone when the puzzle has no poster", async () => {
@@ -137,5 +146,60 @@ describe("shareResult with a Home & Share poster", () => {
     const flaky = vi.fn().mockRejectedValueOnce(new TypeError("offline")).mockImplementation(okFetch());
     expect(await prepareShareImage(POSTER, nav, flaky)).toBeNull();
     expect(await prepareShareImage(POSTER, nav, flaky)).toBeInstanceOf(File);
+  });
+});
+
+describe("wide artwork first, then the square poster", () => {
+  const WIDE = "https://example.supabase.co/storage/v1/object/public/wtf-images/wide/wide.webp";
+  const SQUARE = POSTER;
+  // Serves each URL as its own image type, or fails the ones listed.
+  const byUrl = (failing = []) => vi.fn(async (url) => failing.includes(url)
+    ? { ok: false, status: 404 }
+    : { ok: true, blob: async () => new Blob([new Uint8Array(url === WIDE ? 8 : 4)], { type: url === WIDE ? "image/webp" : "image/png" }) });
+  const shareBoth = (nav, fetchImpl) => shareResult({ text: TEXT, imageText: IMAGE_TEXT, imageUrls: shareArtworkUrls({ wideImage: WIDE, headerImage: SQUARE }) }, nav, { fetchImpl });
+
+  it("lists the wide artwork, then the square poster, skipping what's missing or unusable", () => {
+    expect(shareArtworkUrls({ wideImage: WIDE, headerImage: SQUARE })).toEqual([WIDE, SQUARE]);
+    expect(shareArtworkUrls({ wideImage: "", headerImage: SQUARE })).toEqual([SQUARE]);
+    expect(shareArtworkUrls({ wideImage: WIDE, headerImage: null })).toEqual([WIDE]);
+    expect(shareArtworkUrls({ wideImage: "javascript:alert(1)", headerImage: "  " })).toEqual([]);
+  });
+
+  it("attaches the wide artwork when it downloads, without fetching the square", async () => {
+    const nav = phone();
+    const fetchImpl = byUrl();
+    expect(await shareBoth(nav, fetchImpl)).toBe("shared");
+    expect(nav.share.mock.calls[0][0].files[0].type).toBe("image/webp");
+    expect(nav.share.mock.calls[0][0].text).toBe(IMAGE_TEXT);
+    expect(fetchImpl.mock.calls.map((c) => c[0])).toEqual([WIDE]);
+  });
+
+  it("falls back to the square poster when the wide artwork fails or isn't shareable", async () => {
+    let nav = phone();
+    expect(await shareBoth(nav, byUrl([WIDE]))).toBe("shared");
+    expect(nav.share.mock.calls[0][0].files[0].type).toBe("image/png");
+
+    clearShareImages();
+    nav = phone({ canShare: vi.fn(({ files }) => files[0].type !== "image/webp") });
+    expect(await shareBoth(nav, byUrl())).toBe("shared");
+    expect(nav.share.mock.calls[0][0].files[0].type).toBe("image/png");
+  });
+
+  it("falls back to the full text when neither image can go", async () => {
+    const nav = phone();
+    expect(await shareBoth(nav, byUrl([WIDE, SQUARE]))).toBe("shared");
+    expect(nav.share).toHaveBeenCalledTimes(1);
+    expect(nav.share).toHaveBeenCalledWith({ text: TEXT });
+  });
+
+  it("prepares the chain ahead of the tap, and a failed wide download goes straight to the square next time", async () => {
+    const nav = phone();
+    const fetchImpl = byUrl([WIDE]);
+    const file = await prepareShareImages([WIDE, SQUARE], nav, fetchImpl);
+    expect(file.type).toBe("image/png");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(await shareBoth(nav, fetchImpl)).toBe("shared");
+    expect(fetchImpl).toHaveBeenCalledTimes(2); // nothing fetched at tap time
+    expect(prepareShareImages([WIDE, SQUARE], { userAgent: WINDOWS, share: vi.fn(), canShare: vi.fn() }, fetchImpl)).toBeNull();
   });
 });

@@ -323,7 +323,65 @@ export function demoGames() {
     categoryBImage: null,
     questions: longLabelQuestions(),
   };
-  return [{ ...demoGame(), ...todayOverrides() }, older, longLabels, ...archiveDemoGames()];
+  const today = { ...demoGame(), headerImage: DEMO_SQUARE_ART, wideImage: DEMO_WIDE_ART, ...todayOverrides() };
+  return [today, older, longLabels, ...upcomingDemoGames(), ...archiveDemoGames()];
+}
+
+// Stand-in posters for the review: a square 1600x1600 and a wide 1200x630,
+// each labelled with its own size so a crop or stretch is obvious.
+const posterArt = (w, h, title, a, b) => svg(`
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <defs><linearGradient id="p" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/>
+  </linearGradient></defs>
+  <rect width="${w}" height="${h}" fill="url(#p)"/>
+  <rect x="24" y="24" width="${w - 48}" height="${h - 48}" rx="36" fill="none" stroke="#1a1a1a" stroke-width="12" stroke-dasharray="40 24"/>
+  <circle cx="${w * 0.5}" cy="${h * 0.42}" r="${Math.min(w, h) * 0.2}" fill="#fff6d8" stroke="#1a1a1a" stroke-width="10"/>
+  <text x="50%" y="${h * 0.44}" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black, sans-serif" font-size="${Math.min(w, h) * 0.12}" fill="#1a1a1a">OR</text>
+  <text x="50%" y="${h * 0.78}" text-anchor="middle" font-family="Arial Black, sans-serif" font-size="${Math.min(w, h) * 0.075}" fill="#1a1a1a">${title}</text>
+  <text x="50%" y="${h * 0.9}" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="${Math.min(w, h) * 0.05}" fill="#1a1a1a">${w} × ${h}</text>
+</svg>`);
+const DEMO_SQUARE_ART = /* @__PURE__ */ posterArt(1600, 1600, "TODAY · SQUARE", "#ffd23f", "#ff8fb1");
+const DEMO_WIDE_ART = /* @__PURE__ */ posterArt(1200, 630, "TODAY · WIDE", "#ffd23f", "#ff8fb1");
+const UPCOMING_SQUARE_ART = /* @__PURE__ */ posterArt(1600, 1600, "TOMORROW · SQUARE", "#6ff0dd", "#b49cff");
+const UPCOMING_WIDE_ART = /* @__PURE__ */ posterArt(1200, 630, "TOMORROW · WIDE", "#6ff0dd", "#b49cff");
+
+function daysAheadKey(n) {
+  return daysAgoKey(-n);
+}
+
+// The puzzles after today, for Home's Up Next. Drafts and a retired puzzle
+// sit on the nearest dates so a leak would show. localStorage
+// "wtf-dev-upnext" picks the next published one's artwork and date:
+//   (unset) / "wide"  tomorrow, wide + square artwork
+//   "square"          tomorrow, square poster only
+//   "no-art"          tomorrow, no artwork at all (category images only)
+//   "later"           in three days, wide + square artwork
+//   "none"            no published puzzle after today (drafts only)
+function upcomingDemoGames() {
+  let mode = null;
+  try { mode = localStorage.getItem("wtf-dev-upnext"); } catch { /* ignore */ }
+  const base = { ...demoGame(), questions: archiveQuestions(), headerImage: null, wideImage: "" };
+  const hidden = [
+    { ...base, id: "demo-draft-tomorrow", date: daysAheadKey(1), status: "draft", themeTitle: "SECRET DRAFT (must never show)", wideImage: posterArt(1200, 630, "DRAFT · MUST NOT SHOW", "#ff3b30", "#1a1a1a") },
+    { ...base, id: "demo-retired-tomorrow", date: daysAheadKey(1), status: "retired", themeTitle: "Retired (must never show)", wideImage: posterArt(1200, 630, "RETIRED · MUST NOT SHOW", "#ff3b30", "#1a1a1a") },
+  ];
+  if (mode === "none") return hidden;
+  const next = {
+    ...base,
+    id: "demo-upnext",
+    date: daysAheadKey(mode === "later" ? 3 : 1),
+    themeTitle: "Cereal Mascot or Wrestler?",
+    categoryA: "Cereal Mascot",
+    categoryB: "Wrestler",
+    categoryAColor: "yellow",
+    categoryBColor: "purple",
+    headerImage: mode === "no-art" ? null : UPCOMING_SQUARE_ART,
+    wideImage: mode === "no-art" || mode === "square" ? "" : UPCOMING_WIDE_ART,
+  };
+  // A later published puzzle, so "next" has to mean the soonest.
+  const after = { ...next, id: "demo-upnext-after", date: daysAheadKey(mode === "later" ? 5 : 4), themeTitle: "Later puzzle (not next)", wideImage: posterArt(1200, 630, "LATER · NOT NEXT", "#ff3b30", "#1a1a1a") };
+  return [...hidden, next, after];
 }
 
 // Set localStorage "wtf-dev-archive" to "full" for a fuller Archive: a dozen
@@ -647,6 +705,10 @@ export function devSaveGameRow(row) {
   // "no-tags-column" does the same for supabase/puzzle_tags.sql.
   if (mode === "no-tags-column" && "tags" in row) {
     throw new Error(`Supabase error 400: {"code":"PGRST204","message":"Could not find the 'tags' column of 'games' in the schema cache"}`);
+  }
+  // "no-wide-column" does the same for supabase/wide_artwork.sql.
+  if (mode === "no-wide-column" && "wide_image" in row) {
+    throw new Error(`Supabase error 400: {"code":"PGRST204","message":"Could not find the 'wide_image' column of 'games' in the schema cache"}`);
   }
   savedGameRows.set(row.id, JSON.parse(JSON.stringify(row)));
 }

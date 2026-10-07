@@ -1,11 +1,14 @@
 // Archive list logic, kept apart from the screen so it can be tested.
 //
-// Which puzzles appear is unchanged from the original Archive: every
-// published puzzle, plus a retired one only when this player has a result
-// for it. Newest first; only a published puzzle can be today's. Search, the
-// status filter (Favorites included) and the topic narrow it; the Sort menu
-// orders what is left.
+// Which puzzles appear: every released puzzle (published and dated today or
+// earlier, schedule.js), plus a retired one only when this player has a
+// result for it. A published puzzle scheduled after today never appears, so
+// it can't be played early (Home's Up Next teases it instead). Newest first;
+// only a published puzzle can be today's. Search, the status filter
+// (Favorites included) and the topic narrow it; the Sort menu orders what is
+// left.
 
+import { isReleased } from "./schedule.js";
 import { TOPICS, foldText, normalizeTags, topicLabels } from "./topics.js";
 
 export const ARCHIVE_FILTERS = [
@@ -28,7 +31,7 @@ export const MIN_RANKED_PLAYS = 5;
 
 export function archivePuzzles(games, records, today) {
   const list = games
-    .filter((g) => g.status === "published" || (g.status === "retired" && records[g.id]))
+    .filter((g) => isReleased(g, today) || (g.status === "retired" && records[g.id]))
     .sort((a, b) => b.date.localeCompare(a.date));
   const todayGame = list.find((g) => g.date === today && g.status === "published") || null;
   // Today's puzzle leads the list, as it always has.

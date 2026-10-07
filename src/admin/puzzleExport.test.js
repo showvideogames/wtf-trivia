@@ -37,7 +37,10 @@ describe("puzzle text export", () => {
     expect(out).toContain("  Scheduled date: 2026-12-14");
     expect(out).toContain("  Status: Draft");
     expect(out).toContain("  Topics: Music 🎵, Toys 🧸");
-    expect(out).toContain("  Home & Share artwork: https://example.com/poster.png");
+    expect(out).toContain("  Square poster (Home): https://example.com/poster.png");
+    expect(out).toContain("  Wide artwork (shares, Up Next, short screens): (blank)");
+    expect(buildPuzzleExport({ ...GAME, wideImage: "https://example.com/wide.png" }, { palette: PALETTE, isYouTube, now }))
+      .toContain("  Wide artwork (shares, Up Next, short screens): https://example.com/wide.png");
     expect(out.indexOf("Question 1")).toBeLessThan(out.indexOf("Question 2"));
     expect(out.indexOf("Question 2")).toBeLessThan(out.indexOf("Question 3"));
   });

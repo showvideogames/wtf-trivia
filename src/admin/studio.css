@@ -516,6 +516,37 @@
 .ps-art-size { margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--ps-ink-3); }
 .ps-art-size.is-warn { color: var(--ps-red-ink); }
 
+/* Wide artwork: the preview is the image at its own proportions (width set,
+   height from the image), so nothing is boxed, cropped or stretched. */
+.ps-artwork-wide { grid-template-columns: 1fr minmax(280px, 400px); }
+.ps-art-wide {
+  overflow: hidden;
+  border: 3px solid var(--black, #1A1A1A);
+  border-radius: 18px;
+  background: #FFFEF5;
+  box-shadow: 4px 4px 0 var(--black, #1A1A1A);
+}
+.ps-art-wide img { display: block; width: 100%; height: auto; }
+
+/* The phone share preview: the attached image, then the text under it, as a
+   messaging app shows a shared image with its caption. */
+.ps-share-phone-wrap { display: grid; gap: 6px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--ps-line); }
+.ps-share-phone {
+  width: min(100%, 340px);
+  overflow: hidden;
+  border: 1px solid var(--ps-line-strong);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(26, 26, 26, 0.08);
+}
+.ps-share-phone-img { display: block; width: 100%; height: auto; }
+.ps-share-phone-text {
+  padding: 10px 14px 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 15px; line-height: 1.4; color: var(--ps-ink);
+}
+
 /* Category names: one row per place a name appears (its label and hint,
    then Category A and B side by side), and a small preview underneath. */
 .ps-names { display: grid; gap: 18px; }
@@ -654,7 +685,7 @@
 }
 .ps-media-row .ps-media-thumb { width: 240px; aspect-ratio: 16 / 10; }
 .ps-media-stack .ps-media-thumb { width: 100%; aspect-ratio: 1; }
-.ps-media-wide .ps-media-thumb { width: min(460px, 62%); aspect-ratio: 2.75; }
+.ps-media-wide .ps-media-thumb { width: min(260px, 50%); aspect-ratio: 1200 / 630; }
 .ps-media-square .ps-media-thumb { width: 160px; aspect-ratio: 1; }
 .ps-media-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .ps-media-video { width: 100%; height: 100%; border: 0; display: block; background: #000; }

@@ -114,12 +114,13 @@ export function shareTextFor(game, record, crowd) {
   return shareTextsFor(game, record, crowd).text;
 }
 
-// Both share texts from one "Beat N%": `text`, the full text, and
-// `imageText`, the short text sent alongside the Home & Share poster.
+// Both share texts for one finished game: `text`, the full text with its
+// "Beat N%", and `imageText`, the short text (score and dare, no
+// percentage) sent alongside the puzzle's artwork.
 export function shareTextsFor(game, record, crowd) {
   const beatPercent = crowdBeatPercent(crowdStatsFor(crowd, record), record?.score);
   return {
     text: buildResultsShareText({ game, record, beatPercent }),
-    imageText: buildImageShareText({ record, beatPercent }),
+    imageText: buildImageShareText({ record }),
   };
 }

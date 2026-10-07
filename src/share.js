@@ -16,9 +16,15 @@
      8/12 • Beat 77% of players
      whatthefudge.gg
 
-   When a phone's share sheet sends the puzzle's Home & Share poster
-   with it, the poster already shows the header and both categories, so
-   the text alongside it is only the last three lines (the image text).
+   When a phone's share sheet sends the puzzle's artwork with it (the
+   wide artwork, else the square poster), the artwork already shows the
+   header and both categories, so the text alongside it is three short
+   lines (the image text): the same circles, the score with a dare, and
+   the domain:
+
+     🟢🟢🔴🔴🟢🟢🔴🔴🟢🟢🟢🟢
+     8/12 ➜ Can you beat my score?!
+     whatthefudge.gg
    ============================================================ */
 
 export const SHARE_HEADER = "What The Fudge Trivia 🍬";
@@ -82,13 +88,22 @@ const isBeatPercent = (value) => Number.isInteger(value) && value >= 0 && value 
 // only when `beatPercent` is the Results hero's already-validated number
 // (crowdBeatPercent), else the bare score.
 function shareResultLines(record, beatPercent) {
+  const { score, total, circles } = shareResult(record);
+  const scoreLine = isBeatPercent(beatPercent) ? `${score}/${total} • Beat ${beatPercent}% of players` : `${score}/${total}`;
+  return [circles, scoreLine];
+}
+
+// The saved record's score, question count and one circle per saved answer.
+function shareResult(record) {
   const score = Number.isFinite(record?.score) ? record.score : 0;
   const total = Number.isFinite(record?.totalQuestions) ? record.totalQuestions : 0;
   const answers = Array.isArray(record?.answers) ? record.answers : [];
   const circles = answers.map((a) => (a?.correct ? "🟢" : "🔴")).join("");
-  const scoreLine = isBeatPercent(beatPercent) ? `${score}/${total} • Beat ${beatPercent}% of players` : `${score}/${total}`;
-  return [circles, scoreLine];
+  return { score, total, circles };
 }
+
+// The image text's score line: the score, then the dare.
+export const SHARE_DARE = "➜ Can you beat my score?!";
 
 // The full share text: everything shared without the poster (Results'
 // preview and copy, Home's desktop copy, the text-only share sheet and the
@@ -107,9 +122,11 @@ export function buildResultsShareText({ game, record, beatPercent = null }) {
   ].join("\n");
 }
 
-// The image text: what goes with the poster in the share sheet. The same
-// circles and score line as the full text, then the domain; no header,
-// dividers, categories or OR, which the poster already shows.
-export function buildImageShareText({ record, beatPercent = null }) {
-  return [...shareResultLines(record, beatPercent), SHARE_DOMAIN].join("\n");
+// The image text: what goes with the artwork in the share sheet. The same
+// circles as the full text, the score with the dare (no percentage), then
+// the domain; no header, dividers, categories or OR, which the artwork
+// already shows.
+export function buildImageShareText({ record }) {
+  const { score, total, circles } = shareResult(record);
+  return [circles, `${score}/${total} ${SHARE_DARE}`, SHARE_DOMAIN].join("\n");
 }

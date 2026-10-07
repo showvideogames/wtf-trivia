@@ -13,9 +13,10 @@
 export const ARCHIVE_CONCURRENCY = 4;
 
 /**
- * Every image a puzzle references, in on-screen order: header, category A,
- * category B, then each question. Blank, missing and non-string values are
- * skipped (a question without an image is not an image to archive).
+ * Every image a puzzle references: the square poster (header), the wide
+ * artwork, category A, category B, then each question. Blank, missing and
+ * non-string values are skipped (a question without an image is not an
+ * image to archive).
  */
 export function listPuzzleImages(game) {
   const out = [];
@@ -23,6 +24,7 @@ export function listPuzzleImages(game) {
     if (typeof target.url === "string" && target.url.trim()) out.push(target);
   };
   add({ key: "headerImage", kind: "header", field: "headerImage", url: game?.headerImage });
+  add({ key: "wideImage", kind: "wide", field: "wideImage", url: game?.wideImage });
   add({ key: "categoryAImage", kind: "category", field: "categoryAImage", slot: "A", url: game?.categoryAImage });
   add({ key: "categoryBImage", kind: "category", field: "categoryBImage", slot: "B", url: game?.categoryBImage });
   (Array.isArray(game?.questions) ? game.questions : []).forEach((q, index) => {
@@ -102,7 +104,8 @@ export function isWarningResolved(game, failure) {
 
 /** What to call a failed image in a sentence. */
 export function imageName(failure, game) {
-  if (failure.kind === "header") return "The Home & Share artwork";
+  if (failure.kind === "header") return "The square poster";
+  if (failure.kind === "wide") return "The wide artwork";
   if (failure.kind === "category") {
     const cat = failure.slot === "A" ? game?.categoryA : game?.categoryB;
     return `The Category ${failure.slot} image${cat ? ` (${cat})` : ""}`;
