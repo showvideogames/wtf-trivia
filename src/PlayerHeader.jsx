@@ -20,6 +20,7 @@ import { PlayerChromeContext } from "./playerChrome.js";
 //   sound    the sound engine ({muted, setMuted})
 //   account  {signedIn, label, title, onClick}
 //   admin    {onClick, icon} or null (the dev-only Admin entry)
+//   wordmark true to show the logo without TRIVIA on phones (paper-look gameplay)
 
 // pending: loading and error, where nothing behind the links is ready yet.
 // The header keeps its exact geometry but is inert.
@@ -38,7 +39,7 @@ export default function PlayerHeader({ pending = false, compact = false, sticky 
   if (!chrome) return null;
   const header = (
     <SiteHeader current={chrome.current} nav={chrome.nav} sound={chrome.sound}
-      account={chrome.account} admin={chrome.admin}/>
+      account={chrome.account} admin={chrome.admin} wordmark={chrome.wordmark}/>
   );
   let frame = compact ? "ph-top ph-compact" : "ph-top";
   if (sticky) frame += " ph-sticky";

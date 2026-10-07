@@ -19,6 +19,7 @@ import "./homePage.css";
 import HowToPlay from "./HowToPlay";
 import "./results.css";
 import "./backdrop.css";
+import "./paperLook.css";
 import "./admin/studio.css";
 import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from "./mediaPreloader.js";
 import { archivePuzzleImages, describeImageWarning, failureReason, imageName, isWarningResolved } from "./admin/publishImages.js";
@@ -32,6 +33,8 @@ import { SITE_NAME, puzzleMeta } from "./puzzleMeta.js";
 import { answerButtonName } from "./categoryNames.js";
 import PlayerHeader from "./PlayerHeader.jsx";
 import GameProgress from "./GameProgress.jsx";
+import PaperPrompt from "./PaperPrompt.jsx";
+import { PAPER_LOOK } from "./gameplayLook.js";
 import { PlayerChromeContext } from "./playerChrome.js";
 import { answerWriteFilter, saveAnswerThenSync } from "./answerSync.js";
 import SharePreview from "./SharePreview.jsx";
@@ -2955,7 +2958,7 @@ function useMediaQuery(query){
   return matches;
 }
 
-function GameMatchup({game,label}){
+function GameMatchup({game,label,paper=false}){
   const id=useId();
   // Size ceilings for the fitted text: the taller tablet/desktop banner
   // (game.css, 600px and up) carries larger names.
@@ -3002,7 +3005,7 @@ function GameMatchup({game,label}){
             {i===1&&<span className="gp-sr"> or </span>}
             <div className={`gp-mu-half gp-mu-${x.cat.toLowerCase()}`}
                  style={{"--mu-bg":x.color.mid,"--mu-edge":x.color.dark,"--mu-ink":x.color.isDark?"#fff":"var(--black)"}}>
-              <FitText className="gp-mu-name" min={11} max={roomy?26:20} oneLine={withSub&&!longName} buffer={2}
+              <FitText className="gp-mu-name" min={paper?14:11} max={roomy?26:paper?19:20} oneLine={withSub&&!longName} buffer={2}
                 onFit={size=>setNameFit(f=>shared(f,x.cat,size))} forceSize={lineSize}>{x.name}</FitText>
               {x.sub&&(
                 <FitText className="gp-mu-sub" min={11} max={roomy?26:20} oneLine buffer={2}
@@ -3011,7 +3014,10 @@ function GameMatchup({game,label}){
             </div>
           </Fragment>
         ))}
-        <span className="gp-mu-or" aria-hidden="true">OR</span>
+        {/* The paper look uses the brand's own OR mark (public/or-badge.png). */}
+        {paper
+          ? <span className="gp-mu-or gp-mu-or-art" aria-hidden="true"><img src="/or-badge.png" alt="" draggable="false"/></span>
+          : <span className="gp-mu-or" aria-hidden="true">OR</span>}
       </div>
     </section>
   );
@@ -3038,6 +3044,20 @@ function PanelIcon({kind}){
           <circle cx="16" cy="11" r="1.35" fill="rgba(0,0,0,.2)"/>
         </svg>
       )}
+    </span>
+  );
+}
+
+// The paper look's result mark: a check for a right answer, a cross for a
+// wrong one, in the banner's text colour. Decorative: the word says it.
+function VerdictMark({ok}){
+  return(
+    <span className="gp-verdict-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="100%" height="100%" focusable="false">
+        {ok
+          ? <path d="M5 12.5l4.6 4.6L19.2 7.4" fill="none" stroke="currentColor" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round"/>
+          : <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" strokeWidth="3.6" strokeLinecap="round"/>}
+      </svg>
     </span>
   );
 }
@@ -3302,9 +3322,13 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
 
   const isRight = chosen===cq.correctCategory;
   const correctLabel = cq.correctCategory==="A"?cq._catA:cq._catB;
+  // The paper look (gameplayLook.js; ?look=classic shows the previous one in
+  // a review tab): the question on a PaperPrompt, no mystery stage, and the
+  // quieter treatment in paperLook.css.
+  const paper = PAPER_LOOK;
 
   return(
-    <div className={`gp-wrap${phase==="question"?" gp-q":phase==="reveal"?" gp-r":""}`}>
+    <div className={`gp-wrap${phase==="question"?" gp-q":phase==="reveal"?" gp-r":""}${paper?" gp-paper":""}`}>
       <canvas ref={canvasRef} id="confetti-canvas" style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:9999}}/>
       {reaction&&<ReactionOverlay emoji={reaction}/>}
 
@@ -3314,16 +3338,19 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
           the progress, then the question itself, set straight on the page.
           It is identical in both phases, so nothing moves or shrinks when the
           player answers. The question is the screen's heading. */}
-      <GameMatchup game={game} label={isReplay?<>The matchup</>:<>Today&rsquo;s matchup</>}/>
+      <GameMatchup game={game} paper={paper} label={isReplay?<>The matchup</>:<>Today&rsquo;s matchup</>}/>
       <GameProgress total={qs.length} currentIndex={idx}/>
-      <h1 className={`gp-clue-text ${clueSizeClass(cq.itemText)}`}>{cq.itemText}</h1>
+      {paper
+        ? <PaperPrompt as="h1" className={`gp-prompt ${clueSizeClass(cq.itemText)}`}>{cq.itemText}</PaperPrompt>
+        : <h1 className={`gp-clue-text ${clueSizeClass(cq.itemText)}`}>{cq.itemText}</h1>}
 
       {phase==="question"&&(
         <div className="gp-qmod">
           {/* The mystery stage holds the place the reveal media will take once
               the player answers. Its artwork is decoration; the stage itself
-              is labelled for assistive tech. */}
-          <div className="gp-mystery">
+              is labelled for assistive tech. The paper look has none: the
+              choices follow the question directly. */}
+          {!paper&&<div className="gp-mystery">
             <div className="gp-mystery-frame" role="img" aria-label="Mystery image — answer to reveal">
               <span className="gp-mystery-rays" aria-hidden="true"/>
               <span className="gp-mystery-dash gp-mystery-dash-l" aria-hidden="true"/>
@@ -3332,7 +3359,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
               <span className="gp-mystery-spark gp-mystery-spark-b" aria-hidden="true"/>
               <img className="gp-mystery-mark" src="/mystery-question.webp" alt="" aria-hidden="true" draggable="false"/>
             </div>
-          </div>
+          </div>}
           <div className="ans-btns">
             {[
               {cat:"A",label:btnA,img:game.categoryAImage,color:PALETTE.find(p=>p.id===(game.categoryAColor||"teal"))||PALETTE[0]},
@@ -3345,7 +3372,11 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
               return(
                 <button key={cat} className={boxCls}
                   style={{
-                    background:`linear-gradient(160deg,${color.light} 0%,${color.mid} 55%,${color.dark} 100%)`,
+                    // The paper look keeps the category colour but drops the
+                    // deep three-stop candy gradient for a gentle top light.
+                    background:paper
+                      ?`linear-gradient(180deg,${color.light} -20%,${color.mid} 48%,${color.mid} 100%)`
+                      :`linear-gradient(160deg,${color.light} 0%,${color.mid} 55%,${color.dark} 100%)`,
                     borderColor:color.dark
                   }}
                   onClick={()=>!animBtn&&handleAnswerClick(cat)}>
@@ -3381,12 +3412,16 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
               It stays first in the DOM so it is announced and read before the
               media, and CSS alone moves the media above it visually. */}
           <div className={`gp-verdict ${isRight?"ok":"no"}`} role="status">
-            <span className="gp-verdict-gleam" aria-hidden="true"/>
-            <span className="gp-verdict-emoji" aria-hidden="true">{isRight?"🎉":"😬"}</span>
+            {/* The paper look drops the gleam and the emoji for a plain
+                check or cross, and a middle dot for the dash. */}
+            {!paper&&<span className="gp-verdict-gleam" aria-hidden="true"/>}
+            {paper
+              ? <VerdictMark ok={isRight}/>
+              : <span className="gp-verdict-emoji" aria-hidden="true">{isRight?"🎉":"😬"}</span>}
             <span className="gp-verdict-word">{isRight?"Correct!":"Nope!"}</span>
             {/* The category is presented as a label after a dash rather than in a
                 sentence, so it reads correctly whatever the theme's wording is. */}
-            <span className="gp-verdict-dash" aria-hidden="true">&mdash;</span>
+            <span className="gp-verdict-dash" aria-hidden="true">{paper?"·":<>&mdash;</>}</span>
             <span className={`gp-verdict-tail ${catSizeClass(correctLabel)}`}>{correctLabel}</span>
           </div>
 
@@ -5106,6 +5141,9 @@ export default function WhatTheFudgeTrivia(){
     },
     // [accounts] the Admin gear also shows for a signed-in admin account (the database enforces the rule regardless)
     admin: (SHOW_ADMIN_LINK||isAdmin) ? {onClick:openAdmin, icon:<FI name="gear" size={22}/>} : null,
+    // The paper look (gameplayLook.js) shows the logo without TRIVIA on
+    // phones during a game.
+    wordmark: PAPER_LOOK && isGameplay,
   };
 
   // Loading and boot failure: Home's own frame (see HomeLoadingPage), under

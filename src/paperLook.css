@@ -1,0 +1,357 @@
+/* ================= PAPER LOOK (gameplay) =================
+   The question and reveal screens' treatment: the question on a crinkled
+   paper scrap (PaperPrompt), no mystery stage, and calmer chrome around it
+   -- thinner borders, small shadows, no gloss or confetti layers. Only
+   applies inside .gp-wrap.gp-paper, which GameScreen sets unless a review
+   tab asked for the classic look (gameplayLook.js: ?look=classic), so
+   game.css still draws the classic look underneath. Every rule here is
+   prefixed so it outranks the matching rule in game.css whatever the load
+   order. */
+
+/* ---------- Header: the logo without TRIVIA on phones ---------- */
+/* The picture only wraps the logo for the media switch; the image itself
+   stays the grid item and keeps its .sh-logo sizing. */
+.sh-logo-pic { display: contents; }
+.sh-logo-pic source { display: none; }
+@media (max-width: 599px) {
+  .sh-logo-pic .sh-logo { height: 46px; max-width: 124px; }
+}
+
+/* ---------- Page ---------- */
+.gp-wrap.gp-paper,
+.gp-wrap.gp-paper.gp-q {
+  --pp-ink: #241B15;
+  padding-top: 10px;
+}
+
+/* ---------- Matchup bar ----------
+   The same wide orange | OR | green bar, flatter and lighter, so it frames
+   the round without competing with the paper and the choices: flat
+   category colours, a 2.25px border, a faint shadow. Full names wrap to two lines rather than
+   shrinking (GameMatchup's paper sizes: 14-19px). */
+.gp-paper .gp-mu-bar {
+  height: 64px;
+  border-width: 2.25px;
+  border-radius: 18px;
+  box-shadow: 0 1px 0 rgba(26, 26, 26, 0.12), 0 4px 10px -8px rgba(80, 52, 0, 0.22);
+}
+.gp-paper .gp-mu-half {
+  background: var(--mu-bg);
+  padding: 4px 30px 4px 12px;
+}
+.gp-paper .gp-mu-b {
+  padding: 4px 12px 4px 30px;
+  border-left-width: 2.25px;
+}
+.gp-paper .gp-mu-half .fit-text-content { line-height: 1.06; }
+.gp-paper .gp-mu-half .fit-text-box { text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2); }
+.gp-paper .gp-mu-half[style*="var(--black)"] .fit-text-box { text-shadow: none; }
+
+/* The brand's own OR mark, in a thin ink ring. */
+.gp-paper .gp-mu-or-art {
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  border-width: 2.25px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(26, 26, 26, 0.22);
+}
+.gp-mu-or-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* ---------- Progress: secondary to the question ---------- */
+/* Same spacing in both phases (outranks the question phase's own gaps), so
+   nothing above the choices moves when the player answers. */
+.gp-wrap.gp-paper .gp-progress { gap: 6px; margin-top: 12px; }
+.gp-paper .gp-qpill {
+  padding: 0;
+  background: none;
+  color: rgba(70, 48, 12, 0.62);
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
+}
+/* 8 and 12 dots both sit comfortably on one row at 360px (12 x 9 + 11 x 6). */
+.gp-paper .gp-dots { gap: 6px; }
+.gp-paper .gp-dot {
+  width: 9px;
+  height: 9px;
+  border-width: 1.5px;
+  border-color: rgba(34, 181, 163, 0.6);
+  background: rgba(255, 255, 255, 0.55);
+}
+.gp-paper .gp-dot.is-reached {
+  border-color: #189A8A;
+  background: #22B5A3;
+}
+
+/* ---------- Paper prompt ----------
+   A scrap about 92% of the phone's width. The sheet is a real paper image
+   (paperAssets.js); PaperPrompt sets the prompt's height to the sheet's own
+   proportions, so the image fills it without stretching, and only overly
+   tall text makes it crop the sheet's sides instead. The text is the live
+   heading: heavy, rounded, dark, centred, wrapping at spaces only. The side
+   padding sets the text width; the height comes from the sheet. */
+.gp-paper .gp-prompt {
+  width: min(100%, 92vw);
+  margin: 12px auto 0;
+}
+.pp {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 6px 24px;
+}
+.pp-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 50%;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  filter:
+    drop-shadow(0 1px 1px rgba(74, 52, 18, 0.2))
+    drop-shadow(0 6px 9px rgba(110, 78, 20, 0.14));
+}
+.pp-text {
+  margin: 0;
+  max-width: 100%;
+  font-family: 'Fredoka One', cursive;
+  font-weight: 400;
+  color: var(--pp-ink, #241B15);
+  text-align: center;
+  line-height: 1.08;
+  letter-spacing: 0.1px;
+  text-wrap: balance;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+/* Stepped by length (clueSizeClass), like the classic question, but kept
+   large: a long title takes another line rather than getting small. */
+.gp-prompt.lg .pp-text { font-size: clamp(31px, 9.4vw, 42px); }
+.gp-prompt.md .pp-text { font-size: clamp(28px, 8.3vw, 37px); }
+.gp-prompt.sm .pp-text { font-size: clamp(25px, 7.3vw, 32px); }
+.gp-prompt.xs .pp-text { font-size: clamp(22px, 6.4vw, 28px); }
+
+/* ---------- Answer choices ----------
+   Still the two side-by-side candy buttons with the real category art; a
+   2.5px border, a short ledge and a fainter gloss. The softer two-stop fill
+   is set inline (GameScreen). */
+/* About 24-30px of visible space under the paper (its drawn edge sits a
+   few pixels inside the box), the same at every height. */
+.gp-paper .gp-qmod,
+.gp-wrap.gp-paper.gp-q > .gp-qmod { margin-top: 22px; }
+.gp-wrap.gp-paper .gp-qmod > .ans-btns { margin-top: 0; }
+.gp-paper .ans-box {
+  border-width: 2.5px;
+  border-radius: 20px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.22), 0 8px 14px -8px rgba(60, 40, 0, 0.3);
+}
+.gp-paper .ans-box::after {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%);
+}
+@media (hover: hover) {
+  .gp-paper .ans-box:hover:not(.dis) { box-shadow: 0 6px 0 rgba(0, 0, 0, 0.22), 0 10px 16px -8px rgba(60, 40, 0, 0.3); }
+}
+.gp-paper .ans-box:active:not(.dis) { box-shadow: 0 1px 0 rgba(0, 0, 0, 0.22); }
+.gp-paper .ans-box-img { max-width: 94%; border-radius: 8px; }
+/* Without the mystery stage there is room for taller choices (and bigger
+   category art); they step down on shorter screens, by the screen alone,
+   never by question, so they never change size mid-game. */
+@supports (height: 100dvh) {
+  .gp-wrap.gp-paper.gp-q .ans-box {
+    --gp-ans-h: clamp(168px, calc(276px - (840px - 100dvh) * 0.6), 276px);
+  }
+}
+
+/* ---------- Reveal ----------
+   The same stack above (bar, progress, the same paper), then the media,
+   the result, the two panels and Next. The page may scroll: the copy keeps
+   a comfortable size rather than squeezing onto one screen. */
+.app.gp-fullscreen:has(.gp-wrap.gp-paper.gp-r) {
+  height: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.gp-wrap.gp-paper.gp-r { display: block; }
+.gp-paper .gp-reveal { margin-top: 16px; }
+
+/* Media: the paper's width, a thin dark frame, modest corners, a small
+   shadow. A still keeps its own proportions (GameRevealMedia) up to a cap
+   of about 380px; a taller one (a poster, a book cover) is then shown whole
+   inside a full-width stage, letterboxed on the dark frame, rather than
+   taking over the page. Video keeps its 16:9 player, which never reaches
+   the cap at phone widths. */
+.gp-paper .gp-media,
+.gp-paper .gp-reveal > .gp-media {
+  --gp-media-cap: min(380px, 52dvh);
+  flex: none;
+  align-self: center;
+  width: calc(min(100%, 92vw) - 4px);
+  padding: 2px;
+  min-height: 0;
+  margin: 0 0 14px;
+}
+.gp-paper .gp-media-img,
+.gp-paper .gp-media-frame,
+.gp-paper .gp-media-loading,
+.gp-paper .gp-media-failed {
+  margin: -2px;
+  border-width: 2px;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(40, 28, 8, 0.16), 0 8px 18px -10px rgba(40, 28, 8, 0.35);
+}
+.gp-paper .gp-media:not(.gp-media-video) .gp-media-img,
+.gp-paper .gp-media-loading,
+.gp-paper .gp-media-failed {
+  width: 100cqw;
+  height: 100cqh;
+  aspect-ratio: auto;
+}
+.gp-paper .gp-media-src {
+  bottom: 2px;
+  width: 100cqw;
+  border-radius: 0 0 10px 10px;
+}
+
+/* Result banner: solid and confident, without the gloss, ribbons, gleam or
+   confetti. Green for right, coral for wrong. */
+.gp-paper .gp-verdict {
+  gap: 2px 8px;
+  min-height: 52px;
+  padding: 8px 14px;
+  margin: 0 0 14px;
+  border-width: 2.5px;
+  border-radius: 14px;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
+}
+.gp-paper .gp-verdict::before,
+.gp-paper .gp-verdict::after { display: none; }
+.gp-paper .gp-verdict.ok {
+  background: linear-gradient(180deg, #34C46A 0%, #1FA552 100%);
+  border-color: #0E5A2B;
+  box-shadow: 0 3px 0 #0E5A2B, 0 8px 16px -10px rgba(14, 90, 43, 0.6);
+}
+.gp-paper .gp-verdict.no {
+  background: linear-gradient(180deg, #FF7563 0%, #EC5140 100%);
+  border-color: #962A1E;
+  box-shadow: 0 3px 0 #962A1E, 0 8px 16px -10px rgba(150, 42, 30, 0.55);
+}
+.gp-verdict-mark {
+  display: inline-block;
+  width: 1.05em;
+  height: 1.05em;
+  font-size: clamp(22px, 6vw, 28px);
+  line-height: 1;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.18));
+}
+.gp-verdict-mark svg { display: block; }
+.gp-paper .gp-verdict-word { font-size: clamp(22px, 6vw, 28px); }
+.gp-paper .gp-verdict-dash { font-size: clamp(22px, 6vw, 28px); opacity: 0.75; }
+.gp-paper .gp-verdict-tail.xl { font-size: clamp(22px, 6vw, 28px); }
+.gp-paper .gp-verdict-tail.lg { font-size: clamp(20px, 5.4vw, 26px); }
+.gp-paper .gp-verdict-tail.md { font-size: clamp(19px, 5vw, 24px); }
+.gp-paper .gp-verdict-tail.sm { font-size: clamp(18px, 4.8vw, 22px); }
+.gp-paper .gp-verdict-tail.xs { font-size: clamp(17px, 4.4vw, 20px); }
+
+/* Needless Commentary (pink) and Actual Info (aqua): pale cards with a thin
+   tinted edge and a small shadow, readable body copy. These override the
+   classic panels' phone and short-screen tightening, including the merged
+   card on the shortest phones. */
+.gp-paper .gp-panel,
+.gp-paper .gp-panel-info,
+.gp-paper .gp-panel-fun {
+  padding: 12px 14px 13px;
+  margin: 0 0 10px;
+  border-style: solid;
+  border-width: 1.25px;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(60, 40, 10, 0.06), 0 6px 12px -8px rgba(60, 40, 10, 0.18);
+}
+.gp-paper .gp-panel-fun { background: #FFF1F6; border-color: #F4BFD2; }
+.gp-paper .gp-panel-info { background: #EAFAF6; border-color: #A6E0D5; }
+.gp-paper .gp-panel-ico {
+  width: 27px;
+  height: 27px;
+  padding: 5px;
+  margin: 0 9px 2px 0;
+}
+.gp-paper .gp-panel-info .gp-panel-ico { background: #14A595; box-shadow: none; }
+.gp-paper .gp-panel-fun .gp-panel-ico { background: #F04E85; box-shadow: none; }
+.gp-paper .gp-panel-lbl {
+  margin: 0 0 3px;
+  font-size: 11.5px;
+  letter-spacing: 1.2px;
+  line-height: 1.3;
+}
+.gp-paper .gp-panel-body {
+  font-size: 15px;
+  line-height: 1.45;
+  color: #2A2522;
+}
+
+/* Next: the big yellow game button, toned down for the paper look: a
+   2.4px border, a 3px ledge and a fainter gloss (each about a fifth
+   lighter). The breathing invitation is unchanged. */
+.gp-wrap.gp-paper .gp-next.btn {
+  --gp-next-fs: clamp(22px, 6.2vw, 27px);
+  --gp-next-inner: 52px;
+  width: 92%;
+  margin: 8px auto 6px;
+  border-width: 2.4px;
+  background: linear-gradient(180deg, #FFEB6B 0%, #FFD93A 55%, #FBC52A 100%);
+  box-shadow:
+    0 3px 0 #2B2106,
+    0 9px 14px -10px rgba(214, 138, 0, 0.4);
+  text-shadow: none;
+}
+.gp-wrap.gp-paper .gp-next.btn::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0) 100%);
+}
+.gp-paper .gp-next-arrow { filter: none; }
+@media (hover: hover) {
+  .gp-wrap.gp-paper .gp-next.btn:hover {
+    box-shadow: 0 4px 0 #2B2106, 0 11px 16px -10px rgba(214, 138, 0, 0.45);
+  }
+}
+.gp-wrap.gp-paper .gp-next.btn:active {
+  box-shadow: 0 1px 0 #2B2106, 0 4px 8px -6px rgba(214, 138, 0, 0.4);
+}
+
+/* ---------- Tablet and desktop ----------
+   Mobile is the reference for this pass; wider screens get the same pieces
+   at a sensible size so nothing breaks there. */
+@media (min-width: 600px) {
+  .gp-paper .gp-mu-bar { height: 74px; border-radius: 22px; }
+  .gp-paper .gp-mu-or-art { width: 52px; height: 52px; }
+  .gp-paper .gp-qpill { font-size: 12.5px; }
+  .gp-paper .gp-prompt { width: min(100%, 620px); }
+  .pp { padding: 8px 34px; }
+  .gp-prompt.lg .pp-text { font-size: 50px; }
+  .gp-prompt.md .pp-text { font-size: 44px; }
+  .gp-prompt.sm .pp-text { font-size: 37px; }
+  .gp-prompt.xs .pp-text { font-size: 31px; }
+  .gp-paper .gp-media,
+  .gp-paper .gp-reveal > .gp-media { width: calc(min(100%, 620px) - 4px); --gp-media-cap: min(440px, 46vh); }
+  .gp-paper .gp-verdict,
+  .gp-paper .gp-panel,
+  .gp-paper .gp-next.btn { width: min(100%, 620px); margin-left: auto; margin-right: auto; }
+  .gp-paper .gp-panel { padding: 14px 18px 15px; }
+  .gp-paper .gp-panel-ico { width: 32px; height: 32px; padding: 6px; margin: 0; }
+  .gp-paper .gp-panel-body { font-size: 16px; }
+}
