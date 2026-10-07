@@ -4,7 +4,7 @@ import { Fragment, useState, useEffect, useLayoutEffect, useRef, useCallback, us
 // is src/account/platformSignIn.js; the guest handoff is guestHandoff.js.
 // Every touch point in this file is marked "[accounts]".
 import { SUPABASE_URL as SB_URL, SUPABASE_KEY as SB_KEY, SUPABASE_CONFIGURED as SUPABASE_READY, ACCOUNTS_ENABLED, announceConfiguration } from "./game/config.js";
-import { supabase } from "./account/supabaseClient.js";
+import { authedFetch, supabase } from "./account/supabaseClient.js";
 import { checkAdminStatus, deleteMyAccount, ensureAccount, signInWithPlatform, signOutOfWtf } from "./account/platformSignIn.js";
 import { StorageUploadError, canWriteAs, classifyStorageFailure, copyFailureCode } from "./admin/adminAccess.js";
 import { declinePendingHandoff, importPendingHandoff, resolvePendingHandoff } from "./account/guestHandoff.js";
@@ -1808,9 +1808,11 @@ async function sbFetch(path, opts={}){
 // resolves the stored session's token for ordinary reads; writes whose row
 // must belong to the signing user (the player row) pass the token from the
 // same session read that supplied the user id (src/account/playerRow.js).
+// An expired pass is renewed and the request retried once, only ever as the
+// same user (src/account/renewingFetch.js).
 async function sbFetchWithToken(accessToken, path, opts={}){
   if(!SUPABASE_READY) throw new Error("Supabase is not configured.");
-  const res = await fetch(`${SB_URL}${path}`, {
+  const res = await authedFetch(`${SB_URL}${path}`, {
     ...opts,
     headers:{
       "apikey": SB_KEY,
@@ -1873,7 +1875,7 @@ async function uploadBytesToStorage(body, mime, folder="images"){
   if(!session?.access_token || isAnonymousUser(session.user)) throw new StorageUploadError("signed-out", {detail:"No admin account session."});
   let res;
   try{
-    res = await fetch(`${SB_URL}/storage/v1/object/${STORAGE_BUCKET}/${filename}`, {
+    res = await authedFetch(`${SB_URL}/storage/v1/object/${STORAGE_BUCKET}/${filename}`, {
       method:"POST",
       headers:{
         "apikey": SB_KEY,
