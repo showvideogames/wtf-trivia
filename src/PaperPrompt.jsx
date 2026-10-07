@@ -14,6 +14,12 @@ import { PAPER_ASSET } from "./gameplayLook.js";
 // text is centred on it. Only text too tall for that sheet makes the prompt
 // taller, and then the sheet is scaled up and its sides cropped rather than
 // distorted. The soft shadow is CSS (paperLook.css).
+//
+// A phone reveal short on room may draw the whole prompt smaller at once
+// with --pp-fit (paperLook.css), scaling its width, text and padding, and
+// with them the height set here. The measurement divides that factor back
+// out, so the chosen sheet and its proportions never change, and the
+// shrink takes effect in the same layout pass, with no re-measure.
 
 function usePaperLayout(boxRef, textRef, force) {
   const [layout, setLayout] = useState(null);
@@ -21,8 +27,9 @@ function usePaperLayout(boxRef, textRef, force) {
     const box = boxRef.current, text = textRef.current;
     if (!box || !text) return;
     const measure = () => {
-      const width = box.offsetWidth;
-      const textHeight = text.offsetHeight;
+      const fit = parseFloat(getComputedStyle(box).getPropertyValue("--pp-fit")) || 1;
+      const width = box.offsetWidth / fit;
+      const textHeight = text.offsetHeight / fit;
       const lineHeight = parseFloat(getComputedStyle(text).lineHeight) || textHeight;
       if (!width || !textHeight) return;
       const next = paperLayout({ width, textHeight, lines: Math.round(textHeight / lineHeight), force });
@@ -50,7 +57,7 @@ export default function PaperPrompt({ children, as = "h1", className = "", paper
   const layout = usePaperLayout(boxRef, textRef, paper);
   return (
     <div ref={boxRef} className={`pp ${className}`.trim()}
-         data-paper={layout?.id} style={layout ? { minHeight: layout.height } : undefined}>
+         data-paper={layout?.id} style={layout ? { minHeight: `calc(${layout.height}px * var(--pp-fit, 1))` } : undefined}>
       {layout && <img className="pp-sheet" src={layout.src} alt="" aria-hidden="true" draggable="false"/>}
       <Tag ref={textRef} className="pp-text">{children}</Tag>
     </div>

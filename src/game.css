@@ -278,6 +278,8 @@
   text-transform: uppercase;
   white-space: nowrap;
 }
+/* The short "3 / 12" label is only for short phone screens (paperLook.css). */
+.gp-qshort { display: none; }
 .gp-dots {
   display: flex;
   flex-wrap: nowrap;

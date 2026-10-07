@@ -3074,6 +3074,9 @@ function catSizeClass(text){
   return"xl";
 }
 
+// How many data-fit steps a phone reveal may take (paperLook.css).
+const REVEAL_FIT_STEPS=8;
+
 // Matches the wide desktop answer row in game.css.
 const WIDE_ANSWER_ROW_MQ="(min-width: 1100px)";
 
@@ -3275,6 +3278,49 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
     primeActiveWindow(getPuzzleImageUrls(game), idx, game.id);
   },[game, idx]);
 
+  // Every question starts at the top of the page: when a game opens (new or
+  // resumed) and after each Next, so the browser never carries an old scroll
+  // position into a question and clips its top. Instant and before paint, so
+  // there is no visible jump or scroll animation.
+  useLayoutEffect(()=>{
+    window.scrollTo({top:0, left:0, behavior:"instant"});
+  },[idx]);
+
+  // Phones: the reveal fits the screen (paperLook.css, Phones: one screen).
+  // While it overflows, the reveal steps down one data-fit level at a time --
+  // gaps, the info cards, the header and paper, the verdict, and only last
+  // the media -- until it fits or the last step is reached, and only then may
+  // the page scroll. Measured here, before paint, and set straight on the
+  // element, since it is a measurement of the rendered page. The reveal's own
+  // box is measured (its scroll height is in its own coordinates), so its
+  // entrance scale doesn't skew the result.
+  // Re-measured when the screen size changes, when any block of the reveal
+  // changes size (a still's real proportions arrive after it loads), and
+  // once the web fonts load.
+  const wrapRef=useRef(null);
+  useLayoutEffect(()=>{
+    const wrap=wrapRef.current;
+    if(!wrap) return;
+    wrap.removeAttribute("data-fit");
+    if(!PAPER_LOOK||phase!=="reveal") return;
+    const phone=window.matchMedia("(max-width: 599px)");
+    const fit=()=>{
+      const reveal=wrap.querySelector(".gp-reveal");
+      wrap.removeAttribute("data-fit");
+      if(!phone.matches||!reveal) return;
+      for(let level=1; level<=REVEAL_FIT_STEPS && reveal.scrollHeight>reveal.clientHeight+1; level++){
+        wrap.setAttribute("data-fit",String(level));
+      }
+    };
+    fit();
+    const ro=typeof ResizeObserver!=="undefined"?new ResizeObserver(fit):null;
+    ro?.observe(wrap);
+    for(const block of wrap.querySelector(".gp-reveal")?.children||[]) ro?.observe(block);
+    let live=true;
+    document.fonts?.ready?.then(()=>{ if(live) fit(); });
+    return ()=>{ live=false; ro?.disconnect(); };
+  },[phase,idx]);
+
   // Guard: once we've advanced past the last question, stop rendering question/reveal UI.
   if(!cq) return null;
 
@@ -3328,7 +3374,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
   const paper = PAPER_LOOK;
 
   return(
-    <div className={`gp-wrap${phase==="question"?" gp-q":phase==="reveal"?" gp-r":""}${paper?" gp-paper":""}`}>
+    <div ref={wrapRef} className={`gp-wrap${phase==="question"?" gp-q":phase==="reveal"?" gp-r":""}${paper?" gp-paper":""}`}>
       <canvas ref={canvasRef} id="confetti-canvas" style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:9999}}/>
       {reaction&&<ReactionOverlay emoji={reaction}/>}
 
@@ -3427,19 +3473,19 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
 
           <GameRevealMedia question={cq}/>
 
-          {/* Needless commentary first, then the actual info. */}
-          {cq.flavorCopy&&(
-            <section className="gp-panel gp-panel-fun">
-              <PanelIcon kind="fun"/>
-              <h3 className="gp-panel-lbl">Needless commentary</h3>
-              <p className="gp-panel-body">{cq.flavorCopy}</p>
-            </section>
-          )}
+          {/* The actual info first, then the needless commentary. */}
           {cq.explanationCopy&&(
             <section className="gp-panel gp-panel-info">
               <PanelIcon kind="info"/>
               <h3 className="gp-panel-lbl">Actual info</h3>
               <p className="gp-panel-body">{cq.explanationCopy}</p>
+            </section>
+          )}
+          {cq.flavorCopy&&(
+            <section className="gp-panel gp-panel-fun">
+              <PanelIcon kind="fun"/>
+              <h3 className="gp-panel-lbl">Needless commentary</h3>
+              <p className="gp-panel-body">{cq.flavorCopy}</p>
             </section>
           )}
 
