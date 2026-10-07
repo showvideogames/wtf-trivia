@@ -273,6 +273,148 @@ function longLabelQuestions() {
   ];
 }
 
+// The paper-look review puzzle: the real "Fake Sports Team OR Real Sports
+// Team" matchup with its real handmade category art (the bull and the
+// Phanatic, resized copies in ./art) and its short Fake / Real button
+// names. The reveal media is not the live puzzle's: question 1 has a real
+// photo (fixtures.local/01-landscape-photo.jpg, the untracked image-upload
+// test fixtures, so it only shows where that folder exists),
+// question 2 a YouTube video that embeds, and the rest the usual labelled
+// demo artwork, including a tall still on question 5. It covers a short title, the
+// Montgomery Biscuits-length one, a very long one, stills, a YouTube reveal,
+// and short and long copy. Open it at /puzzle/demo-sports (8 questions) or
+// /puzzle/demo-sports-12 (12). Built inside a function for
+// the same tree-shaking reason as above.
+function sportsQuestions(count) {
+  const eight = [
+    {
+      itemText: "Montgomery Biscuits",
+      correctCategory: "B",
+      explanationCopy:
+        "The Montgomery Biscuits are a real Double-A minor league baseball team in Montgomery, Alabama, named after the breakfast biscuit.",
+      flavorCopy: "The most delicious name in professional sports, and it isn't close.",
+      imageUrl: "/fixtures.local/01-landscape-photo.jpg",
+      imageAlt: "Aerial photo of a sandy coastline",
+      imageSource: "Demo photo",
+    },
+    {
+      itemText: "Jumbo Shrimp",
+      correctCategory: "B",
+      explanationCopy: "The Jacksonville Jumbo Shrimp are a real Triple-A baseball team in Florida.",
+      flavorCopy: "A contradiction in terms. A championship mindset.",
+      imageUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      imageSource: "Demo video",
+    },
+    {
+      itemText: "Duluth Gravy Boats",
+      correctCategory: "A",
+      explanationCopy: "Invented for the quiz. Duluth has no gravy-themed franchise, despite obvious demand.",
+      flavorCopy: "Pour one out.",
+      imageUrl: "",
+    },
+    {
+      itemText: "The Greater Tri-County Competitive Sourdough Starter Appreciation Society Fighting Yeasts",
+      correctCategory: "A",
+      explanationCopy:
+        "Invented for the quiz, and deliberately long: this entry checks that a very long prompt wraps onto the paper instead of shrinking into fine print, and that the reveal still reads comfortably on a 390px phone with no sideways scrolling, however enthusiastic the copywriter was feeling that day.",
+      flavorCopy:
+        "And this is a deliberately long piece of needless commentary, so the pink panel can be checked for wrapping too. It rambles. It continues. It considers stopping, decides against it, and carries on regardless, much like a sourdough starter that has been fed every morning for eleven years.",
+      imageUrl: /* @__PURE__ */ photo("#d9c39a", "#8a6a3a", "Fighting Yeasts"),
+      imageAlt: "Stylised bread artwork",
+      imageSource: "Demo artwork",
+    },
+    {
+      itemText: "Rocket City Trash Pandas",
+      correctCategory: "B",
+      explanationCopy: "The Rocket City Trash Pandas are a real Double-A baseball team in Madison, Alabama.",
+      flavorCopy: "A raccoon with a rocket. Nobody has ever needed less explanation.",
+      imageUrl: /* @__PURE__ */ portrait("#3a3f63", "#14172e", "Trash Pandas"),
+      imageAlt: "Stylised portrait artwork",
+      imageSource: "Demo artwork",
+    },
+    {
+      itemText: "Toledo Mud Hens",
+      correctCategory: "B",
+      explanationCopy: "The Toledo Mud Hens are a real Triple-A baseball team in Ohio. Klinger wore their cap on M*A*S*H.",
+      flavorCopy: "Muddy. Hen-like. Real.",
+      imageUrl: /* @__PURE__ */ photo("#7c5a3a", "#3b2a1a", "Mud Hens"),
+      imageAlt: "Stylised artwork",
+      imageSource: "Demo artwork",
+    },
+    {
+      itemText: "Boise Spud Lightning",
+      correctCategory: "A",
+      explanationCopy: "Invented for the quiz. Potatoes remain, as far as anyone knows, non-conductive.",
+      flavorCopy: "Strikes the same field twice. Mashes it.",
+      imageUrl: "",
+    },
+    {
+      itemText: "Hartford Yard Goats",
+      correctCategory: "B",
+      explanationCopy: "The Hartford Yard Goats are a real Double-A baseball team in Connecticut.",
+      flavorCopy: "A goat. In a yard. Undefeated in both.",
+      imageUrl: /* @__PURE__ */ photo("#3c8d5a", "#1d4a2e", "Yard Goats"),
+      imageAlt: "Stylised artwork",
+      imageSource: "Demo artwork",
+    },
+  ];
+  const more = [
+    {
+      itemText: "Akron RubberDucks",
+      correctCategory: "B",
+      explanationCopy: "The Akron RubberDucks are a real Double-A baseball team in Ohio.",
+      flavorCopy: "Squeaks when you hit it.",
+      imageUrl: "",
+    },
+    {
+      itemText: "Tulsa Thunderpickles",
+      correctCategory: "A",
+      explanationCopy: "Invented for the quiz. Tulsa's pickles remain unaffiliated.",
+      flavorCopy: "Brined for victory.",
+      imageUrl: /* @__PURE__ */ photo("#7fae3c", "#3d5d1a", "Thunderpickles"),
+      imageAlt: "Stylised artwork",
+      imageSource: "Demo artwork",
+    },
+    {
+      itemText: "Savannah Bananas",
+      correctCategory: "B",
+      explanationCopy: "The Savannah Bananas are a real exhibition baseball team from Georgia.",
+      flavorCopy: "Peak potassium.",
+      imageUrl: "",
+    },
+    {
+      itemText: "Wichita Pancake Wizards",
+      correctCategory: "A",
+      explanationCopy: "Invented for the quiz. No wizard has ever played in Wichita, pancake or otherwise.",
+      flavorCopy: "Syrup is a performance-enhancing substance.",
+      imageUrl: "",
+    },
+  ];
+  return count > 8 ? [...eight, ...more] : eight;
+}
+
+function sportsGames() {
+  const base = {
+    ...demoGame(),
+    themeTitle: "Fake Sports Team OR Real Sports Team?",
+    categoryA: "Fake Sports Team",
+    categoryB: "Real Sports Team",
+    categoryAColor: "orange",
+    categoryBColor: "green",
+    categoryAButtonName: "Fake",
+    categoryBButtonName: "Real",
+    categoryAImage: "/src/dev/art/fake-bull-mascot-fudge.webp",
+    categoryBImage: "/src/dev/art/phillie-phanatic-fudge.webp",
+    headerImage: null,
+    wideImage: "",
+    tags: ["sports"],
+  };
+  return [
+    { ...base, id: "demo-sports", date: daysAgoKey(33), questions: sportsQuestions(8) },
+    { ...base, id: "demo-sports-12", date: daysAgoKey(34), themeTitle: "Fake Sports Team OR Real Sports Team? (12 questions)", questions: sportsQuestions(12) },
+  ];
+}
+
 function todayKey() {
   return new Date().toLocaleDateString("en-CA");
 }
@@ -324,7 +466,7 @@ export function demoGames() {
     questions: longLabelQuestions(),
   };
   const today = { ...demoGame(), headerImage: DEMO_SQUARE_ART, wideImage: DEMO_WIDE_ART, ...todayOverrides() };
-  return [today, older, longLabels, ...upcomingDemoGames(), ...archiveDemoGames()];
+  return [today, older, longLabels, ...sportsGames(), ...upcomingDemoGames(), ...archiveDemoGames()];
 }
 
 // Stand-in posters for the review: a square 1600x1600 and a wide 1200x630,

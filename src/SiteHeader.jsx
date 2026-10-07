@@ -157,7 +157,7 @@ function useShortcutRoom(barRef) {
   return room;
 }
 
-export default function SiteHeader({ nav, current, sound, account, admin }) {
+export default function SiteHeader({ nav, current, sound, account, admin, wordmark = false }) {
   const menuItems = admin ? [...nav, { id: "admin", label: "Admin", icon: admin.icon, onClick: admin.onClick }] : nav;
   const barRef = useRef(null);
   const room = useShortcutRoom(barRef);
@@ -185,7 +185,16 @@ export default function SiteHeader({ nav, current, sound, account, admin }) {
           </button>
         ))}
       </nav>
-      <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="sh-logo"/>
+      {/* wordmark: phones show the logo without its TRIVIA line (the same
+          artwork, cropped), for the paper-look gameplay screens. */}
+      {wordmark ? (
+        <picture className="sh-logo-pic">
+          <source media="(max-width: 599px)" srcSet="/wtf-logo-wordmark.png"/>
+          <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="sh-logo"/>
+        </picture>
+      ) : (
+        <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="sh-logo"/>
+      )}
       <div className="sh-tools">
         {help && (
           <button type="button" className={currentClass("sh-icon-btn sh-shortcut sh-help", "help", current)}
