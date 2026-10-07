@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { countdownGroups, countdownParts, countdownWords, nextPuzzle, releaseTime } from "./upNext.js";
+import { countdownGroups, countdownParts, countdownWords, gameDayKey, isReleased, nextPuzzle, releaseTime } from "./schedule.js";
 
 const g = (id, date, status = "published") => ({ id, date, status });
 
@@ -60,5 +60,36 @@ describe("countdown", () => {
     expect(countdownWords(ms(0, 0, 1, 0))).toBe("1 minute");
     expect(countdownWords(ms(0, 0, 0, 30))).toBe("less than a minute");
     expect(countdownWords(0)).toBe("0 minutes");
+  });
+});
+
+describe("the release rule", () => {
+  const today = "2026-10-06";
+
+  it("plays only published puzzles dated today or earlier", () => {
+    expect(isReleased(g("today", today), today)).toBe(true);
+    expect(isReleased(g("past", "2026-09-30"), today)).toBe(true);
+    expect(isReleased(g("tomorrow", "2026-10-07"), today)).toBe(false);
+    expect(isReleased(g("draft", "2026-10-01", "draft"), today)).toBe(false);
+    expect(isReleased(g("retired", "2026-10-01", "retired"), today)).toBe(false);
+    expect(isReleased(g("undated", ""), today)).toBe(false);
+    expect(isReleased(null, today)).toBe(false);
+  });
+
+  it("is never both playable and Up Next: the teaser is exactly the first puzzle not yet released", () => {
+    const games = [g("today", today), g("tomorrow", "2026-10-07"), g("later", "2026-10-09")];
+    const next = nextPuzzle(games, today);
+    expect(next.id).toBe("tomorrow");
+    expect(isReleased(next, today)).toBe(false);
+    expect(games.filter((x) => isReleased(x, today)).map((x) => x.id)).toEqual(["today"]);
+  });
+
+  it("opens at the countdown's moment: the game day turns over exactly at releaseTime", () => {
+    const at = releaseTime("2026-10-07");
+    expect(gameDayKey(new Date(at.getTime() - 1))).toBe("2026-10-06");
+    expect(gameDayKey(at)).toBe("2026-10-07");
+    expect(isReleased(g("tomorrow", "2026-10-07"), gameDayKey(new Date(at.getTime() - 1)))).toBe(false);
+    expect(isReleased(g("tomorrow", "2026-10-07"), gameDayKey(at))).toBe(true);
+    expect(nextPuzzle([g("tomorrow", "2026-10-07")], gameDayKey(at))).toBeNull();
   });
 });

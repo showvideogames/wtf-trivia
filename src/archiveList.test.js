@@ -36,6 +36,18 @@ describe("archivePuzzles", () => {
     expect(puzzles.map((p) => p.id)).toEqual(["today", "mid", "retired-played", "old"]);
   });
 
+  it("never lists a published puzzle scheduled after today, until its day comes", () => {
+    const withFuture = [...games, g("tomorrow", "2026-10-04"), g("next-week", "2026-10-10")];
+    const ids = (today) => archivePuzzles(withFuture, records, today).puzzles.map((p) => p.id);
+    expect(ids("2026-10-03")).toEqual(["today", "mid", "retired-played", "old"]);
+    // At local midnight the next day's puzzle becomes today's and leads the list.
+    expect(ids("2026-10-04")).toEqual(["tomorrow", "today", "mid", "retired-played", "old"]);
+    expect(archivePuzzles(withFuture, records, "2026-10-04").todayGame.id).toBe("tomorrow");
+    // Topic counts and filters only ever see what was listed.
+    expect(archiveTopicCounts(archivePuzzles(withFuture, records, "2026-10-03").puzzles).reduce((n, t) => n + t.count, 0))
+      .toBe(archiveTopicCounts(archivePuzzles(games, records, "2026-10-03").puzzles).reduce((n, t) => n + t.count, 0));
+  });
+
   it("never treats a retired puzzle as today's", () => {
     const { todayGame } = archivePuzzles(
       [g("r", "2026-10-03", { status: "retired" })],

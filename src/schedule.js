@@ -1,12 +1,28 @@
-// Home's Up Next: which puzzle comes after today's, and how long until it
-// opens. Pure functions, so the choice and the countdown can be tested.
+// The puzzle schedule, in one place: today's game day, which puzzles are
+// released (playable), which comes next (Home's Up Next) and how long until
+// it opens. Pure functions, so every rule can be tested.
 //
-// The release rule is the app's own (getLocalGameDay in App.jsx): a puzzle
-// belongs to a calendar day in the player's local time zone, so the puzzle
-// dated D opens at local midnight starting D, the same moment the Results
-// countdown counts down to.
+// The release rule: a puzzle belongs to a calendar day in the player's local
+// time zone, so the puzzle dated D opens at local midnight starting D. Home's
+// Play, the Archive, Replay, the Up Next countdown and the Results countdown
+// all go by this same day.
 
 const DAY_KEY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+// Today's game day in the player's local time zone, as YYYY-MM-DD.
+export function gameDayKey(now = new Date()) {
+  return now.toLocaleDateString("en-CA");
+}
+
+// Whether players may play this puzzle on `today`: published, with a real
+// date, and that date is today or earlier. Drafts, retired puzzles and
+// published puzzles scheduled after today are never playable, whatever
+// screen asks. (Admin Preview plays the editor's copy and never asks.)
+export function isReleased(game, today) {
+  return game?.status === "published"
+    && typeof game.date === "string" && DAY_KEY.test(game.date)
+    && typeof today === "string" && game.date <= today;
+}
 
 // The soonest published puzzle dated after `today` (a YYYY-MM-DD key), or
 // null. Drafts and retired puzzles never count, whatever their date. Two

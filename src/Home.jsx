@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import CandyPageShell from "./CandyPageShell.jsx";
 import CategoryArtImage from "./CategoryArtImage.jsx";
 import { shareFeedback } from "./homeShare.js";
-import { countdownGroups, countdownWords } from "./upNext.js";
+import { countdownGroups, countdownWords } from "./schedule.js";
 
 // ---- HOME ----
 // The category-first Home page, built on the Archive's custard shell. The

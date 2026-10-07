@@ -25,7 +25,7 @@ import { archivePuzzleImages, describeImageWarning, failureReason, imageName, is
 import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor, shareTextsFor } from "./crowdStats.js";
 import { gameToRow, rowToGame } from "./gameRow.js";
 import { copyText, prepareShareImages, puzzleArtworkUrl, shareArtworkUrls, shareResult, wideArtworkUrl } from "./homeShare.js";
-import { nextPuzzle, releaseTime } from "./upNext.js";
+import { gameDayKey, isReleased, nextPuzzle, releaseTime } from "./schedule.js";
 import { normalizeShareLabel } from "./share.js";
 import { answerButtonName } from "./categoryNames.js";
 import PlayerHeader from "./PlayerHeader.jsx";
@@ -2283,7 +2283,7 @@ function safeRead(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):
 function safeWrite(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch{return false;}}
 function safeRemove(k){try{localStorage.removeItem(k);return true;}catch{return false;}}
 function calcBestCombo(answers){let best=0,cur=0;for(const a of answers){if(a.correct){cur++;best=Math.max(best,cur);}else cur=0;}return best;}
-function getLocalGameDay(){return new Date().toLocaleDateString("en-CA");}
+function getLocalGameDay(){return gameDayKey();} // the release rule's day (schedule.js)
 function getCountdown(){const n=new Date();const t=new Date(n);t.setDate(t.getDate()+1);t.setHours(0,0,0,0);const d=t-n;return`${String(Math.floor(d/3600000)).padStart(2,"0")}:${String(Math.floor((d%3600000)/60000)).padStart(2,"0")}:${String(Math.floor((d%60000)/1000)).padStart(2,"0")}`;}
 function parseYouTubeStart(value){
   const raw = String(value||"").trim();
@@ -4649,7 +4649,7 @@ export default function WhatTheFudgeTrivia(){
 
   const todayGame = games.find(g=>g.date===today&&g.status==="published") || null;
   // Home's Up Next: the soonest published puzzle after today. Drafts and
-  // retired puzzles never show there (upNext.js).
+  // retired puzzles never show there (schedule.js).
   const upNextGame = nextPuzzle(games, today);
   // The player's record counts as today's only if it belongs to today's
   // puzzle: if the puzzle on today's date changes, another puzzle's result
@@ -4941,8 +4941,11 @@ export default function WhatTheFudgeTrivia(){
     return shareResult({ text, imageText, imageUrls: shareArtworkUrls(todayGame) }, navigator);
   };
 
-  // Replay
+  // Replay. Only a released puzzle (schedule.js: published, dated today or
+  // earlier) can start, whatever asks: a puzzle scheduled after today stays
+  // a teaser (Up Next) until its day, even if a stale list still offers it.
   const handleReplay = g => {
+    if(!isReleased(g, getLocalGameDay())) return;
     primeActiveWindow(getPuzzleImageUrls(g), 0, g.id);
     setReplayGame(g);
     setReplayRecord(newRecordFor(g));
