@@ -14,8 +14,9 @@
     <title>What The Fudge Trivia</title>
     <meta name="description" content="Each clue belongs to one of two ridiculous categories. Finish the puzzle, compare scores, and share without spoilers." />
     <link rel="canonical" href="https://whatthefudge.gg/" />
-    <!-- Link previews for the site itself. Puzzle results are shared as
-         generated images and text, not through these tags. -->
+    <!-- Link previews for the site itself. A puzzle link (/puzzle/<id>)
+         gets its own title, description and picture instead: api/puzzle.js
+         replaces these tags on the server (src/puzzleMeta.js). -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="What The Fudge Trivia" />
     <meta property="og:title" content="What The Fudge Trivia" />

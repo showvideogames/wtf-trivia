@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  ARCHIVE_SORTS,
   MIN_RANKED_PLAYS,
   archivePuzzles,
   archiveTopicCounts,
   filterArchive,
   matchesArchiveSearch,
+  playCount,
   puzzleAccuracy,
   sortArchive,
+  sortAvailable,
 } from "./archiveList.js";
 
 const g = (id, date, extra = {}) => ({
@@ -187,6 +190,22 @@ describe("archive topic filter", () => {
     expect(archiveTopicCounts(puzzles)[0]).toMatchObject({ id: "music", label: "Music", emoji: "🎵", count: 2 });
   });
 
+  it("handles Made Up like any other topic: counts, filter and search", () => {
+    const list = [
+      ...puzzles,
+      g("f", "2026-01-06", { themeTitle: "Real Dinosaur or Fake One?", tags: ["made-up", "animals"] }),
+      g("g", "2026-01-07", { themeTitle: "Real Word or Not?", tags: ["words_language", "made-up"] }),
+    ];
+    expect(archiveTopicCounts(list).map((t) => [t.id, t.count])).toEqual([
+      ["music", 2], ["gaming", 2], ["food", 1], ["animals", 1], ["words_language", 1], ["made-up", 2],
+    ]);
+    expect(archiveTopicCounts(list).at(-1)).toMatchObject({ label: "Made Up", emoji: "🙄" });
+    expect(ids(filterArchive(list, records, { topic: "made-up" }))).toEqual(["f", "g"]);
+    expect(ids(filterArchive(list, records, { query: "made up" }))).toEqual(["f", "g"]);
+    expect(ids(filterArchive(list, records, { query: "MADE" }))).toEqual(["f", "g"]);
+    expect(ids(filterArchive(list, records, { topic: "made-up", query: "dinosaur" }))).toEqual(["f"]);
+  });
+
   it("All topics covers the whole Archive, so its total is the puzzle count", () => {
     const { puzzles: list } = archivePuzzles(puzzles, {}, "2026-01-05");
     expect(filterArchive(list, {}, { topic: "all" })).toHaveLength(puzzles.length);
@@ -299,6 +318,19 @@ describe("puzzleAccuracy", () => {
   });
 });
 
+describe("playCount", () => {
+  it("is the puzzle's finished plays from its community stats", () => {
+    expect(playCount({ totalFinished: 52, totalScore: 300, totalQuestions: 8 })).toBe(52);
+    expect(playCount({ totalFinished: "7" })).toBe(7);
+  });
+
+  it("is 0 for a puzzle with no stats row or nonsense numbers", () => {
+    for (const stat of [undefined, null, {}, { totalFinished: null }, { totalFinished: -3 }, { totalFinished: 2.5 }, { totalFinished: "x" }]) {
+      expect(playCount(stat)).toBe(0);
+    }
+  });
+});
+
 describe("sortArchive", () => {
   const ids = (list) => list.map((p) => p.id);
 
@@ -404,10 +436,50 @@ describe("sortArchive", () => {
     });
   });
 
+  describe("Most played", () => {
+    const puzzles = [
+      g("a", "2026-01-01"), g("b", "2026-01-02"), g("c", "2026-01-03"), g("d", "2026-01-04"), g("e", "2026-01-05"),
+      g("tie-x", "2026-01-03", { themeTitle: "Xylophone" }), g("tie-w", "2026-01-03", { themeTitle: "Walrus" }),
+    ];
+    const stats = {
+      a: { totalFinished: 52, totalScore: 300, totalQuestions: 8 },
+      b: { totalFinished: 3, totalScore: 9, totalQuestions: 8 }, // too few for Hardest, still counted here
+      c: { totalFinished: 52, totalScore: 200, totalQuestions: 8 },
+      e: { totalFinished: 0, totalScore: 0, totalQuestions: 0 },
+      "tie-x": { totalFinished: 3, totalScore: 3, totalQuestions: 5 },
+      "tie-w": { totalFinished: 3, totalScore: 3, totalQuestions: 5 },
+    };
+
+    it("most plays first; equal counts newest first, then by title and id; no stats row is 0", () => {
+      expect(ids(sortArchive(puzzles, "played", { stats }))).toEqual(["c", "a", "tie-w", "tie-x", "b", "e", "d"]);
+    });
+
+    it("is the same whatever order the puzzles arrive in", () => {
+      const shuffled = [...puzzles].reverse();
+      expect(ids(sortArchive(shuffled, "played", { stats }))).toEqual(ids(sortArchive(puzzles, "played", { stats })));
+    });
+
+    it("never moves today's puzzle to the front: it ranks by its plays like any other", () => {
+      const today = puzzles[4]; // "e", 0 plays
+      expect(ids(sortArchive(puzzles, "played", { stats, todayGame: today })).at(-2)).toBe("e");
+    });
+
+    it("falls back to Newest when the stats didn't load", () => {
+      expect(sortAvailable("played", { stats: null })).toBe(false);
+      expect(sortAvailable("played", { stats: {} })).toBe(true);
+      expect(ids(sortArchive(puzzles, "played", { stats: null }))).toEqual(ids(sortArchive(puzzles, "newest")));
+    });
+
+    it("is in the Sort menu after Most liked", () => {
+      expect(ARCHIVE_SORTS.map((s) => s.id)).toEqual(["newest", "oldest", "hardest", "easiest", "liked", "played"]);
+      expect(ARCHIVE_SORTS.at(-1).label).toBe("Most played");
+    });
+  });
+
   it("sorting never changes the topic counts", () => {
     const puzzles = [g("a", "2026-01-01", { tags: ["music"] }), g("b", "2026-01-02", { tags: ["music", "food"] })];
     const before = archiveTopicCounts(puzzles);
-    for (const sort of ["oldest", "hardest", "easiest", "liked"]) {
+    for (const sort of ["oldest", "hardest", "easiest", "liked", "played"]) {
       archiveTopicCounts(sortArchive(puzzles, sort, { stats: {}, favoriteCounts: { a: 1 } }));
       expect(archiveTopicCounts(puzzles)).toEqual(before);
     }

@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  buildResultsShareText, normalizeShareLabel, shareCategoryName, strictlyBetterPercent,
-  SHARE_DIVIDER, SHARE_DOMAIN, SHARE_HEADER, SHARE_OR,
+  SHARE_DARE, buildResultsShareText, normalizeShareLabel, shareCategoryName, shareLink, strictlyBetterPercent,
 } from "./share.js";
 
 const answersFrom = (pattern) => [...pattern].map((c, i) => ({ questionIndex: i, correct: c === "1" }));
@@ -12,6 +11,7 @@ const recordFrom = (pattern) => {
 const circlesFor = (pattern) => [...pattern].map((c) => (c === "1" ? "🟢" : "🔴")).join("");
 
 const CAGE = {
+  id: "g-1759600000000",
   categoryA: "Nicolas Cage Movies",
   categoryB: "Board Games",
   categoryAShareName: "Nicolas Cage Movie 🤩🎬",
@@ -20,24 +20,19 @@ const CAGE = {
 const lines = (args) => buildResultsShareText(args).split("\n");
 
 describe("buildResultsShareText", () => {
-  it("builds the exact text from the brief", () => {
-    const text = buildResultsShareText({ game: CAGE, record: recordFrom("110011001111"), beatPercent: 77 });
+  it("builds the exact text from the brief: circles, score with the dare, the puzzle's link", () => {
+    const text = buildResultsShareText({ game: CAGE, record: recordFrom("110011001111") });
     expect(text).toBe(
-      "What The Fudge Trivia 🍬\n" +
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-        "Nicolas Cage Movie 🤩🎬\n" +
-        "     OR\n" +
-        "Board Game 🎲♟️\n" +
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-        "🟢🟢🔴🔴🟢🟢🔴🔴🟢🟢🟢🟢\n" +
-        "8/12 • Beat 77% of players\n" +
-        "whatthefudge.gg"
+      "🟢🟢🔴🔴🟢🟢🔴🔴🟢🟢🟢🟢\n" +
+        "8/12 ➜ Can you beat my score?!\n" +
+        "https://whatthefudge.gg/puzzle/g-1759600000000"
     );
+    expect(SHARE_DARE).toBe("➜ Can you beat my score?!");
   });
 
-  it("has exactly nine lines with a percentage, none blank or with trailing whitespace", () => {
-    const all = lines({ game: CAGE, record: recordFrom("110011001111"), beatPercent: 77 });
-    expect(all).toHaveLength(9);
+  it("has exactly three lines, none blank or with trailing whitespace", () => {
+    const all = lines({ game: CAGE, record: recordFrom("110011001111") });
+    expect(all).toHaveLength(3);
     for (const line of all) {
       expect(line).not.toBe("");
       expect(line).toBe(line.trimEnd());
@@ -45,107 +40,34 @@ describe("buildResultsShareText", () => {
     }
   });
 
-  it("uses a fixed 26-character heavy divider and a fixed five-space OR", () => {
-    expect(SHARE_DIVIDER).toBe("━".repeat(26));
-    expect([...SHARE_DIVIDER]).toHaveLength(26);
-    expect(SHARE_DIVIDER).toMatch(/^━{26}$/);
-    expect(SHARE_OR).toBe("     OR");
-    expect(SHARE_OR).toMatch(/^ {5}OR$/);
-    // The same whatever the labels' length.
-    for (const game of [CAGE, { categoryA: "A", categoryB: "B" }, { categoryAShareName: "x".repeat(80), categoryBShareName: "Y" }]) {
-      const all = lines({ game, record: recordFrom("10"), beatPercent: null });
-      expect(all[1]).toBe(SHARE_DIVIDER);
-      expect(all[3]).toBe(SHARE_OR);
-      expect(all[5]).toBe(SHARE_DIVIDER);
+  it("links to that exact puzzle, whatever its date, and never to today's", () => {
+    expect(lines({ game: { ...CAGE, date: "2026-01-01" }, record: recordFrom("1") })[2]).toBe("https://whatthefudge.gg/puzzle/g-1759600000000");
+    expect(lines({ game: { ...CAGE, id: "g-other" }, record: recordFrom("1") })[2]).toBe("https://whatthefudge.gg/puzzle/g-other");
+  });
+
+  it("encodes unusual ids so the link stays one clickable URL", () => {
+    expect(shareLink({ id: "g-1&2=ü" })).toBe("https://whatthefudge.gg/puzzle/g-1%262%3D%C3%BC");
+  });
+
+  it("falls back to the site itself when the puzzle has no usable id", () => {
+    for (const game of [null, {}, { id: "" }, { id: "a/b" }, { id: 42 }]) {
+      expect(lines({ game, record: recordFrom("10") })[2]).toBe("https://whatthefudge.gg");
     }
   });
 
-  it("always starts with the fixed header and ends with the fixed domain", () => {
-    const all = lines({ game: CAGE, record: recordFrom("10"), beatPercent: null });
-    expect(all[0]).toBe("What The Fudge Trivia 🍬");
-    expect(SHARE_HEADER).toBe("What The Fudge Trivia 🍬");
-    expect(all.at(-1)).toBe("whatthefudge.gg");
-    expect(SHARE_DOMAIN).toBe("whatthefudge.gg");
-  });
-
-  it("never contains the old header, arrow or domain", () => {
+  it("has no percentage, header, divider, category name or OR", () => {
     const text = buildResultsShareText({ game: CAGE, record: recordFrom("110011001111"), beatPercent: 77 });
-    expect(text).not.toMatch(/WTF Trivia|➜|whatthefudgetrivia|https?:|\.gg\//);
-  });
-
-  it("falls back to the gameplay category names when share names are missing or blank", () => {
-    const blank = { categoryA: "Board Game", categoryB: "Nicolas Cage Movie", categoryAShareName: "", categoryBShareName: " \n\t " };
-    expect(lines({ game: blank, record: recordFrom("1") }).slice(2, 5)).toEqual(["Board Game", SHARE_OR, "Nicolas Cage Movie"]);
-    const none = { categoryA: "Board Game", categoryB: "Nicolas Cage Movie" };
-    expect(lines({ game: none, record: recordFrom("1") }).slice(2, 5)).toEqual(["Board Game", SHARE_OR, "Nicolas Cage Movie"]);
-    const nulls = { ...none, categoryAShareName: null, categoryBShareName: undefined };
-    expect(lines({ game: nulls, record: recordFrom("1") }).slice(2, 5)).toEqual(["Board Game", SHARE_OR, "Nicolas Cage Movie"]);
-  });
-
-  it("mixes one share name with one fallback", () => {
-    const all = lines({ game: { ...CAGE, categoryBShareName: "" }, record: recordFrom("1") });
-    expect(all[2]).toBe("Nicolas Cage Movie 🤩🎬");
-    expect(all[4]).toBe("Board Games");
-  });
-
-  it("uses generic labels only when the puzzle itself is missing", () => {
-    expect(lines({ game: null, record: recordFrom("1") }).slice(2, 5)).toEqual(["Category A", SHARE_OR, "Category B"]);
-  });
-
-  it("puts pasted newlines, tabs and repeated spaces in a label on one line", () => {
-    const game = {
-      categoryAShareName: "  Nicolas\nCage\r\n Movie\t\t🤩🎬  ",
-      categoryBShareName: "Board    Game   🎲♟️",
-    };
-    const all = lines({ game, record: recordFrom("10"), beatPercent: 50 });
-    expect(all).toHaveLength(9);
-    expect(all[2]).toBe("Nicolas Cage Movie 🤩🎬");
-    expect(all[4]).toBe("Board Game 🎲♟️");
-    // The fallback name is normalized the same way.
-    expect(shareCategoryName("", "  Harry\tPotter \n Characters ", "Category A")).toBe("Harry Potter Characters");
-  });
-
-  it("keeps emoji sequences intact while normalizing", () => {
-    expect(normalizeShareLabel(" Harry Potter Character 🧙‍♂️ ")).toBe("Harry Potter Character 🧙‍♂️");
-    expect(normalizeShareLabel("Board Game 🎲♟️")).toBe("Board Game 🎲♟️");
-    expect(normalizeShareLabel(undefined)).toBe("");
-  });
-
-  it("adds no trailing space to a label without emoji", () => {
-    const game = { categoryAShareName: "Board Game ", categoryBShareName: "Pro Hockey Player?" };
-    const all = lines({ game, record: recordFrom("1"), beatPercent: null });
-    expect(all[2]).toBe("Board Game");
-    expect(all[4]).toBe("Pro Hockey Player?");
-  });
-
-  it("does not truncate, pad or centre long labels", () => {
-    const long = "The Extremely Long Category Name That Will Certainly Wrap On A Phone 🤩🎬";
-    const all = lines({ game: { categoryAShareName: long, categoryBShareName: "B" }, record: recordFrom("1") });
-    expect(all[2]).toBe(long);
-    expect(all[4]).toBe("B");
-  });
-
-  it("shows only {score}/{total} without a valid percentage", () => {
-    for (const beatPercent of [null, undefined, NaN, -1, 100, 150, 77.5, "77", Infinity]) {
-      const all = lines({ game: CAGE, record: recordFrom("110011001111"), beatPercent });
-      expect(all).toHaveLength(9);
-      expect(all[7]).toBe("8/12");
+    for (const part of ["Beat", "%", "•", "What The Fudge Trivia", "━", "Nicolas Cage", "Board Game", " OR"]) {
+      expect(text).not.toContain(part);
     }
-    const text = buildResultsShareText({ game: CAGE, record: recordFrom("110011001111") });
-    expect(text).not.toMatch(/•|Beat|%/);
-  });
-
-  it("prints 0% and 99% as given", () => {
-    expect(lines({ game: CAGE, record: recordFrom("0000000000"), beatPercent: 0 })[7]).toBe("0/10 • Beat 0% of players");
-    expect(lines({ game: CAGE, record: recordFrom("111111111111111"), beatPercent: 99 })[7]).toBe("15/15 • Beat 99% of players");
   });
 
   it("builds the circles from the saved answers, in order, not from the score", () => {
-    expect(lines({ game: CAGE, record: recordFrom("01010") })[6]).toBe("🔴🟢🔴🟢🔴");
-    expect(lines({ game: CAGE, record: recordFrom("10100") })[6]).toBe("🟢🔴🟢🔴🔴");
+    expect(lines({ game: CAGE, record: recordFrom("01010") })[0]).toBe("🔴🟢🔴🟢🔴");
+    expect(lines({ game: CAGE, record: recordFrom("10100") })[0]).toBe("🟢🔴🟢🔴🔴");
     // Same score, different answers: different circles.
-    const a = lines({ game: CAGE, record: { score: 2, totalQuestions: 4, answers: answersFrom("1100") } })[6];
-    const b = lines({ game: CAGE, record: { score: 2, totalQuestions: 4, answers: answersFrom("0011") } })[6];
+    const a = lines({ game: CAGE, record: { score: 2, totalQuestions: 4, answers: answersFrom("1100") } })[0];
+    const b = lines({ game: CAGE, record: { score: 2, totalQuestions: 4, answers: answersFrom("0011") } })[0];
     expect(a).toBe("🟢🟢🔴🔴");
     expect(b).toBe("🔴🔴🟢🟢");
     expect(a + b).not.toMatch(/[⬜🟩🟥 ]/u);
@@ -154,17 +76,41 @@ describe("buildResultsShareText", () => {
   it.each([
     ["8/8", "11111111"],
     ["5/8", "10110101"],
-    ["8/12", "110011001111"],
+    ["9/12", "110111011101"],
     ["10/13", "1101101111101"],
     ["0/13", "0000000000000"],
     ["11/15", "110111011101110"],
     ["15/15", "111111111111111"],
   ])("handles %s with one circle per question", (expected, pattern) => {
-    const all = lines({ game: CAGE, record: recordFrom(pattern), beatPercent: null });
-    expect(all).toHaveLength(9);
-    expect(all[6]).toBe(circlesFor(pattern));
-    expect([...all[6]]).toHaveLength(pattern.length);
-    expect(all[7]).toBe(expected);
+    const all = lines({ game: CAGE, record: recordFrom(pattern) });
+    expect(all).toHaveLength(3);
+    expect(all[0]).toBe(circlesFor(pattern));
+    expect([...all[0]]).toHaveLength(pattern.length);
+    expect(all[1]).toBe(`${expected} ➜ Can you beat my score?!`);
+  });
+
+  it("treats a missing or malformed record as 0/0 with no circles", () => {
+    expect(lines({ game: CAGE, record: null })[1]).toBe("0/0 ➜ Can you beat my score?!");
+  });
+});
+
+describe("share names (used by link previews)", () => {
+  it("fall back to the gameplay category names when missing or blank", () => {
+    expect(shareCategoryName("", "Board Game", "Category A")).toBe("Board Game");
+    expect(shareCategoryName(" \n\t ", "Nicolas Cage Movie", "Category B")).toBe("Nicolas Cage Movie");
+    expect(shareCategoryName(null, undefined, "Category A")).toBe("Category A");
+    expect(shareCategoryName("Nicolas Cage Movie 🤩🎬", "Nicolas Cage Movies", "Category A")).toBe("Nicolas Cage Movie 🤩🎬");
+  });
+
+  it("put pasted newlines, tabs and repeated spaces on one line", () => {
+    expect(shareCategoryName("  Nicolas\nCage\r\n Movie\t\t🤩🎬  ", "", "Category A")).toBe("Nicolas Cage Movie 🤩🎬");
+    expect(shareCategoryName("", "  Harry\tPotter \n Characters ", "Category A")).toBe("Harry Potter Characters");
+  });
+
+  it("keep emoji sequences intact while normalizing", () => {
+    expect(normalizeShareLabel(" Harry Potter Character 🧙‍♂️ ")).toBe("Harry Potter Character 🧙‍♂️");
+    expect(normalizeShareLabel("Board Game 🎲♟️")).toBe("Board Game 🎲♟️");
+    expect(normalizeShareLabel(undefined)).toBe("");
   });
 });
 

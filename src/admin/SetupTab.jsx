@@ -6,7 +6,8 @@ import ImageField from "./ImageField.jsx";
 import { paletteColor, useStudio } from "./StudioContext.js";
 import { TOPICS, normalizeTags, toggleTag } from "../topics.js";
 import { answerButtonName } from "../categoryNames.js";
-import { SHARE_OR, buildImageShareText, buildResultsShareText, normalizeShareLabel, shareCategoryName } from "../share.js";
+import { buildResultsShareText, normalizeShareLabel, shareCategoryName } from "../share.js";
+import { BRAND_IMAGE, puzzleMeta } from "../puzzleMeta.js";
 
 function CardHead({icon, title, sub}){
   return(
@@ -59,7 +60,7 @@ const NAME_ROWS = [
    hint:"The label on the answer button players tap. Blank uses the matchup name.",
    placeholder:(side,game)=>game[`category${side}`]||"Same as matchup name"},
   {key:"ShareName", id:"share", label:"Share name",
-   hint:"The name in copied share text, emoji allowed. Blank uses the matchup name.",
+   hint:"The name in link previews when players share the puzzle, emoji allowed. Blank uses the matchup name.",
    placeholder:(side,game)=>game[`category${side}`]||"Same as matchup name"},
 ];
 
@@ -79,7 +80,7 @@ function NameInput({row, side, game, set, color}){
 }
 
 // A small picture of where each name lands: the banner, the buttons and the
-// share text, drawn from the same values gameplay and the share formatter use.
+// link preview, drawn from the same values gameplay and the preview use.
 function NamesPreview({game, colorA, colorB}){
   const sides = [["A", colorA], ["B", colorB]];
   return(
@@ -107,11 +108,11 @@ function NamesPreview({game, colorA, colorB}){
         </div>
       </div>
       <div className="ps-np-block">
-        <div className="ps-np-label">Share text</div>
+        <div className="ps-np-label">Link preview</div>
         <div className="ps-np-share">
           <div>{shareCategoryName(game.categoryAShareName, game.categoryA, "Category A")}</div>
-          <div>{SHARE_OR.trim()}</div>
-          <div>{shareCategoryName(game.categoryBShareName, game.categoryB, "Category B")}</div>
+          <div>or</div>
+          <div>{shareCategoryName(game.categoryBShareName, game.categoryB, "Category B")}?</div>
         </div>
       </div>
     </div>
@@ -330,26 +331,38 @@ function WideArtworkPreview({src, title}){
   );
 }
 
-// What a phone's share sheet sends for a finished game of this puzzle, from
-// the same formatter and the same image choice players get: the wide
-// artwork, else the square poster, with the short text; with neither, the
-// full text alone. The result is an example (alternating answers).
+// What players share for a finished game of this puzzle, from the same
+// formatter they use (an example result, alternating answers), and the
+// preview card apps that show link previews build from the link: the
+// puzzle's title, description and picture (the wide artwork, else the
+// square poster, else the site's icon), as api/puzzle.js serves them once
+// the puzzle is out. Each app decides whether and how to show the card.
 function PhoneSharePreview({game}){
   const total = game.questions?.length || 12;
   const answers = Array.from({length:total}, (_, i)=>({questionIndex:i, correct:i%4!==1}));
   const record = {score:answers.filter(a=>a.correct).length, totalQuestions:total, answers};
-  const image = game.wideImage || game.headerImage || "";
-  const text = image ? buildImageShareText({record}) : buildResultsShareText({game, record});
-  const note = game.wideImage ? "Phones attach the wide artwork."
-    : game.headerImage ? "No wide artwork, so phones attach the square poster."
-    : "No artwork, so phones share the full text only.";
+  const text = buildResultsShareText({game, record});
+  const meta = puzzleMeta(game);
+  // The picture the preview chose, shown from its stored address (a relative
+  // one is made absolute for crawlers, which only resolves once deployed).
+  const shown = meta.image.wide ? game.wideImage : meta.image.url===BRAND_IMAGE.url ? BRAND_IMAGE.url : game.headerImage;
+  const note = meta.image.wide ? "Link previews use the wide artwork."
+    : game.headerImage ? "No wide artwork, so link previews use the square poster."
+    : "No artwork, so link previews use the site’s icon.";
   return(
     <div className="ps-share-phone-wrap">
-      <div className="ps-label">Phone share preview</div>
-      <div className="ps-hint">{note} Example result. Desktops copy the full text instead.</div>
-      <div className="ps-share-phone" aria-label="Phone share preview">
-        {image&&<img src={image} alt="" className="ps-share-phone-img"/>}
+      <div className="ps-label">Share preview</div>
+      <div className="ps-hint">{note} Example result. Apps decide whether to show a preview.</div>
+      <div className="ps-share-phone" aria-label="Share preview">
         <div className="ps-share-phone-text">{text}</div>
+        <div className="ps-share-card">
+          <img src={shown} alt="" className={meta.image.wide?"ps-share-phone-img":"ps-share-card-thumb"}/>
+          <div className="ps-share-card-text">
+            <div className="ps-share-card-title">{meta.title}</div>
+            <div className="ps-share-card-desc">{meta.description}</div>
+            <div className="ps-share-card-site">whatthefudge.gg</div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -361,7 +374,7 @@ function PhoneSharePreview({game}){
 function WideArtwork({game, set, trackImage}){
   return(
     <section className="ps-panel ps-card" aria-labelledby="ps-wide-title">
-      <CardHead icon="image" title={<span id="ps-wide-title">Wide artwork</span>} sub="Attached when players share, shown in Home's Up Next before the puzzle's day, and used as Home's poster on short phone screens."/>
+      <CardHead icon="image" title={<span id="ps-wide-title">Wide artwork</span>} sub="The picture in link previews when players share, shown in Home's Up Next before the puzzle's day, and used as Home's poster on short phone screens."/>
       <div className="ps-artwork ps-artwork-wide">
         <div className="ps-artwork-field">
           <ImageField label="Wide artwork" value={game.wideImage||""} onChange={v=>set("wideImage",v)} preset="wide"
@@ -380,7 +393,7 @@ function WideArtwork({game, set, trackImage}){
           ):(
             <div className="ps-home-empty">
               <strong>No wide artwork uploaded yet.</strong>
-              <span>Shares and Up Next use the square poster instead, and short phone screens keep the square poster.</span>
+              <span>Link previews and Up Next use the square poster instead, and short phone screens keep the square poster.</span>
             </div>
           )}
         </div>

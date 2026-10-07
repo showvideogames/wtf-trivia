@@ -27,6 +27,7 @@ export const TOPICS = [
   { id: "internet_memes", label: "Internet & Memes", emoji: "🌐" },
   { id: "cars", label: "Cars", emoji: "🚗" },
   { id: "toys", label: "Toys", emoji: "🧸" },
+  { id: "made-up", label: "Made Up", emoji: "🙄" },
 ];
 
 const BY_ID = new Map(TOPICS.map((t) => [t.id, t]));

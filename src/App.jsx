@@ -22,11 +22,13 @@ import "./backdrop.css";
 import "./admin/studio.css";
 import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from "./mediaPreloader.js";
 import { archivePuzzleImages, describeImageWarning, failureReason, imageName, isWarningResolved } from "./admin/publishImages.js";
-import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats, shareTextFor, shareTextsFor } from "./crowdStats.js";
+import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats } from "./crowdStats.js";
 import { gameToRow, rowToGame } from "./gameRow.js";
-import { copyText, prepareShareImages, puzzleArtworkUrl, shareArtworkUrls, shareResult, wideArtworkUrl } from "./homeShare.js";
+import { copyText, puzzleArtworkUrl, shareResult, wideArtworkUrl } from "./homeShare.js";
 import { gameDayKey, isReleased, nextPuzzle, releaseTime } from "./schedule.js";
-import { normalizeShareLabel } from "./share.js";
+import { buildResultsShareText, normalizeShareLabel } from "./share.js";
+import { puzzleIdFromPath, puzzlePath } from "./puzzleLink.js";
+import { SITE_NAME, puzzleMeta } from "./puzzleMeta.js";
 import { answerButtonName } from "./categoryNames.js";
 import PlayerHeader from "./PlayerHeader.jsx";
 import GameProgress from "./GameProgress.jsx";
@@ -40,7 +42,7 @@ import ResultsScore from "./ResultsScore.jsx";
 import CandyPageShell from "./CandyPageShell.jsx";
 import CategoryArtImage from "./CategoryArtImage.jsx";
 import { HomeBigButton, HomeCandyArt, HomeDonePanel, HomeFoot, HomeHeading, HomeHero, HomeLinks, HomePage, HomeUpNext } from "./Home.jsx";
-import { ARCHIVE_FILTERS, archivePuzzles, archiveTopicCounts, filterArchive, sortArchive, sortAvailable } from "./archiveList.js";
+import { ARCHIVE_FILTERS, archivePuzzles, archiveTopicCounts, filterArchive, playCount, sortArchive, sortAvailable } from "./archiveList.js";
 import { emptyFavorites, toggleFavorite } from "./archiveFavorites.js";
 import ArchiveTopicFilter from "./ArchiveTopicFilter.jsx";
 import ArchiveSortMenu from "./ArchiveSortMenu.jsx";
@@ -2225,7 +2227,8 @@ async function dbSetFavorite(puzzleId, favorite){
   );
   return Number(total);
 }
-// Aggregate community stats for Hardest/Easiest (no individual plays):
+// Aggregate community stats for the Archive's play counts, Hardest/Easiest
+// and Most played (no individual plays):
 // { [puzzleId]: { totalFinished, totalScore, totalQuestions } }.
 async function dbGetArchiveStats(){
   if(OFFLINE_PREVIEW) return devArchiveStats();
@@ -2805,10 +2808,6 @@ function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onS
   const signedIn = player && !player.isGuest;
   const artworkUrl = game ? puzzleArtworkUrl(game) : null;
   const wideUrl = game ? wideArtworkUrl(game) : null;
-  const shareUrls = game ? shareArtworkUrls(game).join("\n") : "";
-  // Once today is finished, have the share image ready for a phone's share
-  // sheet (the wide artwork, else the square poster).
-  useEffect(()=>{ if(done&&shareUrls) prepareShareImages(shareUrls.split("\n"), navigator); },[done,shareUrls]);
   const opensAt = upNext ? releaseTime(upNext.date)?.getTime() : null;
   const next = upNext&&opensAt&&(
     <HomeUpNext game={upNext} colors={categoryColors(upNext)} wideUrl={wideArtworkUrl(upNext)} squareUrl={puzzleArtworkUrl(upNext)}
@@ -2859,15 +2858,60 @@ function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onS
   );
 }
 
+// A puzzle link to an earlier released puzzle (today's opens Home itself),
+// in Home's frame: its poster, then the Archive's rule for it. Play replays
+// it, never saved, like any earlier puzzle; once this player has a finished
+// result for it, the score panel shows instead, with Play again and Share
+// (their saved result and the link). `record` is undefined while it loads,
+// so the action waits as a ghost rather than flipping from Play to a score.
+function PuzzleLinkPage({game,record,onPlay,onShare}){
+  const done = Boolean(record?.completed);
+  return(
+    <HomePage>
+      <HomeHero game={game} colors={categoryColors(game)} artworkUrl={puzzleArtworkUrl(game)} wideUrl={wideArtworkUrl(game)}
+        eyebrow={<>Puzzle from {archiveDateLabel(game.date)}</>}/>
+      {record===undefined?(
+        <div className="hm-cta"><div className="hm-play-ghost" aria-hidden="true"/></div>
+      ):done?(
+        <HomeDonePanel score={record.score} total={record.totalQuestions}
+          message={scoreMsg(record.score, record.totalQuestions||1)}
+          primaryLabel={<>Play again <span aria-hidden="true">{"\u{1F501}"}</span></>}
+          onResults={onPlay} onShare={onShare}/>
+      ):(
+        <div className="hm-cta">
+          <p className="hm-progress" id="hm-replay-note">Archive puzzle &middot; not saved to your stats</p>
+          <HomeBigButton onClick={onPlay} describedBy="hm-replay-note">PLAY THIS PUZZLE</HomeBigButton>
+        </div>
+      )}
+    </HomePage>
+  );
+}
+
+// A puzzle link that can't be opened: not out yet on this player's day, a
+// draft, retired, or no such puzzle. All say the same thing, so a link never
+// reveals whether a draft exists. Points at today's puzzle, else the Archive.
+function PuzzleUnavailablePage({hasToday,onNav}){
+  return(
+    <HomePage>
+      <HomeHeading eyebrow="Puzzle not available" title={<>This one isn&rsquo;t ready to play.</>}/>
+      <p className="hm-lede">It may not be out yet, or the link may be wrong. Come back on its day&mdash;or play something delicious now.</p>
+      <HomeCandyArt/>
+      <div className="hm-cta">
+        <HomeBigButton onClick={()=>onNav(hasToday?"home":"archive")}>{hasToday?"PLAY TODAY’S PUZZLE":"BROWSE THE ARCHIVE"}</HomeBigButton>
+      </div>
+    </HomePage>
+  );
+}
+
 // Boot loading and boot failure, drawn in Home's own frame (the app always
 // boots onto Home) so nothing jumps when the real page arrives. App draws
 // the shared header above them, inert: there's nothing behind its links yet.
-function HomeLoadingPage(){
+function HomeLoadingPage({link=false}){
   return(
     <HomePage>
       <div className="hm-heading">
-        <p className="hm-eyebrow">Today&rsquo;s puzzle</p>
-        <p className="hm-title hm-title-quiet" role="status">Mixing today&rsquo;s trivia&hellip;</p>
+        <p className="hm-eyebrow">{link?"Shared puzzle":<>Today&rsquo;s puzzle</>}</p>
+        <p className="hm-title hm-title-quiet" role="status">{link?<>Finding your puzzle&hellip;</>:<>Mixing today&rsquo;s trivia&hellip;</>}</p>
       </div>
       <HomeCandyArt busy/>
       <div className="hm-cta"><div className="hm-play-ghost" aria-hidden="true"/></div>
@@ -3452,10 +3496,9 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
     : "unavailable";
   const showTiles = Boolean(communityStats)&&communityStats.finishedPlayers>0;
 
-  // Until crowd stats arrive (or if they never do) the score line has no
-  // percentage; preview and clipboard always use the same text.
-  // The preview shows this exact string (SharePreview).
-  const txt=shareTextFor(game, safeRecord, crowd);
+  // The share text, ending with the puzzle's own link; the preview shows
+  // this exact string (SharePreview) and the button copies it.
+  const txt=buildResultsShareText({game:game||{id:safeRecord.puzzleId}, record:safeRecord});
   // "Copied" only after the clipboard write succeeds (ResultsCopyButton).
   const share=async()=>{
     clearTimeout(copiedTimer.current);
@@ -3660,7 +3703,24 @@ function SearchGlyph(){
 // The button is the real control. A click anywhere else on the card does
 // the same thing, unless the player was selecting text. The heart (any
 // card, played or not, today's or retired) only ever toggles the favorite.
-function ArchiveCard({game,record,isToday,onAction,eager,favorite}){
+// "52 plays", "1 play", "1.2K plays": a card's play count, short enough for
+// the meta row on the narrowest phone.
+const compactCount = new Intl.NumberFormat("en-US",{notation:"compact",maximumFractionDigits:1});
+function playsLabel(n){
+  return `${n>=1000?compactCount.format(n):n} ${n===1?"play":"plays"}`;
+}
+function PlaysGlyph(){
+  return(
+    <svg className="arc-plays-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path d="M5 3.2v9.6a.8.8 0 001.22.68l7.7-4.8a.8.8 0 000-1.36l-7.7-4.8A.8.8 0 005 3.2z" fill="currentColor"/>
+    </svg>
+  );
+}
+
+// plays: the puzzle's play count (playCount, archiveList.js), or null while
+// the community stats load or when they couldn't (no count rather than a
+// wrong one).
+function ArchiveCard({game,record,isToday,onAction,eager,favorite,plays=null}){
   const done = Boolean(record?.completed);
   const retired = game.status==="retired";
   const canReplay = !retired && game.questions?.length>0;
@@ -3683,6 +3743,11 @@ function ArchiveCard({game,record,isToday,onAction,eager,favorite}){
             <time dateTime={game.date}>{archiveDateLabel(game.date)}</time>
             {isToday&&<span className="arc-tag">Today</span>}
             {retired&&<span className="arc-tag arc-tag-quiet">Retired</span>}
+            {plays!==null&&(
+              <span className="arc-plays" title={plays>=1000?`${plays.toLocaleString("en-US")} plays`:undefined}>
+                <PlaysGlyph/>{playsLabel(plays)}
+              </span>
+            )}
             {favorite&&<ArchiveFavoriteButton title={game.themeTitle} {...favorite}/>}
           </div>
         </div>
@@ -3741,7 +3806,8 @@ function ArchiveScreen({games,playerId,onReplay,onPlayToday}){
 
   // The rest loads alongside, never holding up the list: this player's
   // favorites, every puzzle's favorite total, and the community stats
-  // behind Hardest/Easiest. Each failure only switches off what needs it.
+  // behind the play counts, Hardest/Easiest and Most played (one request
+  // for every puzzle). Each failure only switches off what needs it.
   useEffect(()=>{
     if(!playerId) return;
     let cancelled = false;
@@ -3783,13 +3849,16 @@ function ArchiveScreen({games,playerId,onReplay,onPlayToday}){
   const favoritesReady = mineStatus==="ready" && Boolean(fav.mine);
   const filter = filterChoice==="favorites"&&!favoritesReady ? "all" : filterChoice;
   const sortData = {stats:puzzleStats.data, favoriteCounts:fav.counts};
-  const sortStatus = {hardest:puzzleStats.status, easiest:puzzleStats.status, liked:countsStatus};
+  const sortStatus = {hardest:puzzleStats.status, easiest:puzzleStats.status, liked:countsStatus, played:puzzleStats.status};
   const sort = sortAvailable(sortChoice, sortData) ? sortChoice : "newest";
   const shown = sortArchive(
     filterArchive(puzzles, records, {query, filter, topic, favorites:fav.mine}),
     sort, {todayGame, ...sortData}
   );
   const narrowed = query.trim()!=="" || filter!=="all" || topic!=="all";
+  // Play counts show once the community stats have loaded; a puzzle with
+  // no stats row has 0 plays.
+  const playsFor = g=>puzzleStats.status==="ready" ? playCount(puzzleStats.data[g.id]) : null;
   const favoriteFor = g=>({
     selected: Boolean(fav.mine?.has(g.id)),
     count: fav.counts ? (fav.counts[g.id]||0) : null,
@@ -3866,7 +3935,7 @@ function ArchiveScreen({games,playerId,onReplay,onPlayToday}){
           <ul className="arc-grid">
             {shown.map((g,i)=>(
               <ArchiveCard key={g.id} game={g} record={records[g.id]} isToday={g===todayGame}
-                           onAction={g===todayGame?onPlayToday:onReplay} eager={i<4} favorite={favoriteFor(g)}/>
+                           onAction={g===todayGame?onPlayToday:onReplay} eager={i<4} favorite={favoriteFor(g)} plays={playsFor(g)}/>
             ))}
           </ul>
         )}
@@ -3987,6 +4056,21 @@ const ADMIN_SESSION_KEY = "wtf-admin-in";
 // (admin/signInResume.js).
 const WRITES_PAUSED = "Saving is paused: Puzzle Studio needs a signed-in admin account. Your changes are still here.";
 const isAdminPath = ()=>window.location.pathname.replace(/\/+$/,"")===ADMIN_PATH;
+// The puzzle a link opens: its id, "" for a puzzle link that can't be used,
+// or null when the address isn't a puzzle link. /?puzzle=<id> is the same
+// link handed over by api/puzzle.js when it couldn't build the page; the
+// address bar gets /puzzle/<id> back.
+function readPuzzleLink(){
+  const fromPath = puzzleIdFromPath(window.location.pathname);
+  if(fromPath!==null) return fromPath;
+  const handed = new URLSearchParams(window.location.search).get("puzzle");
+  if(handed===null || window.location.pathname!=="/") return null;
+  const id = puzzleIdFromPath(puzzlePath(handed)) || "";
+  if(id) window.history.replaceState(null,"",puzzlePath(id));
+  return id;
+}
+// The screens that belong to the site itself rather than to one puzzle.
+const SITE_VIEWS = new Set(["home","archive","stats","account"]);
 const readAdminSession = ()=>{ try { return sessionStorage.getItem(ADMIN_SESSION_KEY)==="1"; } catch { return false; } };
 const writeAdminSession = on=>{ try { if(on) sessionStorage.setItem(ADMIN_SESSION_KEY,"1"); else sessionStorage.removeItem(ADMIN_SESSION_KEY); } catch { /* storage blocked */ } };
 const setPath = path=>{ if(window.location.pathname!==path) window.history.pushState(null,"",path); };
@@ -4488,17 +4572,30 @@ function AdminPreview({game,onBack}){
 // ROOT APP
 // ============================================================
 export default function WhatTheFudgeTrivia(){
-  const[view,setView]=useState(()=>isAdminPath()?"admin":"home");
+  // A puzzle link (/puzzle/<id>) opens that puzzle's page (see "puzzle" below).
+  const[linkId,setLinkId]=useState(()=>isAdminPath()?null:readPuzzleLink());
+  const[view,setView]=useState(()=>isAdminPath()?"admin":linkId!==null?"puzzle":"home");
   // Back from an admin sign-in started in the editor: reopen that puzzle.
   const[adminResume]=useState(()=>isAdminPath()&&readAdminSession()?takeAdminResume():null);
   const[adminView,setAdminView]=useState(()=>adminResume?"editor":readAdminSession()?"dashboard":"login");
   const[adminIn,setAdminIn]=useState(readAdminSession);
-  // Back/forward between /admin and the site.
+  // Back/forward between /admin, puzzle links and the site.
   useEffect(()=>{
-    const onPop=()=>setView(v=>isAdminPath()?"admin":v==="admin"?"home":v);
+    const onPop=()=>{
+      if(isAdminPath()){ setView("admin"); return; }
+      const id=puzzleIdFromPath(window.location.pathname);
+      if(id!==null) setLinkId(id);
+      setView(v=>id!==null?"puzzle":v==="admin"||v==="puzzle"?"home":v);
+    };
     window.addEventListener("popstate",onPop);
     return ()=>window.removeEventListener("popstate",onPop);
   },[]);
+  // Leaving a puzzle link's page for the rest of the site (the header,
+  // Back to home, ...) puts the site's own address back. Playing from the
+  // page keeps the link, so a refresh comes back to the same puzzle.
+  useEffect(()=>{
+    if(SITE_VIEWS.has(view) && puzzleIdFromPath(window.location.pathname)!==null) setPath("/");
+  },[view]);
   const[editGame,setEditGame]=useState(adminResume);
   const[replayGame,setReplayGame]=useState(null);
   const[replayRecord,setReplayRecord]=useState(null);
@@ -4655,11 +4752,34 @@ export default function WhatTheFudgeTrivia(){
   // puzzle: if the puzzle on today's date changes, another puzzle's result
   // is never shown, resumed or shared as today's.
   const todayRecord = gameRecord && todayGame && gameRecord.puzzleId===todayGame.id ? gameRecord : null;
+  // A puzzle link's page follows the same rules as everywhere else: today's
+  // puzzle is Home itself (a normal, scored daily play), an earlier released
+  // puzzle replays as it would from the Archive, and anything else (not out
+  // yet on this player's day, a draft, retired, unknown) can't be opened.
+  const linkGame = view==="puzzle"&&linkId ? games.find(g=>g.id===linkId)||null : null;
+  const linkIsToday = Boolean(linkGame&&todayGame&&linkGame.id===todayGame.id);
+  const linkReplay = Boolean(linkGame&&!linkIsToday&&isReleased(linkGame, today));
+  // This player's own result for an earlier puzzle opened by link, once read.
+  const[linkRecord,setLinkRecord]=useState(null); // {puzzleId, record}
+  useEffect(()=>{
+    if(!linkReplay||!player?.id) return;
+    let cancelled = false;
+    dbGetGameRecord(player.id, linkGame.id).then(record=>{ if(!cancelled) setLinkRecord({puzzleId:linkGame.id, record}); });
+    return ()=>{cancelled = true;};
+  },[linkReplay, linkGame?.id, player?.id]);
+  const linkGameRecord = linkReplay&&linkRecord?.puzzleId===linkGame.id ? linkRecord.record : undefined;
+  // The tab names the puzzle a link opened (once it can be played here).
+  const titledGame = linkIsToday||linkReplay ? linkGame : null;
+  useEffect(()=>{
+    document.title = titledGame ? puzzleMeta(titledGame).pageTitle : SITE_NAME;
+  },[titledGame]);
   const isGameplay = view==="game"||view==="replay";
   // Results carries its own warm backdrop, like Archive (CandyPageShell).
   const isResults = view==="score"||view==="replay-score";
-  // Stats and Account sit over the gameplay backdrop.
-  const usesGameBackdrop = view!=="home"&&view!=="archive"&&!isGameplay&&!isResults;
+  // Stats and Account sit over the gameplay backdrop. A puzzle link's page
+  // is drawn in Home's own shell.
+  const isHomeShell = view==="home"||view==="puzzle";
+  const usesGameBackdrop = !isHomeShell&&view!=="archive"&&!isGameplay&&!isResults;
 
   // Home-idle preload: once the player is looking at Home with an unfinished
   // puzzle in front of them, quietly warm just the single image they'd see
@@ -4669,8 +4789,9 @@ export default function WhatTheFudgeTrivia(){
   // browser is next idle rather than immediately, so it can never compete
   // with Home's own render or make boot/refresh take any longer. Skipped
   // entirely on a flagged data-saver connection.
+  const showsTodayHome = view==="home"||(view==="puzzle"&&linkIsToday);
   useEffect(()=>{
-    if(view!=="home" || !todayGame || todayRecord?.completed) return;
+    if(!showsTodayHome || !todayGame || todayRecord?.completed) return;
     if(typeof navigator!=="undefined" && navigator.connection?.saveData) return;
     const url = getPuzzleImageUrls(todayGame)[todayRecord?.currentIndex ?? 0];
     if(!url) return;
@@ -4678,7 +4799,7 @@ export default function WhatTheFudgeTrivia(){
     const cancel = typeof cancelIdleCallback==="function" ? cancelIdleCallback : clearTimeout;
     const handle = schedule(()=>preloadImage(url));
     return ()=>cancel(handle);
-  },[view, todayGame, todayRecord]);
+  },[showsTodayHome, todayGame, todayRecord]);
 
   // Crowd stats for today's finished game, shared by Results ("You beat N%"
   // and the share text) and the homepage Share button so they always agree.
@@ -4931,15 +5052,15 @@ export default function WhatTheFudgeTrivia(){
     setCrowd({puzzleId, score:finalRec.score, ...result});
   };
 
-  // Share today's result from the homepage: the same full text Results
-  // copies, or on phones the puzzle's wide artwork (else its square poster)
-  // plus the short image text. Resolves to shareResult's outcome;
-  // HomeScreen shows the feedback.
-  const handleShareToday = async() => {
-    if(!todayRecord?.completed) return null;
-    const { text, imageText } = shareTextsFor(todayGame, todayRecord, crowd);
-    return shareResult({ text, imageText, imageUrls: shareArtworkUrls(todayGame) }, navigator);
+  // Share a finished result from Home or a puzzle link's page: the same text
+  // Results copies (circles, score and dare, the puzzle's link), through a
+  // phone's share sheet or the clipboard. Resolves to shareResult's outcome;
+  // the panel shows the feedback.
+  const shareFinished = (game, record) => {
+    if(!game || !record?.completed) return null;
+    return shareResult({ text: buildResultsShareText({ game, record }) }, navigator);
   };
+  const handleShareToday = () => shareFinished(todayGame, todayRecord);
 
   // Replay. Only a released puzzle (schedule.js: published, dated today or
   // earlier) can start, whatever asks: a puzzle scheduled after today stays
@@ -5004,7 +5125,7 @@ export default function WhatTheFudgeTrivia(){
         <PlayerHeader pending/>
         <div className="main">
           {loading
-            ? <HomeLoadingPage/>
+            ? <HomeLoadingPage link={view==="puzzle"}/>
             : <HomeErrorPage detail={error} onRetry={()=>window.location.reload()}/>}
         </div>
       </div>
@@ -5029,9 +5150,9 @@ export default function WhatTheFudgeTrivia(){
             so the bar and its logo never move. Home and Archive pin it to
             the top while they scroll; gameplay, Results and the rest keep
             it in the normal flow. */}
-        <PlayerHeader sticky={view==="home"||view==="archive"}/>
+        <PlayerHeader sticky={isHomeShell||view==="archive"}/>
         <div className="main">
-          {view==="home"&&(
+          {(view==="home"||(view==="puzzle"&&linkIsToday))&&(
             <HomeScreen game={todayGame} gameRecord={todayRecord} upNext={upNextGame} stats={stats}
               player={player}
               onPlay={handlePlay}
@@ -5040,6 +5161,16 @@ export default function WhatTheFudgeTrivia(){
               onShare={handleShareToday}
               onNextDay={()=>setDayTick(t=>t+1)}
             />
+          )}
+
+          {view==="puzzle"&&linkReplay&&(
+            <PuzzleLinkPage game={linkGame} record={linkGameRecord}
+              onPlay={()=>{sound.play("click");handleReplay(linkGame);}}
+              onShare={()=>shareFinished(linkGame, linkGameRecord)}/>
+          )}
+
+          {view==="puzzle"&&!linkIsToday&&!linkReplay&&(
+            <PuzzleUnavailablePage hasToday={Boolean(todayGame)} onNav={v=>{sound.play("click");setView(v);}}/>
           )}
 
           {view==="game"&&todayGame&&todayRecord&&(

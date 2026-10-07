@@ -348,6 +348,22 @@
 .arc-tag-quiet { background: #EDE7DA; }
 .arc-action { flex-shrink: 0; }
 
+/* The play count: quiet meta text like the date, with a small play mark. */
+.arc-plays {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.arc-plays-icon {
+  display: block;
+  width: 0.78em;
+  height: 0.78em;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
 /* The favorite heart, after the date and tags: outlined, or filled pink
    on a soft pink pill once favorited, the total beside it. Its hit area
    reaches past the small pill (::before) so it is easy to tap without

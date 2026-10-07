@@ -24,6 +24,7 @@ export const ARCHIVE_SORTS = [
   { id: "hardest", label: "Hardest" },
   { id: "easiest", label: "Easiest" },
   { id: "liked", label: "Most liked" },
+  { id: "played", label: "Most played" },
 ];
 
 // A puzzle needs this many finished plays before Hardest/Easiest rank it.
@@ -123,10 +124,21 @@ export function byOldest(a, b) {
   return byText(text(a.date), text(b.date)) || byTitle(a, b);
 }
 
+// A puzzle's play count, from its community stats (puzzle_stats): how many
+// players finished it on its day. Each player has at most one saved play per
+// puzzle, saved only by the normal daily game, so Replay, Admin Preview and
+// unfinished games never count. A puzzle nobody has finished has no stats
+// row: 0. Anything that isn't a whole, non-negative number is 0 too.
+export function playCount(stat) {
+  const n = wholeNumber(stat?.totalFinished);
+  return Number.isInteger(n) && n > 0 ? n : 0;
+}
+
 // Whether a sort can run with the data that loaded. Newest and Oldest
-// always can; Hardest/Easiest need the stats, Most liked the counts.
+// always can; Hardest, Easiest and Most played need the stats, Most liked
+// the counts.
 export function sortAvailable(sort, { stats = null, favoriteCounts = null } = {}) {
-  if (sort === "hardest" || sort === "easiest") return Boolean(stats);
+  if (sort === "hardest" || sort === "easiest" || sort === "played") return Boolean(stats);
   if (sort === "liked") return Boolean(favoriteCounts);
   return true;
 }
@@ -134,8 +146,9 @@ export function sortAvailable(sort, { stats = null, favoriteCounts = null } = {}
 // Orders the (already filtered) list. Newest keeps today's puzzle first, as
 // the Archive always has. Hardest = lowest accuracy first, Easiest =
 // highest; unranked puzzles follow the ranked ones, newest first. Most liked
-// = most favorites first, newest first among equals (zero included). A sort
-// whose data didn't load falls back to Newest.
+// = most favorites first, Most played = most plays first (playCount), each
+// newest first among equals (zero included). A sort whose data didn't load
+// falls back to Newest.
 //   stats: { [puzzleId]: { totalFinished, totalScore, totalQuestions } }
 //   favoriteCounts: { [puzzleId]: number }
 export function sortArchive(puzzles, sort = "newest", { todayGame = null, stats = null, favoriteCounts = null } = {}) {
@@ -158,6 +171,10 @@ export function sortArchive(puzzles, sort = "newest", { todayGame = null, stats 
       return Number.isFinite(n) && n > 0 ? n : 0;
     };
     return list.sort((a, b) => likes(b) - likes(a) || byNewest(a, b));
+  }
+  if (sort === "played") {
+    const plays = new Map(list.map((g) => [g.id, playCount(stats[g.id])]));
+    return list.sort((a, b) => plays.get(b.id) - plays.get(a.id) || byNewest(a, b));
   }
   list.sort(byNewest);
   const at = todayGame ? list.indexOf(todayGame) : -1;
