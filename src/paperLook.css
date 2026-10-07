@@ -98,8 +98,13 @@
    tall text makes it crop the sheet's sides instead. The text is the live
    heading: heavy, rounded, dark, centred, wrapping at spaces only. The side
    padding sets the text width; the height comes from the sheet. */
+/* --pp-scale (by viewport height, both phases) and --pp-fit (a short
+   phone's reveal only) render the whole prompt -- paper, text and padding --
+   proportionally smaller (see Phones: one screen below), so the title wraps
+   exactly as it would at full size. Both are 1 by default. */
 .gp-paper .gp-prompt {
-  width: min(100%, 92vw);
+  --pp-k: calc(var(--pp-scale, 1) * var(--pp-fit, 1));
+  width: calc(min(100%, 92vw) * var(--pp-k));
   margin: 12px auto 0;
 }
 .pp {
@@ -109,7 +114,7 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  padding: 6px 24px;
+  padding: 6px calc(24px * var(--pp-k, 1));
 }
 .pp-sheet {
   position: absolute;
@@ -143,10 +148,10 @@
 }
 /* Stepped by length (clueSizeClass), like the classic question, but kept
    large: a long title takes another line rather than getting small. */
-.gp-prompt.lg .pp-text { font-size: clamp(31px, 9.4vw, 42px); }
-.gp-prompt.md .pp-text { font-size: clamp(28px, 8.3vw, 37px); }
-.gp-prompt.sm .pp-text { font-size: clamp(25px, 7.3vw, 32px); }
-.gp-prompt.xs .pp-text { font-size: clamp(22px, 6.4vw, 28px); }
+.gp-prompt.lg .pp-text { font-size: calc(clamp(31px, 9.4vw, 42px) * var(--pp-k, 1)); }
+.gp-prompt.md .pp-text { font-size: calc(clamp(28px, 8.3vw, 37px) * var(--pp-k, 1)); }
+.gp-prompt.sm .pp-text { font-size: calc(clamp(25px, 7.3vw, 32px) * var(--pp-k, 1)); }
+.gp-prompt.xs .pp-text { font-size: calc(clamp(22px, 6.4vw, 28px) * var(--pp-k, 1)); }
 
 /* ---------- Answer choices ----------
    Still the two side-by-side candy buttons with the real category art; a
@@ -181,8 +186,8 @@
 
 /* ---------- Reveal ----------
    The same stack above (bar, progress, the same paper), then the media,
-   the result, the two panels and Next. The page may scroll: the copy keeps
-   a comfortable size rather than squeezing onto one screen. */
+   the result, Actual Info, Needless Commentary and Next. From tablet up the
+   page may scroll; phones fit it to the screen (Phones: one screen below). */
 .app.gp-fullscreen:has(.gp-wrap.gp-paper.gp-r) {
   height: auto;
   min-height: 100vh;
@@ -191,12 +196,12 @@
 .gp-wrap.gp-paper.gp-r { display: block; }
 .gp-paper .gp-reveal { margin-top: 16px; }
 
-/* Media: the paper's width, a thin dark frame, modest corners, a small
-   shadow. A still keeps its own proportions (GameRevealMedia) up to a cap
-   of about 380px; a taller one (a poster, a book cover) is then shown whole
-   inside a full-width stage, letterboxed on the dark frame, rather than
-   taking over the page. Video keeps its 16:9 player, which never reaches
-   the cap at phone widths. */
+/* Media: up to the paper's width, a thin dark frame, modest corners, a
+   small shadow. Video is the full-width 16:9 player. A still keeps its own
+   proportions (GameRevealMedia) and the frame goes round the image itself:
+   a portrait book cover is a centred portrait, never a small picture in a
+   wide black box. Within the invisible full-width stage (.gp-media) the
+   still is as large as fits under the height cap (game.css sizing). */
 .gp-paper .gp-media,
 .gp-paper .gp-reveal > .gp-media {
   --gp-media-cap: min(380px, 52dvh);
@@ -216,16 +221,8 @@
   border-radius: 12px;
   box-shadow: 0 2px 4px rgba(40, 28, 8, 0.16), 0 8px 18px -10px rgba(40, 28, 8, 0.35);
 }
-.gp-paper .gp-media:not(.gp-media-video) .gp-media-img,
-.gp-paper .gp-media-loading,
-.gp-paper .gp-media-failed {
-  width: 100cqw;
-  height: 100cqh;
-  aspect-ratio: auto;
-}
 .gp-paper .gp-media-src {
   bottom: 2px;
-  width: 100cqw;
   border-radius: 0 0 10px 10px;
 }
 
@@ -354,4 +351,185 @@
   .gp-paper .gp-panel { padding: 14px 18px 15px; }
   .gp-paper .gp-panel-ico { width: 32px; height: 32px; padding: 6px; margin: 0; }
   .gp-paper .gp-panel-body { font-size: 16px; }
+}
+
+/* ================= PHONES: ONE SCREEN =================
+   Under 600px wide, active gameplay is a one-screen game: the question and
+   the reveal both fit the small viewport (svh: the height left while the
+   browser's toolbars show), and the page scrolls only as a last resort, on
+   genuinely small screens or with unusually long copy.
+
+   1. The shell is exactly 100svh tall in both phases, so .gp-wrap is a flex
+      column with a real ceiling.
+   2. By viewport height alone, identically in both phases, the stack above
+      the choices tightens and the info cards' type steps down:
+        800px and under  tighter gaps, a smaller header and matchup bar, the
+                         paper and its text at 92%
+        700px and under  minimal gaps, matchup bar 50px, progress on one row
+                         ("3 / 12" and the dots), the paper at 86%
+        600px and under  progress is the dots alone
+   3. The reveal's space priority, most protected first: the picture or
+      video, the Correct / Nope banner, the question on its paper, then
+      Actual Info and Needless Commentary, which are equal peers. While the
+      reveal overflows, GameScreen steps it down one data-fit level at a
+      time (measured before paint), each step keeping the ones before it:
+        1 tighter gaps            5 smaller header and matchup bar
+        2 tighter card padding    6 the paper and title at 85% (--pp-fit)
+        3 card type 13px          7 a shorter Correct / Nope banner
+        4 smaller icons, card     8 the media may shrink a little, to about
+          type at 12.5px            a quarter of the screen height (28%
+                                    for stills)
+      Past that the page scrolls: a little scrolling beats a thumbnail.
+      Until step 8 the media keeps its own full size (16:9 for video; stills
+      up to their cap, framed round the image), and it is never distorted. */
+@media (max-width: 599px) {
+  .app.gp-fullscreen:has(.gp-wrap.gp-paper.gp-q),
+  .app.gp-fullscreen:has(.gp-wrap.gp-paper.gp-r) {
+    height: 100vh;
+    height: 100svh;
+    min-height: 0;
+  }
+  @supports (height: 100svh) {
+    .gp-wrap.gp-paper.gp-q .ans-box {
+      --gp-ans-h: clamp(150px, calc(276px - (840px - 100svh) * 0.6), 276px);
+    }
+  }
+  .gp-wrap.gp-paper { padding-bottom: max(10px, calc(env(safe-area-inset-bottom, 0px) + 6px)); }
+
+  /* The reveal: one flex column with a real ceiling. */
+  .gp-wrap.gp-paper.gp-r {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .gp-wrap.gp-paper.gp-r > * { flex: 0 0 auto; }
+  .gp-wrap.gp-paper.gp-r > .gp-reveal {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .gp-paper .gp-reveal > * { flex: 0 0 auto; }
+  /* The media keeps its full size until step 8: video its full-width 16:9,
+     a still up to 40% of the screen height (340px at most). */
+  .gp-paper .gp-reveal > .gp-media {
+    --gp-media-cap: min(340px, 40svh);
+    flex: 0 0 auto;
+  }
+
+  /* Info cards: Actual Info and Needless Commentary are equal peers, the
+     same size at every step (Commentary stays italic). Comfortable heights. */
+  .gp-paper .gp-panel { padding: 10px 13px 11px; }
+  .gp-paper .gp-panel-lbl { font-size: 12px; }
+  .gp-paper .gp-panel-body { font-size: 15.5px; line-height: 1.4; }
+
+  /* ----- Reveal fit steps (GameScreen sets data-fit) ----- */
+  /* 1: gaps */
+  .gp-wrap.gp-paper:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-reveal { margin-top: 6px; }
+  .gp-wrap.gp-paper:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-reveal > .gp-media { margin-bottom: 7px; }
+  .gp-wrap.gp-paper:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-verdict { margin-bottom: 7px; }
+  .gp-wrap.gp-paper:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-panel { margin-bottom: 5px; }
+  .gp-wrap.gp-paper:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-next.btn { margin-top: 3px; margin-bottom: 1px; }
+  /* 2: card padding, and the cards closer together */
+  .gp-wrap.gp-paper:is([data-fit="2"], [data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-panel { padding: 8px 12px 8px; margin-bottom: 4px; }
+  .gp-wrap.gp-paper:is([data-fit="2"], [data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-panel-lbl { margin-bottom: 0; }
+  /* 3: card type: 13px on 1.24, labels 10.5px */
+  .gp-wrap.gp-paper:is([data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-panel-lbl { font-size: 10.5px; }
+  .gp-wrap.gp-paper:is([data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-panel-body { font-size: 13px; line-height: 1.24; }
+  /* 4: smaller icons, and the type at its floor: 12.5px on 1.2, labels 10px */
+  .gp-wrap.gp-paper:is([data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-panel-ico { width: 18px; height: 18px; padding: 3px; margin: 0 6px 0 0; }
+  .gp-wrap.gp-paper:is([data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-panel-lbl { font-size: 10px; }
+  .gp-wrap.gp-paper:is([data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-panel-body { font-size: 12.5px; line-height: 1.2; }
+  /* 5: header and matchup bar */
+  .app.gp-fullscreen:has(.gp-wrap.gp-paper:is([data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"])) .ph-top { padding-top: max(6px, env(safe-area-inset-top)); }
+  .app.gp-fullscreen:has(.gp-wrap.gp-paper:is([data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"])) .sh-bar { padding-top: 3px; padding-bottom: 3px; }
+  .app.gp-fullscreen:has(.gp-wrap.gp-paper:is([data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"])) .sh-logo-pic .sh-logo { height: 36px; max-width: 100px; }
+  .app.gp-fullscreen:has(.gp-wrap.gp-paper:is([data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"])) .sh-icon-btn,
+  .app.gp-fullscreen:has(.gp-wrap.gp-paper:is([data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"])) .sh-account { width: 36px; height: 36px; min-height: 36px; }
+  .gp-wrap.gp-paper:is([data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-mu-bar { height: 46px; }
+  .gp-wrap.gp-paper:is([data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-mu-or-art { width: 36px; height: 36px; }
+  /* 6: the paper and its title, proportionally */
+  .gp-wrap.gp-paper:is([data-fit="6"], [data-fit="7"], [data-fit="8"]) { --pp-fit: 0.85; }
+  /* 7: a shorter, still bold, Correct / Nope banner */
+  .gp-wrap.gp-paper:is([data-fit="7"], [data-fit="8"]) .gp-verdict { min-height: 40px; padding: 3px 12px; }
+  .gp-wrap.gp-paper:is([data-fit="7"], [data-fit="8"]) .gp-verdict-word,
+  .gp-wrap.gp-paper:is([data-fit="7"], [data-fit="8"]) .gp-verdict-dash,
+  .gp-wrap.gp-paper:is([data-fit="7"], [data-fit="8"]) .gp-verdict-mark { font-size: 22px; }
+  /* 8: only now may the media give up height, and not much: a still to
+     28% of the screen height (at least 160px), video to about a quarter
+     (at least 160px, never more than its own 16:9 height). Past that the
+     page scrolls rather than shrinking the payoff to a thumbnail. */
+  .gp-wrap.gp-paper[data-fit="8"] .gp-reveal > .gp-media {
+    flex: 0 1 auto;
+    min-height: max(160px, 28svh);
+  }
+  .gp-wrap.gp-paper[data-fit="8"] .gp-reveal > .gp-media-video {
+    min-height: min(max(160px, 25svh), calc((100vw - 32px) * 0.5625));
+  }
+}
+
+/* 800px tall and under: the stack above tightens and shrinks a step, and
+   the info cards' type with it. */
+@media (max-width: 599px) and (max-height: 800px) {
+  .app.gp-fullscreen:has(.gp-wrap.gp-paper) .ph-top { padding-top: max(8px, env(safe-area-inset-top)); }
+  .app.gp-fullscreen:has(.gp-wrap.gp-paper) .sh-bar { padding-top: 4px; padding-bottom: 4px; }
+  .app.gp-fullscreen:has(.gp-wrap.gp-paper) .sh-logo-pic .sh-logo { height: 40px; max-width: 110px; }
+  .app.gp-fullscreen:has(.gp-wrap.gp-paper) .sh-icon-btn,
+  .app.gp-fullscreen:has(.gp-wrap.gp-paper) .sh-account { width: 38px; height: 38px; min-height: 38px; }
+  .gp-wrap.gp-paper,
+  .gp-wrap.gp-paper.gp-q { --pp-scale: 0.92; padding-top: 8px; }
+  .gp-paper .gp-mu-bar { height: 56px; }
+  .gp-paper .gp-mu-or-art { width: 40px; height: 40px; }
+  .gp-wrap.gp-paper .gp-progress { gap: 2px; margin-top: 8px; }
+  .gp-paper .gp-prompt { margin-top: 8px; }
+  .gp-paper .gp-qmod,
+  .gp-wrap.gp-paper.gp-q > .gp-qmod { margin-top: 14px; }
+  .gp-paper .gp-reveal { margin-top: 10px; }
+  .gp-paper .gp-reveal > .gp-media { margin-bottom: 9px; }
+  .gp-paper .gp-verdict { margin-bottom: 9px; }
+  .gp-paper .gp-panel { padding: 9px 12px 9px; margin-bottom: 6px; }
+  .gp-paper .gp-panel-lbl { font-size: 11px; }
+  .gp-paper .gp-panel-ico { width: 24px; height: 24px; padding: 4.5px; }
+  .gp-paper .gp-panel-body { font-size: 14.5px; line-height: 1.32; }
+}
+
+/* 700px tall and under: minimal gaps, one-row progress, a lower bar, the
+   paper at 86%, and the info cards' type another step down. */
+@media (max-width: 599px) and (max-height: 700px) {
+  .gp-wrap.gp-paper,
+  .gp-wrap.gp-paper.gp-q {
+    --pp-scale: 0.86;
+    padding-top: 6px;
+    padding-bottom: max(6px, calc(env(safe-area-inset-bottom, 0px) + 4px));
+  }
+  .gp-paper .gp-mu-bar { height: 50px; }
+  .gp-paper .gp-mu-or-art { width: 38px; height: 38px; }
+  .gp-wrap.gp-paper .gp-progress {
+    flex-direction: row;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 6px;
+  }
+  .gp-paper .gp-qpill { display: none; }
+  .gp-paper .gp-qshort {
+    display: inline-block;
+    color: rgba(70, 48, 12, 0.62);
+    font-family: 'Fredoka One', cursive;
+    font-size: 12px;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+  .gp-paper .gp-prompt { margin-top: 6px; }
+  .gp-paper .gp-qmod,
+  .gp-wrap.gp-paper.gp-q > .gp-qmod { margin-top: 12px; }
+  .gp-paper .gp-reveal { margin-top: 8px; }
+  .gp-paper .gp-panel { padding: 8px 12px 8px; margin-bottom: 5px; }
+  .gp-paper .gp-panel-lbl { font-size: 10.5px; margin-bottom: 1px; }
+  .gp-paper .gp-panel-ico { width: 21px; height: 21px; padding: 3.5px; margin-right: 7px; }
+  .gp-paper .gp-panel-body { font-size: 13.5px; line-height: 1.28; }
+}
+
+/* 600px tall and under: the dots alone. */
+@media (max-width: 599px) and (max-height: 600px) {
+  .gp-paper .gp-qshort { display: none; }
 }
