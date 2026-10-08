@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import CandyPageShell from "./CandyPageShell.jsx";
 import CategoryArtImage from "./CategoryArtImage.jsx";
 import { shareFeedback } from "./homeShare.js";
-import { countdownGroups, countdownWords } from "./schedule.js";
+import { countdownGroups, countdownTier, countdownWords } from "./schedule.js";
 
 // ---- HOME ----
 // The category-first Home page, built on the Archive's custard shell. The
@@ -267,25 +267,28 @@ export function HomeDonePanel({ score, total, message, onResults, onShare, prima
 }
 
 // Milliseconds until `target` (a time in ms), ticking every second and
-// catching up at once when the tab comes back. `onDone` runs once when it
-// reaches zero.
-function useCountdown(target, onDone) {
+// catching up at once when the tab comes back. It never does anything at
+// zero itself: the caller shows what comes next.
+function useCountdown(target) {
   const [now, setNow] = useState(() => Date.now());
-  const onDoneRef = useRef(onDone);
-  useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
   useEffect(() => {
-    let done = false;
-    const tick = () => {
-      const t = Date.now();
-      setNow(t);
-      if (!done && t >= target) { done = true; onDoneRef.current?.(); }
-    };
+    const tick = () => setNow(Date.now());
     tick();
     const id = setInterval(tick, 1000);
     document.addEventListener("visibilitychange", tick);
     return () => { clearInterval(id); document.removeEventListener("visibilitychange", tick); };
   }, [target]);
   return Math.max(0, target - now);
+}
+
+// Two small, still spark lines either side of the countdown in its last ten
+// minutes. Decoration only.
+function CountdownSparks({ flip = false }) {
+  return (
+    <svg className={flip ? "hm-cd-sparks is-flip" : "hm-cd-sparks"} viewBox="0 0 20 30" aria-hidden="true" focusable="false">
+      <path d="M5 5l9 7M3 25l11-4" fill="none" stroke="currentColor" strokeWidth="3.6" strokeLinecap="round"/>
+    </svg>
+  );
 }
 
 // The next puzzle's picture: its wide artwork whole at its own shape, else
@@ -306,29 +309,40 @@ function UpNextArt({ game, colors, wideUrl, squareUrl }) {
   );
 }
 
-// Up Next, under today's action: the label (`title`: "Up next", or
+// Up Next, under today's finished puzzle: the label (`title`: "Up next", or
 // "Tomorrow's puzzle" when it opens tomorrow), a countdown to the moment the
-// next published puzzle opens (`opensAt`, ms), and that puzzle's artwork.
-// Nothing else. `onOpen` runs when the countdown reaches zero, so Home can
-// move on to the new day. The countdown says its time to screen readers in
+// next published puzzle opens (`opensAt`, ms: schedule.js releaseTime, the
+// release rule everything else uses), and that puzzle's artwork, which stays
+// the bigger thing. The countdown is a row of small blocks -- days first when
+// the opening is more than a day away, then hours, minutes and seconds --
+// fixed-width with tabular digits, so nothing shifts as it counts, and its
+// colour warms up as the opening nears (countdownTier). At zero it becomes
+// PLAY NOW, which only reloads the page: Home then reads the new day the
+// usual way. Nothing changes on its own. Screen readers hear the time in
 // words, to the minute; the ticking digits stay silent.
-export function HomeUpNext({ game, colors, wideUrl, squareUrl, opensAt, onOpen, title = "Up next" }) {
-  const left = useCountdown(opensAt, onOpen);
+export function HomeUpNext({ game, colors, wideUrl, squareUrl, opensAt, title = "Up next" }) {
+  const left = useCountdown(opensAt);
+  const tier = countdownTier(left);
   const groups = countdownGroups(left);
   return (
     <section className="hm-next" aria-labelledby="hm-next-title">
       <h2 className="hm-next-title" id="hm-next-title">{title}</h2>
-      <div className="hm-next-clock" role="timer" aria-label={`Opens in ${countdownWords(left)}`}>
-        {groups.map((g, i) => (
-          <span key={g.unit} className="hm-next-group" aria-hidden="true">
-            {i > 0 && !groups[i - 1].unit.startsWith("day") && <span className="hm-next-colon">:</span>}
-            <span className="hm-next-cell">
-              <span className="hm-next-num">{g.value}</span>
-              <span className="hm-next-unit">{g.unit}</span>
+      {tier === "open" ? (
+        <button type="button" className="hm-next-play" onClick={() => window.location.reload()}>
+          Play now
+        </button>
+      ) : (
+        <div className="hm-cd" data-tier={tier} role="timer" aria-label={`Opens in ${countdownWords(left)}`}>
+          {tier === "soon" && <CountdownSparks/>}
+          {groups.map((g) => (
+            <span key={g.unit} className="hm-cd-cell" aria-hidden="true">
+              <span className="hm-cd-num">{g.value}</span>
+              <span className="hm-cd-unit">{g.unit}</span>
             </span>
-          </span>
-        ))}
-      </div>
+          ))}
+          {tier === "soon" && <CountdownSparks flip/>}
+        </div>
+      )}
       <UpNextArt game={game} colors={colors} wideUrl={wideUrl} squareUrl={squareUrl}/>
     </section>
   );

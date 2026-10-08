@@ -460,10 +460,10 @@
 }
 
 /* ===== UP NEXT =====
-   A compact block under today's action: the label, the countdown (the
-   Results "Next game in" capsule, with each unit on its own glowing tile),
-   then the next puzzle's artwork whole at its own shape. Narrower than the
-   hero, so today's poster and action stay the centrepiece. */
+   Shown under today's puzzle once it is finished: the label, the
+   countdown, then the next puzzle's artwork whole at its own shape -- the
+   artwork is the star here, the countdown a small line above it. Narrower
+   than the hero, so today's finished puzzle stays the centrepiece. */
 .hm-next {
   display: grid;
   justify-items: center;
@@ -481,68 +481,90 @@
   text-transform: uppercase;
   color: var(--teal-dark, #0F9488);
 }
-.hm-next-clock {
-  position: relative;
-  display: inline-flex;
+/* The countdown: a row of small blocks on the page itself -- no capsule or
+   card around them -- each a two-digit number over its HRS / MIN / SEC
+   label. The blocks have a fixed width and the digits are tabular, so
+   nothing moves as the seconds change. Its colour warms up as the opening
+   nears (data-tier, countdownTier in Home.jsx): calm cream with teal edges,
+   aqua inside the last hour, pink inside the last ten minutes with two
+   small spark lines either side. Colours ease between tiers; nothing
+   blinks, pulses or moves. */
+.hm-cd {
+  --cd-bg: var(--cs-cream, #FFFBEF);
+  --cd-edge: rgba(15, 148, 136, 0.5);
+  --cd-ink: var(--black, #1A1A1A);
+  --cd-unit: var(--teal-dark, #0F9488);
+  display: flex;
   align-items: flex-start;
-  gap: 4px;
-  padding: 10px 16px 9px;
-  border: 3px solid var(--black);
-  border-radius: 18px;
-  background: linear-gradient(160deg, #1A1A2E 0%, #1A1A1A 100%);
-  box-shadow: 0 5px 0 var(--black);
-  transform: rotate(-1.5deg);
+  justify-content: center;
+  gap: 8px;
 }
-/* The capsule's gloss, as on the Results countdown. */
-.hm-next-clock::before {
-  content: "";
-  position: absolute;
-  top: 5px;
-  left: 12px;
-  right: 12px;
-  height: 25%;
-  border-radius: 12px 12px 50% 50%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 100%);
-  pointer-events: none;
+.hm-cd[data-tier="close"] {
+  --cd-bg: #CCFBF1;
+  --cd-edge: #2DD4BF;
+  --cd-ink: #0B5149;
+  --cd-unit: #0F9488;
 }
-.hm-next-group { display: inline-flex; align-items: flex-start; gap: 4px; }
-.hm-next-group + .hm-next-group:not(:has(.hm-next-colon)) { margin-left: 8px; }
-.hm-next-cell { display: grid; justify-items: center; gap: 3px; }
-.hm-next-num {
-  min-width: 1.35em;
-  padding: 3px 5px 2px;
+.hm-cd[data-tier="soon"] {
+  --cd-bg: #FFE2EC;
+  --cd-edge: #FF79A6;
+  --cd-ink: #8A1846;
+  --cd-unit: #D63D7A;
+}
+.hm-cd-cell { display: grid; justify-items: center; gap: 4px; }
+.hm-cd-num {
+  box-sizing: border-box;
+  width: 2.15em;
+  padding: 6px 0 5px;
+  border: 2px solid var(--cd-edge);
   border-radius: 10px;
-  background: rgba(45, 212, 191, 0.12);
-  box-shadow: inset 0 0 0 1.5px rgba(45, 212, 191, 0.35);
+  background: var(--cd-bg);
   font-family: 'Fredoka One', cursive;
-  font-size: 32px;
+  font-size: 25px;
   line-height: 1;
-  letter-spacing: 1px;
   font-variant-numeric: tabular-nums;
-  color: #fff;
   text-align: center;
-  text-shadow: 0 0 18px rgba(45, 212, 191, 0.55);
+  color: var(--cd-ink);
+  transition: background-color .6s ease, border-color .6s ease, color .6s ease;
 }
-.hm-next-unit {
+.hm-cd-unit {
   font-family: 'Fredoka One', cursive;
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1;
-  letter-spacing: 2px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--teal, #2DD4BF);
+  color: var(--cd-unit);
 }
-.hm-next-colon {
-  padding-top: 4px;
+.hm-cd-sparks {
+  flex: none;
+  width: 13px;
+  height: 20px;
+  margin-top: 9px;
+  color: var(--cd-edge);
+}
+.hm-cd-sparks.is-flip { transform: scaleX(-1); }
+/* At zero, in the countdown's place: PLAY NOW, which reloads the page. The
+   Play button's candy yellow at a compact size. */
+.hm-next-play {
+  appearance: none;
+  min-height: 50px;
+  padding: 0 30px;
+  border: 3px solid var(--black);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #FFEA6B 0%, #FFD23F 42%, #FFAA2B 78%, #FF9418 100%);
+  color: var(--black);
   font-family: 'Fredoka One', cursive;
-  font-size: 28px;
+  font-size: 20px;
   line-height: 1;
-  color: var(--cs-pink, #FF6FA3);
-  animation: hmTick 1s steps(1, end) infinite;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 4px 0 var(--black);
+  transition: transform .12s ease, box-shadow .12s ease;
 }
-@keyframes hmTick {
-  0%   { opacity: 1; }
-  50%  { opacity: 0.35; }
-}
+.hm-next-play:hover { filter: brightness(1.04); }
+.hm-next-play:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--black); }
+.hm-next-play:focus-visible { outline: 3px solid var(--cs-focus, #1D4ED8); outline-offset: 3px; }
 /* The artwork, whole: the wide image at the block's width, its height from
    its own proportions (1200:630 until it loads); a square poster smaller;
    the category matchup as the last resort. */
@@ -654,10 +676,11 @@
   .hm-artwork.is-wide { border-radius: 20px; }
   .hm-next { margin-top: 28px; gap: 8px; }
   .hm-next-title { font-size: 13px; }
-  .hm-next-clock { padding: 8px 12px 7px; border-radius: 16px; }
-  .hm-next-num { font-size: 27px; border-radius: 9px; }
-  .hm-next-colon { font-size: 24px; }
-  .hm-next-unit { font-size: 10px; }
+  .hm-cd { gap: 7px; }
+  .hm-cd-num { font-size: 22px; border-radius: 9px; padding: 5px 0 4px; }
+  .hm-cd-unit { font-size: 9.5px; }
+  .hm-cd-sparks { width: 12px; height: 18px; margin-top: 7px; }
+  .hm-next-play { min-height: 46px; font-size: 18px; }
   .hm-next-art { border-radius: 20px; box-shadow: 0 4px 0 var(--black); }
 }
 /* Short phones: a little less height everywhere so Play stays on screen. */
@@ -675,5 +698,7 @@
   .hm-play, .hm-link, .hm-done-btn { transition: none; }
   .hm-play:active, .hm-link:active, .hm-done-btn:active { transform: none; }
   .hm-candy-art.is-busy .hm-candy-dots img { animation: none; opacity: 0.9; }
-  .hm-next-colon { animation: none; }
+  .hm-cd-num { transition: none; }
+  .hm-next-play { transition: none; }
+  .hm-next-play:active { transform: none; }
 }
