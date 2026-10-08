@@ -27,6 +27,7 @@ import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats
 import { gameToRow, rowToGame } from "./gameRow.js";
 import { copyText, puzzleArtworkUrl, shareResult, wideArtworkUrl } from "./homeShare.js";
 import { gameDayKey, isReleased, nextPuzzle, releaseTime } from "./schedule.js";
+import { isHoldingHome, nextHomeHold } from "./homeHold.js";
 import { buildResultsShareText, normalizeShareLabel } from "./share.js";
 import { puzzleIdFromPath, puzzlePath } from "./puzzleLink.js";
 import { SITE_NAME, puzzleMeta } from "./puzzleMeta.js";
@@ -2810,7 +2811,7 @@ function HomePuzzleArt({game}){
 // published puzzle is scheduled after today. With no puzzle scheduled today
 // it points at the Archive instead. `game` is null then. Stats and Archive
 // are in App's shared PlayerHeader.
-function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onShare,onNextDay}){
+function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onShare}){
   const answered = gameRecord?.answers?.length||0;
   const total = gameRecord?.totalQuestions||game?.questions.length||0;
   const done = Boolean(gameRecord?.completed);
@@ -2819,14 +2820,20 @@ function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onS
   const artworkUrl = game ? puzzleArtworkUrl(game) : null;
   const wideUrl = game ? wideArtworkUrl(game) : null;
   const opensAt = upNext ? releaseTime(upNext.date)?.getTime() : null;
-  // Once today is finished, Home reads top to bottom as today's puzzle --
-  // its wide artwork and the score -- and then the next one under its own
-  // heading: "Tomorrow's puzzle" when it opens tomorrow, else "Up next".
-  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  // The next puzzle appears only once today's is finished (the player's own
+  // record says so): until then Home is today's puzzle and its Play, and
+  // nothing about the next one is rendered at all. Finished, Home reads top
+  // to bottom as today's puzzle -- its wide artwork and the score -- and then
+  // the next one under its own heading: "Tomorrow's puzzle" when it opens
+  // tomorrow, else "Up next". With no puzzle today, it shows straight away.
+  // "Tomorrow" is the day after the puzzle shown as today's (so a page held
+  // past midnight, homeHold.js, keeps its heading), else after today.
+  const tomorrow = (game&&releaseTime(game.date)) || new Date();
+  tomorrow.setDate(tomorrow.getDate()+1);
   const nextTitle = upNext?.date===gameDayKey(tomorrow) ? "Tomorrow’s puzzle" : "Up next";
   const next = upNext&&opensAt&&(
     <HomeUpNext game={upNext} colors={categoryColors(upNext)} wideUrl={wideArtworkUrl(upNext)} squareUrl={puzzleArtworkUrl(upNext)}
-      opensAt={opensAt} onOpen={onNextDay} title={nextTitle}/>
+      opensAt={opensAt} title={nextTitle}/>
   );
   const foot = (stats.currentStreak>0||!signedIn)&&(
     <HomeFoot>
@@ -2855,7 +2862,7 @@ function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onS
               </HomeBigButton>
             </div>
           )}
-          {next}
+          {done&&next}
         </>
       ):(
         <>
@@ -4884,10 +4891,9 @@ export default function WhatTheFudgeTrivia(){
   const authUserIdRef = useRef(null);
 
   const sound=useSoundEngine();
-  // The game day is read on every render. When Home's Up Next countdown
-  // reaches the next puzzle's opening (local midnight), it re-renders the app
-  // through this tick, so the new day loads (loadAppData depends on today).
-  const[,setDayTick]=useState(0);
+  // The game day is read on every render (loadAppData depends on it). Home
+  // never moves to the new day by itself: at the next puzzle's opening its
+  // countdown becomes PLAY NOW, which reloads the page.
   const today=getLocalGameDay();
 
   const loadAppData = useCallback(async(sessionOverride=null,{recoverAuth=false}={})=>{
@@ -5010,6 +5016,17 @@ export default function WhatTheFudgeTrivia(){
   // puzzle: if the puzzle on today's date changes, another puzzle's result
   // is never shown, resumed or shared as today's.
   const todayRecord = gameRecord && todayGame && gameRecord.puzzleId===todayGame.id ? gameRecord : null;
+  // Finished today's puzzle and still on Home or its Results when the day
+  // rolls over: those two keep showing it until PLAY NOW reloads the page
+  // (homeHold.js). Everything else uses the live day.
+  const[homeHold,setHomeHold]=useState(null);
+  const liveHome = {view, day:today, game:todayGame, record:todayRecord, upNext:upNextGame};
+  const hold = nextHomeHold(homeHold, liveHome);
+  if(hold!==homeHold) setHomeHold(hold);
+  const holdingHome = isHoldingHome(hold, liveHome);
+  const homeGame = holdingHome ? hold.game : todayGame;
+  const homeRecord = holdingHome ? hold.record : todayRecord;
+  const homeUpNext = holdingHome ? hold.upNext : upNextGame;
   // A puzzle link's page follows the same rules as everywhere else: today's
   // puzzle is Home itself (a normal, scored daily play), an earlier released
   // puzzle replays as it would from the Archive, and anything else (not out
@@ -5318,7 +5335,7 @@ export default function WhatTheFudgeTrivia(){
     if(!game || !record?.completed) return null;
     return shareResult({ text: buildResultsShareText({ game, record }) }, navigator);
   };
-  const handleShareToday = () => shareFinished(todayGame, todayRecord);
+  const handleShareToday = () => shareFinished(homeGame, homeRecord);
 
   // Replay. Only a released puzzle (schedule.js: published, dated today or
   // earlier) can start, whatever asks: a puzzle scheduled after today stays
@@ -5376,7 +5393,9 @@ export default function WhatTheFudgeTrivia(){
     : null;
   if(adminEditor) return adminEditor;
 
-  if(loading||error) return(
+  // A held Home (see homeHold.js) stays on screen through the new day's
+  // background reload, rather than giving way to the loading page.
+  if((loading||error)&&!holdingHome) return(
     <PlayerChromeContext.Provider value={playerChrome}>
       <style>{styles}</style>
       <div className="app">
@@ -5413,13 +5432,12 @@ export default function WhatTheFudgeTrivia(){
         <PlayerHeader sticky={!isGameplay}/>
         <div className="main">
           {(view==="home"||(view==="puzzle"&&linkIsToday))&&(
-            <HomeScreen game={todayGame} gameRecord={todayRecord} upNext={upNextGame} stats={stats}
+            <HomeScreen game={homeGame} gameRecord={homeRecord} upNext={homeUpNext} stats={stats}
               player={player}
               onPlay={handlePlay}
               onNav={v=>{sound.play("click");setView(v);}}
               onHelp={()=>setShowHelp(true)}
               onShare={handleShareToday}
-              onNextDay={()=>setDayTick(t=>t+1)}
             />
           )}
 
@@ -5454,8 +5472,8 @@ export default function WhatTheFudgeTrivia(){
             />
           )}
 
-          {view==="score"&&todayRecord&&(
-            <ScoreScreen gameRecord={todayRecord} game={todayGame} crowd={crowd} onNav={setView} sound={sound} withChrome/>
+          {view==="score"&&homeRecord&&(
+            <ScoreScreen gameRecord={homeRecord} game={homeGame} crowd={crowd} onNav={setView} sound={sound} withChrome/>
           )}
 
           {view==="replay-score"&&replayRecord&&(

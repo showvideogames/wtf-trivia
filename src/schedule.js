@@ -74,6 +74,17 @@ export function countdownGroups(ms) {
   return days > 0 ? [{ unit: days === 1 ? "day" : "days", value: String(days) }, ...groups] : groups;
 }
 
+// How close the opening is, for the countdown's colour: "calm" while more
+// than an hour is left, "close" inside the last hour, "soon" inside the last
+// ten minutes, and "open" at zero.
+export function countdownTier(ms) {
+  const left = Number(ms) || 0;
+  if (left <= 0) return "open";
+  if (left < 10 * 60 * 1000) return "soon";
+  if (left < 60 * 60 * 1000) return "close";
+  return "calm";
+}
+
 // The same time in words for screen readers, to the minute (seconds would
 // change on every announcement): "1 day, 4 hours and 3 minutes".
 export function countdownWords(ms) {
