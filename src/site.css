@@ -88,22 +88,36 @@
 }
 /* Phones (up to 599px), on every scrolling page (Home, a puzzle link,
    Archive, Stats, Account, Results): standard app chrome. The cream bar is
-   a plain full-width rectangle pinned to the top, starting right under the
-   safe area, and the page scrolls under it. The only yellow above it is the
+   a plain full-width rectangle fixed to the top of the screen, starting
+   right under the safe area, and the page -- still the document, scrolling
+   natively -- passes under it. Fixed rather than sticky: a sticky header
+   is part of the document and goes wherever iPhone Safari's rubber band
+   drags the document; a fixed one belongs to the screen. The app reserves
+   the header's height (--ph-fixed-h) above the page, so nothing starts
+   underneath it. The only yellow above it is the
    safe area itself (iPhone Safari's own strip, or the status-bar inset in a
    home-screen app, filled #FFEDA0 here). No top or side borders (pushing
    them off-screen would widen the page): only the ink bottom divider and
    the soft shadow. The menu and account buttons sit 16px from the screen
    edges, sound 11px left of account; the logo stays dead centre (equal side
-   tracks, symmetric padding). It keeps its place in the flow (sticky, not
-   fixed), so nothing moves when it pins; dialogs (z-index 60 and up) still
-   cover it. From 600px the header is the floating rounded bar and simply
-   scrolls away with the page. Gameplay never gets .ph-sticky. */
+   tracks, symmetric padding). Dialogs (z-index 60 and up) still cover it.
+   From 600px the header is the floating rounded bar and simply scrolls
+   away with the page. Gameplay never gets .ph-sticky. */
 @media (max-width: 599px) {
+  /* The header's height: the bar's 54px row (logo), 10px + 9px padding and
+     the 3px divider; 44px row on the narrowest phones (below). */
+  :root { --ph-fixed-h: 76px; }
   .ph-top.ph-sticky {
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
+    right: 0;
+    max-width: none;
+    margin: 0;
     padding: env(safe-area-inset-top, 0px) 0 0;
+  }
+  .app:has(> .ph-top.ph-sticky) {
+    padding-top: calc(env(safe-area-inset-top, 0px) + var(--ph-fixed-h));
   }
   .ph-top.ph-sticky::before {
     content: "";
@@ -124,9 +138,12 @@
   .ph-top.ph-sticky .sh-tools { gap: 11px; }
   /* The menu panel lines up with the menu button, 16px in. */
   .ph-top.ph-sticky .sh-menu-panel { left: 16px; }
-  /* Keyboard focus, find-in-page and in-page jumps stop below the pinned
-     bar (76px, the safe area above it) with a little air. */
-  html:has(.ph-sticky) { scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 76px + 12px); }
+  /* Keyboard focus, find-in-page and in-page jumps stop below the fixed
+     bar (the safe area above it) with a little air. */
+  html:has(.ph-sticky) { scroll-padding-top: calc(env(safe-area-inset-top, 0px) + var(--ph-fixed-h) + 12px); }
+}
+@media (max-width: 380px) {
+  :root { --ph-fixed-h: 66px; }
 }
 /* Loading and error: the header holds its place but has nothing behind its
    links yet, and the account button isn't known. */

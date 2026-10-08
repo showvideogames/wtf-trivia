@@ -3082,6 +3082,18 @@ function catSizeClass(text){
 const REVEAL_FIT_STEPS=8;
 const FIT_TOLERANCE_PX=2;
 
+// The locked phone game's pretend rubber band (GameScreen): how far a drag
+// must clearly go up or down before it counts, the most the content can
+// ever move (it approaches this, never reaches it), how stiff the pull is,
+// and the spring back. A touch that starts on anything below is never a
+// pull: controls, media (a YouTube frame takes its own touches anyway), the
+// header and its menu, and dialogs.
+const RUBBER_BAND_START_PX=10;
+const RUBBER_BAND_MAX_PX=28;
+const RUBBER_BAND_STIFFNESS=0.55;
+const RUBBER_BAND_RETURN_MS=420;
+const RUBBER_BAND_EXCLUDE='button, a[href], input, select, textarea, label, summary, [role="button"], [role="link"], [role="dialog"], [contenteditable="true"], iframe, video, audio, .gp-media, .ph-top, .htp-bg';
+
 // Matches the wide desktop answer row in game.css.
 const WIDE_ANSWER_ROW_MQ="(min-width: 1100px)";
 
@@ -3374,6 +3386,77 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
     document.fonts?.ready?.then(()=>{ if(live) fit(); });
     return ()=>{ live=false; ro?.disconnect(); vv?.removeEventListener("resize",onViewport); unlock(); };
   },[phase,idx]);
+
+  // Phones, locked game: the page can't scroll or bounce, so a tug on the
+  // screen gets a pretend rubber band instead. A clear vertical drag (past
+  // RUBBER_BAND_START_PX, and mostly up or down) moves the game content --
+  // never the shell or the page -- with growing resistance, approaching but
+  // never reaching RUBBER_BAND_MAX_PX, and on release it springs back. The
+  // header stays put and the yellow backdrop shows behind. Nothing else
+  // changes: scrollY stays 0 and no layout is measured differently (the fit
+  // reads layout positions, which a transform doesn't touch). Never started
+  // from a control or media (RUBBER_BAND_EXCLUDE), never sideways, never
+  // with two fingers, never with reduced motion, and never in the emergency
+  // fallback (html.gp-scroll), where the shell really scrolls instead.
+  useEffect(()=>{
+    const wrap=wrapRef.current;
+    const shell=wrap?.closest(".app.gp-fullscreen");
+    if(!wrap||!shell) return;
+    const root=document.documentElement;
+    const reduce=window.matchMedia("(prefers-reduced-motion: reduce)");
+    const locked=()=>root.classList.contains("gp-lock")&&!root.classList.contains("gp-scroll");
+    let gesture=null;
+    let settleTimer=0;
+    const clear=()=>{ wrap.style.removeProperty("transform"); wrap.style.removeProperty("transition"); };
+    const release=()=>{
+      if(gesture?.pulling){
+        wrap.style.transition=`transform ${RUBBER_BAND_RETURN_MS}ms cubic-bezier(.25,1.35,.5,1)`;
+        wrap.style.transform="translate3d(0,0,0)";
+        clearTimeout(settleTimer);
+        settleTimer=setTimeout(clear,RUBBER_BAND_RETURN_MS+50);
+      }
+      gesture=null;
+    };
+    const onStart=e=>{
+      gesture=null;
+      if(e.touches.length!==1||!locked()||reduce.matches) return;
+      if(e.target instanceof Element&&e.target.closest(RUBBER_BAND_EXCLUDE)) return;
+      const t=e.touches[0];
+      gesture={x:t.clientX, y:t.clientY, pulling:false};
+    };
+    const onMove=e=>{
+      if(!gesture) return;
+      if(e.touches.length!==1||!locked()){ release(); return; }
+      const t=e.touches[0];
+      const dx=t.clientX-gesture.x, dy=t.clientY-gesture.y;
+      if(!gesture.pulling){
+        const ax=Math.abs(dx), ay=Math.abs(dy);
+        if(ay<RUBBER_BAND_START_PX){ if(ax>RUBBER_BAND_START_PX) gesture=null; return; }
+        if(ay<ax*1.5){ gesture=null; return; }
+        // The pull starts from here, so it never jumps by the threshold.
+        gesture.pulling=true;
+        gesture.y+=Math.sign(dy)*RUBBER_BAND_START_PX;
+        clearTimeout(settleTimer);
+        wrap.style.transition="none";
+      }
+      const d=t.clientY-gesture.y;
+      const pull=Math.sign(d)*RUBBER_BAND_MAX_PX*(1-1/(Math.abs(d)*RUBBER_BAND_STIFFNESS/RUBBER_BAND_MAX_PX+1));
+      wrap.style.transform=`translate3d(0,${pull.toFixed(2)}px,0)`;
+      if(e.cancelable) e.preventDefault();
+    };
+    shell.addEventListener("touchstart",onStart,{passive:true});
+    shell.addEventListener("touchmove",onMove,{passive:false});
+    shell.addEventListener("touchend",release);
+    shell.addEventListener("touchcancel",release);
+    return ()=>{
+      shell.removeEventListener("touchstart",onStart);
+      shell.removeEventListener("touchmove",onMove);
+      shell.removeEventListener("touchend",release);
+      shell.removeEventListener("touchcancel",release);
+      clearTimeout(settleTimer);
+      clear();
+    };
+  },[]);
 
   // Guard: once we've advanced past the last question, stop rendering question/reveal UI.
   if(!cq) return null;
