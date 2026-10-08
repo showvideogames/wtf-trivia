@@ -4697,7 +4697,7 @@ function AdminPreview({game,onBack}){
         )}
         {view==="game"&&<GameScreen game={game} gameRecord={pr} onComplete={onComplete} sound={dummySound} isReplay={true}/>}
         {view==="score"&&<ScoreScreen gameRecord={pr} game={game} onNav={()=>setView("home")} sound={dummySound} isReplay={true}/>}
-        {showHelp&&<HowToPlay onClose={()=>setShowHelp(false)} onPlay={()=>{setShowHelp(false);setView("home");}}/>}
+        {showHelp&&<HowToPlay onClose={()=>setShowHelp(false)}/>}
       </div>
     </div>
   );
@@ -5241,9 +5241,6 @@ export default function WhatTheFudgeTrivia(){
     },
     // [accounts] the Admin gear also shows for a signed-in admin account (the database enforces the rule regardless)
     admin: (SHOW_ADMIN_LINK||isAdmin) ? {onClick:openAdmin, icon:<FI name="gear" size={22}/>} : null,
-    // The paper look (gameplayLook.js) shows the logo without TRIVIA on
-    // phones during a game.
-    wordmark: PAPER_LOOK && isGameplay,
   };
 
   // Loading and boot failure: Home's own frame (see HomeLoadingPage), under
@@ -5361,7 +5358,7 @@ export default function WhatTheFudgeTrivia(){
         </div>
 
         {toast&&<Toast message={toast} onDone={()=>setToast(null)}/>}
-        {showHelp&&<HowToPlay onClose={()=>setShowHelp(false)} onPlay={()=>{setShowHelp(false);goTo("home");}}/>}
+        {showHelp&&<HowToPlay onClose={()=>setShowHelp(false)}/>}
         {/* [accounts] asked once, after the first sign-in from a browser whose guest had history */}
         {handoff&&<ImportPrompt summary={handoff} onAdd={handleAddProgress} onStartFresh={handleStartFresh}/>}
       </div>

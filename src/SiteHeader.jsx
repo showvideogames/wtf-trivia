@@ -53,7 +53,7 @@ function HeaderMenu({ items, current }) {
     if (!open) return;
     panelRef.current?.querySelector("button")?.focus();
     const onKey = (e) => {
-      if (e.key === "Escape") { setOpen(false); buttonRef.current?.focus(); }
+      if (e.key === "Escape") { setOpen(false); buttonRef.current?.focus({ preventScroll: true }); }
     };
     const onPointer = (e) => {
       if (!wrapRef.current?.contains(e.target)) setOpen(false);
@@ -81,7 +81,7 @@ function HeaderMenu({ items, current }) {
                 <button type="button"
                         className={currentClass("sh-menu-item", item.id, current)}
                         aria-current={ariaCurrent(item.id, current)}
-                        onClick={() => { setOpen(false); buttonRef.current?.focus(); item.onClick(); }}>
+                        onClick={() => { setOpen(false); buttonRef.current?.focus({ preventScroll: true }); item.onClick(); }}>
                   {item.icon && <span className="sh-menu-icon" aria-hidden="true">{item.icon}</span>}
                   <span className="sh-menu-label">{item.label}</span>
                   {item.id === current && <CurrentGlyph/>}
@@ -96,11 +96,10 @@ function HeaderMenu({ items, current }) {
 }
 
 // Marks for the current link. How to Play is a dialog, not a page: while it
-// is open it takes the mark (a blue outline, no aria-current), and the page
-// underneath gets its own mark back when it closes.
+// is open it takes the same pink mark as a page link (but no aria-current),
+// and the page underneath gets its own mark back when it closes.
 function currentClass(base, id, current) {
-  if (id !== current) return base;
-  return id === "help" ? `${base} is-current is-dialog` : `${base} is-current`;
+  return id === current ? `${base} is-current` : base;
 }
 function ariaCurrent(id, current) {
   return id === current && id !== "help" ? "page" : undefined;
@@ -157,7 +156,7 @@ function useShortcutRoom(barRef) {
   return room;
 }
 
-export default function SiteHeader({ nav, current, sound, account, admin, wordmark = false }) {
+export default function SiteHeader({ nav, current, sound, account, admin }) {
   const menuItems = admin ? [...nav, { id: "admin", label: "Admin", icon: admin.icon, onClick: admin.onClick }] : nav;
   const barRef = useRef(null);
   const room = useShortcutRoom(barRef);
@@ -185,16 +184,9 @@ export default function SiteHeader({ nav, current, sound, account, admin, wordma
           </button>
         ))}
       </nav>
-      {/* wordmark: phones show the logo without its TRIVIA line (the same
-          artwork, cropped), for the paper-look gameplay screens. */}
-      {wordmark ? (
-        <picture className="sh-logo-pic">
-          <source media="(max-width: 599px)" srcSet="/wtf-logo-wordmark.png"/>
-          <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="sh-logo"/>
-        </picture>
-      ) : (
-        <img src="/wtf-logo.png" alt="What The Fudge Trivia" className="sh-logo"/>
-      )}
+      {/* The approved wordmark: the logo without its TRIVIA line (the same
+          artwork, cropped), on every screen and at every width. */}
+      <img src="/wtf-logo-wordmark.png" alt="What The Fudge" className="sh-logo"/>
       <div className="sh-tools">
         {help && (
           <button type="button" className={currentClass("sh-icon-btn sh-shortcut sh-help", "help", current)}
