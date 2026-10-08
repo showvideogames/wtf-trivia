@@ -5282,10 +5282,12 @@ export default function WhatTheFudgeTrivia(){
       <div className={`app${usesGameBackdrop?" cbd-page":""}${isGameplay?" gp-fullscreen":""}`}>
         {(isGameplay||usesGameBackdrop)&&<GameBackdrop/>}
         {/* One header for every player screen, never remounted between them,
-            so the bar and its logo never move. Home and Archive pin it to
-            the top while they scroll; gameplay, Results and the rest keep
-            it in the normal flow. */}
-        <PlayerHeader sticky={isHomeShell||view==="archive"}/>
+            so the bar and its logo never move. On phones every scrolling
+            page (Home, a puzzle link, Archive, Stats, Account, Results) pins
+            it to the top as a full-width bar the page scrolls under; from
+            600px it is the floating bar and scrolls away. Gameplay keeps it
+            in its fixed one-screen layout. */}
+        <PlayerHeader sticky={!isGameplay}/>
         <div className="main">
           {(view==="home"||(view==="puzzle"&&linkIsToday))&&(
             <HomeScreen game={todayGame} gameRecord={todayRecord} upNext={upNextGame} stats={stats}

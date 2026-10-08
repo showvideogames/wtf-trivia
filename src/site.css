@@ -86,25 +86,47 @@
   margin: 0 auto;
   padding: max(12px, env(safe-area-inset-top)) 24px 0;
 }
-/* Home and Archive: the frame stays pinned to the top while the page
-   scrolls. It keeps its place in the flow (sticky, not fixed), so nothing
-   moves when it pins. Only the cream bar is opaque: the gap above it and
-   the gutters beside it stay transparent, so the page shows naturally
-   around the bar, and taps there reach the page underneath. Dialogs
-   (z-index 60 and up) still cover the frame. Gameplay, Results and Admin
-   never get this class. */
-.ph-sticky {
-  position: sticky;
-  top: 0;
-  pointer-events: none;
-}
-.ph-sticky > * { pointer-events: auto; }
-/* Keyboard focus, find-in-page and in-page jumps stop below the pinned bar:
-   the gap above it, the bar itself (72px phone row, 70px from 900px) and a
-   little air. */
-html:has(.ph-sticky) { scroll-padding-top: calc(max(12px, env(safe-area-inset-top)) + 72px + 12px); }
-@media (min-width: 900px) {
-  html:has(.ph-sticky) { scroll-padding-top: calc(max(12px, env(safe-area-inset-top)) + 70px + 12px); }
+/* Phones (up to 599px), on every scrolling page (Home, a puzzle link,
+   Archive, Stats, Account, Results): standard app chrome. The cream bar is
+   a plain full-width rectangle pinned to the top, starting right under the
+   safe area, and the page scrolls under it. The only yellow above it is the
+   safe area itself (iPhone Safari's own strip, or the status-bar inset in a
+   home-screen app, filled #FFEDA0 here). No top or side borders (pushing
+   them off-screen would widen the page): only the ink bottom divider and
+   the soft shadow. The menu and account buttons sit 16px from the screen
+   edges, sound 11px left of account; the logo stays dead centre (equal side
+   tracks, symmetric padding). It keeps its place in the flow (sticky, not
+   fixed), so nothing moves when it pins; dialogs (z-index 60 and up) still
+   cover it. From 600px the header is the floating rounded bar and simply
+   scrolls away with the page. Gameplay never gets .ph-sticky. */
+@media (max-width: 599px) {
+  .ph-top.ph-sticky {
+    position: sticky;
+    top: 0;
+    padding: env(safe-area-inset-top, 0px) 0 0;
+  }
+  .ph-top.ph-sticky::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top, 0px);
+    background: var(--warm-base, #FFEDA0);
+    pointer-events: none;
+  }
+  .ph-top.ph-sticky .sh-bar {
+    padding: 10px 16px 9px;
+    border-width: 0 0 3px;
+    border-radius: 0;
+  }
+  .ph-top.ph-sticky .sh-tools { gap: 11px; }
+  /* The menu panel lines up with the menu button, 16px in. */
+  .ph-top.ph-sticky .sh-menu-panel { left: 16px; }
+  /* Keyboard focus, find-in-page and in-page jumps stop below the pinned
+     bar (76px, the safe area above it) with a little air. */
+  html:has(.ph-sticky) { scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 76px + 12px); }
 }
 /* Loading and error: the header holds its place but has nothing behind its
    links yet, and the account button isn't known. */
