@@ -11,6 +11,10 @@
     <link rel="preload" as="image" type="image/webp" href="/mystery-question.webp" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#FFEDA0" />
+    <!-- The WTF yellow from the very first paint, before the app's own styles
+         load: iPhone Safari's status strip is this colour, so the page's top
+         edge must be too. Keep in step with theme-color and --warm-base. -->
+    <style>html, body { background: #FFEDA0; }</style>
     <title>What The Fudge Trivia</title>
     <meta name="description" content="Each clue belongs to one of two ridiculous categories. Finish the puzzle, compare scores, and share without spoilers." />
     <link rel="canonical" href="https://whatthefudge.gg/" />
