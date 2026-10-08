@@ -108,6 +108,16 @@
    list never makes the menu jump. */
 #arc-sort-select { width: 176px; }
 
+/* Art: Quiz Art | Fudge Art, the same pills as the status filters. From
+   600px it shares the search's row, on its right, so the filters and menus
+   keep their own row as before; on phones it is the last row (below). */
+.arc-artview-pills { display: flex; gap: 6px; }
+.arc-artview .candy-pill { padding: 0 14px; }
+@media (min-width: 600px) {
+  .arc-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; }
+  .arc-tools > :not(.candy-search):not(.arc-artview) { grid-column: 1 / -1; }
+}
+
 /* A load problem the player should know about. Stays until fixed. */
 .arc-notice {
   display: flex;
@@ -299,6 +309,23 @@
   min-width: 0;
 }
 .arc-half-name.on-light { color: var(--black); text-shadow: none; }
+
+/* Quiz Art (the default view): every card's frame takes the wide quiz
+   artwork's own shape, 40:21 (the 2400x1260 upload; the real files are
+   about 1730x909), so the artwork fills it edge to edge -- `cover` trims
+   at most a few tenths of a percent, never the lettering near its edges,
+   and nothing is stretched or letterboxed. A card that falls back to its
+   fudge artwork uses the same frame, so every card in the grid matches.
+   The Fudge Art view keeps the 2:1 frame above. */
+.arc-grid.is-quiz-art .arc-art { aspect-ratio: 40 / 21; }
+.arc-art.is-wide { display: block; }
+.arc-art.is-wide img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
 
 /* The cream information strip. */
 .arc-foot {
@@ -498,6 +525,7 @@
   .arc-topic-clear svg { width: 14px; height: 14px; }
   .arc-select-label { font-size: 14px; }
   #arc-sort-select { width: 164px; }
+  .arc-artview .candy-pill { padding: 0 13px; }
 
   .arc-empty { border-radius: 20px; padding: 22px 20px; }
   .arc-empty-title { font-size: 18px; }
@@ -541,6 +569,13 @@
   .arc-topic .arc-select-label { margin-right: 0; }
   .arc-topic-select,
   #arc-sort-select { width: 100%; max-width: none; padding-left: 14px; padding-right: 34px; font-size: 14px; }
+  /* Art is one row under Topic and Sort: its label, then its two pills
+     sharing the rest. */
+  .arc-artview { order: 1; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12px; }
+  .arc-artview .arc-select-label { grid-column: auto; }
+  .arc-notice { order: 2; }
+  .arc-artview-pills { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .arc-artview .candy-pill { padding: 0 8px; font-size: 14px; }
   .arc-topic-chevron { right: 12px; }
   .arc-meta { row-gap: 6px; }
   .arc-toast { padding: 10px 10px 10px 14px; }

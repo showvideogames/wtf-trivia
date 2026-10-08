@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  ARCHIVE_ART_KEY,
+  ARCHIVE_ART_VIEWS,
   ARCHIVE_SORTS,
   MIN_RANKED_PLAYS,
   archivePuzzles,
@@ -8,6 +10,8 @@ import {
   matchesArchiveSearch,
   playCount,
   puzzleAccuracy,
+  readArchiveArtView,
+  saveArchiveArtView,
   sortArchive,
   sortAvailable,
 } from "./archiveList.js";
@@ -164,17 +168,29 @@ describe("archive topic filter", () => {
   const records = { a: { completed: true }, c: { completed: false, answers: [{}] } };
   const ids = (list) => list.map((p) => p.id);
 
-  it("counts every used topic, in the topic list order", () => {
+  it("counts every used topic, the most used first and ties alphabetically", () => {
     expect(archiveTopicCounts(puzzles).map((t) => [t.id, t.count])).toEqual([
-      ["music", 2],
       ["gaming", 2],
+      ["music", 2],
       ["food", 1],
+    ]);
+  });
+
+  it("orders by count from the data, not the topic list order", () => {
+    const list = [
+      g("x1", "2026-02-01", { tags: ["toys", "sports"] }),
+      g("x2", "2026-02-02", { tags: ["toys", "art"] }),
+      g("x3", "2026-02-03", { tags: ["toys", "art"] }),
+      g("x4", "2026-02-04", { tags: ["animals"] }),
+    ];
+    expect(archiveTopicCounts(list).map((t) => [t.label, t.count])).toEqual([
+      ["Toys", 3], ["Art", 2], ["Animals", 1], ["Sports", 1],
     ]);
   });
 
   it("counts a multiply tagged puzzle once under each of its topics", () => {
     const counts = archiveTopicCounts([puzzles[0]]);
-    expect(counts.map((t) => [t.id, t.count])).toEqual([["music", 1], ["gaming", 1]]);
+    expect(counts.map((t) => [t.id, t.count])).toEqual([["gaming", 1], ["music", 1]]);
     // so the topic totals can exceed the number of puzzles
     expect(archiveTopicCounts(puzzles).reduce((n, t) => n + t.count, 0)).toBe(5);
   });
@@ -187,7 +203,7 @@ describe("archive topic filter", () => {
   });
 
   it("gives labels and emoji for the menu", () => {
-    expect(archiveTopicCounts(puzzles)[0]).toMatchObject({ id: "music", label: "Music", emoji: "🎵", count: 2 });
+    expect(archiveTopicCounts(puzzles)[1]).toMatchObject({ id: "music", label: "Music", emoji: "🎵", count: 2 });
   });
 
   it("handles Made Up like any other topic: counts, filter and search", () => {
@@ -197,9 +213,9 @@ describe("archive topic filter", () => {
       g("g", "2026-01-07", { themeTitle: "Real Word or Not?", tags: ["words_language", "made-up"] }),
     ];
     expect(archiveTopicCounts(list).map((t) => [t.id, t.count])).toEqual([
-      ["music", 2], ["gaming", 2], ["food", 1], ["animals", 1], ["words_language", 1], ["made-up", 2],
+      ["gaming", 2], ["made-up", 2], ["music", 2], ["animals", 1], ["food", 1], ["words_language", 1],
     ]);
-    expect(archiveTopicCounts(list).at(-1)).toMatchObject({ label: "Made Up", emoji: "🙄" });
+    expect(archiveTopicCounts(list)[1]).toMatchObject({ label: "Made Up", emoji: "🙄" });
     expect(ids(filterArchive(list, records, { topic: "made-up" }))).toEqual(["f", "g"]);
     expect(ids(filterArchive(list, records, { query: "made up" }))).toEqual(["f", "g"]);
     expect(ids(filterArchive(list, records, { query: "MADE" }))).toEqual(["f", "g"]);
@@ -483,5 +499,38 @@ describe("sortArchive", () => {
       archiveTopicCounts(sortArchive(puzzles, sort, { stats: {}, favoriteCounts: { a: 1 } }));
       expect(archiveTopicCounts(puzzles)).toEqual(before);
     }
+  });
+});
+
+describe("archive art view preference", () => {
+  const memory = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)) }; };
+
+  it("defaults to Quiz Art", () => {
+    expect(readArchiveArtView(memory())).toBe("quiz");
+    expect(ARCHIVE_ART_VIEWS.map((v) => v.label)).toEqual(["Quiz Art", "Fudge Art"]);
+  });
+
+  it("remembers the choice", () => {
+    const s = memory();
+    saveArchiveArtView("fudge", s);
+    expect(s.getItem(ARCHIVE_ART_KEY)).toBe("fudge");
+    expect(readArchiveArtView(s)).toBe("fudge");
+    saveArchiveArtView("quiz", s);
+    expect(readArchiveArtView(s)).toBe("quiz");
+  });
+
+  it("treats anything unknown as Quiz Art", () => {
+    const s = memory();
+    s.setItem(ARCHIVE_ART_KEY, "tall");
+    expect(readArchiveArtView(s)).toBe("quiz");
+    saveArchiveArtView("tall", s);
+    expect(s.getItem(ARCHIVE_ART_KEY)).toBe("quiz");
+  });
+
+  it("works without storage, or with storage that throws", () => {
+    const broken = { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } };
+    expect(readArchiveArtView(broken)).toBe("quiz");
+    expect(() => saveArchiveArtView("fudge", broken)).not.toThrow();
+    expect(readArchiveArtView(null)).toBe("quiz");
   });
 });

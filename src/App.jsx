@@ -45,7 +45,7 @@ import ResultsScore from "./ResultsScore.jsx";
 import CandyPageShell from "./CandyPageShell.jsx";
 import CategoryArtImage from "./CategoryArtImage.jsx";
 import { HomeBigButton, HomeCandyArt, HomeDonePanel, HomeFoot, HomeHeading, HomeHero, HomeLinks, HomePage, HomeUpNext } from "./Home.jsx";
-import { ARCHIVE_FILTERS, archivePuzzles, archiveTopicCounts, filterArchive, playCount, sortArchive, sortAvailable } from "./archiveList.js";
+import { ARCHIVE_ART_VIEWS, ARCHIVE_FILTERS, archivePuzzles, archiveTopicCounts, filterArchive, playCount, readArchiveArtView, saveArchiveArtView, sortArchive, sortAvailable } from "./archiveList.js";
 import { emptyFavorites, toggleFavorite } from "./archiveFavorites.js";
 import ArchiveTopicFilter from "./ArchiveTopicFilter.jsx";
 import ArchiveSortMenu from "./ArchiveSortMenu.jsx";
@@ -70,6 +70,7 @@ import {
   devPlayer,
   devCurrentPlayer,
   devBootCheck,
+  devFixtureGameRows,
   devGetRecord,
   devGetAllRecords,
   devInitRecord,
@@ -1966,7 +1967,11 @@ async function prepareImageForSave(value, options, archiveExternal=false){
 
 // ===== DB FUNCTIONS — GAMES =====
 async function dbLoadGames(){
-  if(OFFLINE_PREVIEW){ await devBootCheck(); return devMergeSavedGames(devDemoGames(), rowToGame); }
+  if(OFFLINE_PREVIEW){
+    await devBootCheck();
+    const fixture = await devFixtureGameRows();
+    return devMergeSavedGames(fixture ? fixture.map(rowToGame) : devDemoGames(), rowToGame);
+  }
   const rows = await sbFetch("/rest/v1/games?select=*&order=date.desc");
   return (rows||[]).map(rowToGame);
 }
@@ -2814,9 +2819,14 @@ function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onS
   const artworkUrl = game ? puzzleArtworkUrl(game) : null;
   const wideUrl = game ? wideArtworkUrl(game) : null;
   const opensAt = upNext ? releaseTime(upNext.date)?.getTime() : null;
+  // Once today is finished, Home reads top to bottom as today's puzzle --
+  // its wide artwork and the score -- and then the next one under its own
+  // heading: "Tomorrow's puzzle" when it opens tomorrow, else "Up next".
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  const nextTitle = upNext?.date===gameDayKey(tomorrow) ? "Tomorrow’s puzzle" : "Up next";
   const next = upNext&&opensAt&&(
     <HomeUpNext game={upNext} colors={categoryColors(upNext)} wideUrl={wideArtworkUrl(upNext)} squareUrl={puzzleArtworkUrl(upNext)}
-      opensAt={opensAt} onOpen={onNextDay}/>
+      opensAt={opensAt} onOpen={onNextDay} title={nextTitle}/>
   );
   const foot = (stats.currentStreak>0||!signedIn)&&(
     <HomeFoot>
@@ -2831,7 +2841,8 @@ function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onS
     <HomePage>
       {game?(
         <>
-          <HomeHero game={game} colors={categoryColors(game)} artworkUrl={artworkUrl} wideUrl={wideUrl} eyebrow={<>Today&rsquo;s puzzle</>}/>
+          <HomeHero game={game} colors={categoryColors(game)} artworkUrl={artworkUrl} wideUrl={wideUrl} preferWide={done}
+            eyebrow={done?<>Today&rsquo;s puzzle &middot; Completed</>:<>Today&rsquo;s puzzle</>}/>
           {done?(
             <HomeDonePanel score={gameRecord.score} total={gameRecord.totalQuestions}
               message={scoreMsg(gameRecord.score, gameRecord.totalQuestions||1)}
@@ -3867,11 +3878,25 @@ function ArchiveArtHalf({name,image,color,loading}){
   );
 }
 
-// The card artwork is always the two category images, A on the left and B
-// on the right. The wide header image isn't used here (or on Home).
-function ArchiveCardArt({game,eager}){
+// The card artwork. In the Quiz Art view (the default) it is the puzzle's
+// own wide quiz artwork, filling the card's wide frame (archive.css: the
+// frame has the artwork's own shape, so nothing is stretched, boxed or
+// noticeably cropped). A puzzle without wide artwork, or whose artwork fails
+// to load, shows its fudge artwork instead: the two category images, A on
+// the left and B on the right -- which is all the Fudge Art view shows.
+function ArchiveCardArt({game,eager,artView}){
   const loading = eager?"eager":"lazy";
+  const wide = artView==="quiz" ? wideArtworkUrl(game) : null;
+  const [failedWide,setFailedWide] = useState(null);
   const [colA, colB] = categoryColors(game);
+  if(wide && failedWide!==wide){
+    return(
+      <div className="arc-art is-wide">
+        <img src={wide} alt={`${game.categoryA} or ${game.categoryB}`} loading={loading} decoding="async"
+             onError={()=>setFailedWide(wide)}/>
+      </div>
+    );
+  }
   return(
     <div className="arc-art">
       <ArchiveArtHalf name={game.categoryA} image={game.categoryAImage} color={colA} loading={loading}/>
@@ -3938,7 +3963,7 @@ function PlaysGlyph(){
 // plays: the puzzle's play count (playCount, archiveList.js), or null while
 // the community stats load or when they couldn't (no count rather than a
 // wrong one).
-function ArchiveCard({game,record,isToday,onAction,eager,favorite,plays=null}){
+function ArchiveCard({game,record,isToday,onAction,eager,favorite,plays=null,artView="quiz"}){
   const done = Boolean(record?.completed);
   const retired = game.status==="retired";
   const canReplay = !retired && game.questions?.length>0;
@@ -3953,7 +3978,7 @@ function ArchiveCard({game,record,isToday,onAction,eager,favorite,plays=null}){
   };
   return(
     <li className={`arc-card${action?" is-actionable":""}${retired?" is-retired":""}`} onClick={onCardClick}>
-      <ArchiveCardArt game={game} eager={eager}/>
+      <ArchiveCardArt game={game} eager={eager} artView={artView}/>
       <div className="arc-foot">
         <div className="arc-text">
           <h2 className="arc-card-title">{game.themeTitle}</h2>
@@ -3999,6 +4024,9 @@ function ArchiveScreen({games,playerId,onReplay,onPlayToday}){
   const[filterChoice,setFilter]=useState("all");
   const[topicChoice,setTopicChoice]=useState("all");
   const[sortChoice,setSortChoice]=useState("newest");
+  // Quiz Art / Fudge Art, remembered in this browser (archiveList.js).
+  const[artView,setArtViewState]=useState(readArchiveArtView);
+  const setArtView=view=>{ setArtViewState(view); saveArchiveArtView(view); };
   // Favorites (see archiveFavorites.js). The ref is the source of truth for
   // the toggle, so a second press before React re-renders is still seen
   // as "in progress".
@@ -4109,6 +4137,17 @@ function ArchiveScreen({games,playerId,onReplay,onPlayToday}){
               <input type="search" value={query} onChange={e=>setQuery(e.target.value)}
                      placeholder="Search puzzles…" autoComplete="off" spellCheck="false"/>
             </label>
+            {/* Quiz Art / Fudge Art: beside the search from 600px, under
+                Topic and Sort on phones (archive.css). */}
+            <div className="arc-select arc-artview" role="group" aria-labelledby="arc-artview-label">
+              <span className="arc-select-label" id="arc-artview-label">Art</span>
+              <div className="arc-artview-pills">
+                {ARCHIVE_ART_VIEWS.map(v=>(
+                  <button key={v.id} type="button" className="candy-pill" aria-pressed={artView===v.id}
+                          onClick={()=>setArtView(v.id)}>{v.label}</button>
+                ))}
+              </div>
+            </div>
             <div className="arc-tools-row">
               <div className="arc-filters" role="group" aria-label="Show puzzles">
                 {ARCHIVE_FILTERS.map(f=>{
@@ -4150,10 +4189,11 @@ function ArchiveScreen({games,playerId,onReplay,onPlayToday}){
             <button type="button" className="candy-pill" onClick={showAll}>Show all puzzles</button>
           </div>
         ):(
-          <ul className="arc-grid">
+          <ul className={artView==="quiz"?"arc-grid is-quiz-art":"arc-grid"}>
             {shown.map((g,i)=>(
               <ArchiveCard key={g.id} game={g} record={records[g.id]} isToday={g===todayGame}
-                           onAction={g===todayGame?onPlayToday:onReplay} eager={i<4} favorite={favoriteFor(g)} plays={playsFor(g)}/>
+                           onAction={g===todayGame?onPlayToday:onReplay} eager={i<4} favorite={favoriteFor(g)} plays={playsFor(g)}
+                           artView={artView}/>
             ))}
           </ul>
         )}
