@@ -3074,8 +3074,11 @@ function catSizeClass(text){
   return"xl";
 }
 
-// How many data-fit steps a phone reveal may take (paperLook.css).
+// How many data-fit steps a phone reveal may take (paperLook.css), and the
+// overflow a locked phone game absorbs (inside its bottom padding) before
+// it counts as not fitting and the emergency scroll fallback switches on.
 const REVEAL_FIT_STEPS=8;
+const FIT_TOLERANCE_PX=2;
 
 // Matches the wide desktop answer row in game.css.
 const WIDE_ANSWER_ROW_MQ="(min-width: 1100px)";
@@ -3278,47 +3281,96 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
     primeActiveWindow(getPuzzleImageUrls(game), idx, game.id);
   },[game, idx]);
 
-  // Every question starts at the top of the page: when a game opens (new or
-  // resumed) and after each Next, so the browser never carries an old scroll
-  // position into a question and clips its top. Instant and before paint, so
-  // there is no visible jump or scroll animation.
+  // Every question starts at the top: when a game opens (new or resumed) and
+  // after each Next, so an old scroll position never carries into a question
+  // and clips its top. Both the page and the locked phone shell (below,
+  // which is what scrolls in its emergency fallback) are reset. Instant and
+  // before paint, so there is no visible jump or scroll animation.
   useLayoutEffect(()=>{
     window.scrollTo({top:0, left:0, behavior:"instant"});
+    document.querySelector(".app.gp-fullscreen")?.scrollTo({top:0, left:0, behavior:"instant"});
   },[idx]);
 
-  // Phones: the reveal fits the screen (paperLook.css, Phones: one screen).
-  // While it overflows, the reveal steps down one data-fit level at a time --
-  // gaps, the info cards, the header and paper, the verdict, and only last
-  // the media -- until it fits or the last step is reached, and only then may
-  // the page scroll. Measured here, before paint, and set straight on the
-  // element, since it is a measurement of the rendered page. The reveal's own
-  // box is measured (its scroll height is in its own coordinates), so its
-  // entrance scale doesn't skew the result.
-  // Re-measured when the screen size changes, when any block of the reveal
-  // changes size (a still's real proportions arrive after it loads), and
-  // once the web fonts load.
+  // Phones: active gameplay is locked to the visible screen (paperLook.css,
+  // Phones: one screen). <html> gets gp-lock, which pins the shell
+  // (.app.gp-fullscreen) to the viewport -- position: fixed, inset: 0, the
+  // visual viewport's height in --gp-vvh -- and stops the page itself from
+  // scrolling or bouncing. On the reveal, while the content overflows the
+  // shell it steps down one data-fit level at a time -- gaps, the info
+  // cards, the header and paper, the verdict, and only last the media --
+  // until it fits or the last step is reached. Only content that still
+  // doesn't fit after every step (a genuinely short screen) switches on the
+  // emergency fallback, gp-scroll, which lets the shell scroll; nothing else
+  // can make a phone game scroll.
+  // Measured here, before paint, and set straight on the elements, since it
+  // is a measurement of the rendered page. The reveal's own box is measured
+  // (its scroll height is in its own coordinates), so its entrance scale
+  // doesn't skew the result. Re-measured when the screen or visual viewport
+  // changes size, when any block of the reveal changes size (a still's real
+  // proportions arrive after it loads), and once the web fonts load.
   const wrapRef=useRef(null);
   useLayoutEffect(()=>{
     const wrap=wrapRef.current;
     if(!wrap) return;
-    wrap.removeAttribute("data-fit");
-    if(!PAPER_LOOK||phase!=="reveal") return;
+    const root=document.documentElement;
+    const shell=wrap.closest(".app.gp-fullscreen");
     const phone=window.matchMedia("(max-width: 599px)");
-    const fit=()=>{
-      const reveal=wrap.querySelector(".gp-reveal");
+    const vv=window.visualViewport;
+    const unlock=()=>{
+      root.classList.remove("gp-lock","gp-scroll");
+      root.style.removeProperty("--gp-vvh");
       wrap.removeAttribute("data-fit");
-      if(!phone.matches||!reveal) return;
-      for(let level=1; level<=REVEAL_FIT_STEPS && reveal.scrollHeight>reveal.clientHeight+1; level++){
-        wrap.setAttribute("data-fit",String(level));
+    };
+    // The visible height at normal zoom (a pinch-zoom shrinks vv.height).
+    const visibleHeight=()=>Math.round(vv?vv.height*vv.scale:window.innerHeight);
+    let fittedHeight=null;
+    const fit=()=>{
+      if(!PAPER_LOOK||!shell||!phone.matches){ unlock(); return; }
+      // A re-fit never unlocks the page, even for a moment: it only resets
+      // the steps and the fallback, then measures again.
+      root.classList.remove("gp-scroll");
+      wrap.removeAttribute("data-fit");
+      fittedHeight=visibleHeight();
+      root.style.setProperty("--gp-vvh",`${fittedHeight}px`);
+      root.classList.add("gp-lock");
+      // How far the content runs past its box, from layout positions only,
+      // which transforms don't affect (the reveal's entrance scale, the Next
+      // button's breathing), so the result never depends on the moment of
+      // an animation it is measured in. Positions are taken relative to the
+      // reveal itself: while its entrance transform runs it is its blocks'
+      // offset parent, and afterwards it isn't.
+      const reveal=phase==="reveal"?wrap.querySelector(".gp-reveal"):null;
+      const overflow=()=>{
+        if(!reveal) return wrap.scrollHeight-wrap.clientHeight;
+        let bottom=0;
+        for(const block of reveal.children){
+          const top=block.offsetParent===reveal?block.offsetTop:block.offsetTop-reveal.offsetTop;
+          bottom=Math.max(bottom,top+block.offsetHeight);
+        }
+        return bottom-reveal.clientHeight;
+      };
+      if(reveal){
+        for(let level=1; level<=REVEAL_FIT_STEPS && overflow()>1; level++){
+          wrap.setAttribute("data-fit",String(level));
+        }
       }
+      // The fallback is decided only once the web fonts have loaded: until
+      // then the copy may be set in a stand-in face (the italic commentary
+      // face loads on first use) and wrap differently, which must not
+      // briefly make a fitting screen scrollable. fonts.ready re-fits.
+      const fontsSettled=!document.fonts||document.fonts.status==="loaded";
+      if(fontsSettled&&overflow()>FIT_TOLERANCE_PX) root.classList.add("gp-scroll");
     };
     fit();
     const ro=typeof ResizeObserver!=="undefined"?new ResizeObserver(fit):null;
     ro?.observe(wrap);
     for(const block of wrap.querySelector(".gp-reveal")?.children||[]) ro?.observe(block);
+    // Visual viewport events re-fit only when the visible height has changed.
+    const onViewport=()=>{ if(visibleHeight()!==fittedHeight) fit(); };
+    vv?.addEventListener("resize",onViewport);
     let live=true;
     document.fonts?.ready?.then(()=>{ if(live) fit(); });
-    return ()=>{ live=false; ro?.disconnect(); };
+    return ()=>{ live=false; ro?.disconnect(); vv?.removeEventListener("resize",onViewport); unlock(); };
   },[phase,idx]);
 
   // Guard: once we've advanced past the last question, stop rendering question/reveal UI.
