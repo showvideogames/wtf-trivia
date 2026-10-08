@@ -359,8 +359,14 @@
    browser's toolbars show), and the page scrolls only as a last resort, on
    genuinely small screens or with unusually long copy.
 
-   1. The shell is exactly 100svh tall in both phases, so .gp-wrap is a flex
-      column with a real ceiling.
+   1. The shell is locked to the visible screen in both phases (html.gp-lock,
+      set by GameScreen): position: fixed, inset: 0, the visual viewport's
+      own height (--gp-vvh; 100dvh until it is known), and the page itself
+      can't scroll or bounce. So .gp-wrap is a flex column with a real
+      ceiling, and everything -- safe-area padding, shadows, the Next button
+      and its breathing scale -- stays inside it. Only content that still
+      doesn't fit after every step below (a genuinely short screen) turns on
+      the emergency fallback, html.gp-scroll, which lets the shell scroll.
    2. By viewport height alone, identically in both phases, the stack above
       the choices tightens and the info cards' type steps down:
         800px and under  tighter gaps, a smaller header and matchup bar, the
@@ -383,11 +389,40 @@
       Until step 8 the media keeps its own full size (16:9 for video; stills
       up to their cap, framed round the image), and it is never distorted. */
 @media (max-width: 599px) {
-  .app.gp-fullscreen:has(.gp-wrap.gp-paper.gp-q),
-  .app.gp-fullscreen:has(.gp-wrap.gp-paper.gp-r) {
-    height: 100vh;
-    height: 100svh;
+  /* Locked: the page never scrolls; the shell is the visible screen. */
+  html.gp-lock,
+  html.gp-lock body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  html.gp-lock body { min-height: 0; }
+  html.gp-lock .app.gp-fullscreen:has(.gp-wrap.gp-paper) {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--gp-vvh, 100dvh);
     min-height: 0;
+    /* clip, not just hidden: a clipped box is not a scroll container at
+       all, so nothing (a drag, the Next button's breathing scale reaching
+       past its box) can move it even a pixel. */
+    overflow: hidden;
+    overflow: clip;
+    overscroll-behavior: none;
+  }
+  /* Emergency fallback only: the shell (never the page) scrolls, with a
+     little room after the last control. */
+  html.gp-lock.gp-scroll .app.gp-fullscreen:has(.gp-wrap.gp-paper) {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  html.gp-scroll .gp-paper .gp-reveal::after,
+  html.gp-scroll .gp-paper .gp-qmod::after {
+    content: "";
+    flex: none;
+    height: 12px;
   }
   @supports (height: 100svh) {
     .gp-wrap.gp-paper.gp-q .ans-box {
@@ -425,8 +460,8 @@
   /* ----- Reveal fit steps (GameScreen sets data-fit) ----- */
   /* 1: gaps */
   .gp-wrap.gp-paper:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-reveal { margin-top: 6px; }
-  .gp-wrap.gp-paper:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-reveal > .gp-media { margin-bottom: 7px; }
-  .gp-wrap.gp-paper:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-verdict { margin-bottom: 7px; }
+  .gp-wrap.gp-paper:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-reveal > .gp-media { margin-bottom: 6px; }
+  .gp-wrap.gp-paper:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-verdict { margin-bottom: 6px; }
   .gp-wrap.gp-paper:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-panel { margin-bottom: 5px; }
   .gp-wrap.gp-paper:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-next.btn { margin-top: 3px; margin-bottom: 1px; }
   /* 2: card padding, and the cards closer together */
@@ -476,11 +511,15 @@
   .app.gp-fullscreen:has(.gp-wrap.gp-paper) .sh-icon-btn,
   .app.gp-fullscreen:has(.gp-wrap.gp-paper) .sh-account { width: 38px; height: 38px; min-height: 38px; }
   .gp-wrap.gp-paper,
-  .gp-wrap.gp-paper.gp-q { --pp-scale: 0.92; padding-top: 8px; }
+  .gp-wrap.gp-paper.gp-q {
+    --pp-scale: 0.92;
+    padding-top: 8px;
+    padding-bottom: max(8px, calc(env(safe-area-inset-bottom, 0px) + 6px));
+  }
   .gp-paper .gp-mu-bar { height: 56px; }
   .gp-paper .gp-mu-or-art { width: 40px; height: 40px; }
-  .gp-wrap.gp-paper .gp-progress { gap: 2px; margin-top: 8px; }
-  .gp-paper .gp-prompt { margin-top: 8px; }
+  .gp-wrap.gp-paper .gp-progress { gap: 2px; margin-top: 6px; }
+  .gp-paper .gp-prompt { margin-top: 6px; }
   .gp-paper .gp-qmod,
   .gp-wrap.gp-paper.gp-q > .gp-qmod { margin-top: 14px; }
   .gp-paper .gp-reveal { margin-top: 10px; }
