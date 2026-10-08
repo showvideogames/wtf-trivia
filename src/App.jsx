@@ -179,7 +179,7 @@ const styles = `
     pointer-events: none;
     /* The PAGE is yellow. A soft cream light sits behind the game, fading
        outward back into yellow at the top, sides and bottom. */
-    background-color: #FFF0A8;
+    background-color: var(--warm-base);
     background-image:
       /* Cream spotlight behind the central interface. */
       radial-gradient(ellipse 52% 38% at 50% 33%,

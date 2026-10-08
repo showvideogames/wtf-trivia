@@ -32,7 +32,7 @@
   inset: 0;
   z-index: -2;
   pointer-events: none;
-  background-color: var(--cs-custard);
+  background-color: var(--warm-base, #FFEDA0);
   background-image:
     radial-gradient(ellipse 46% 34% at 50% 14%,
       rgba(255, 251, 236, 0.96) 0%,

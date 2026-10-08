@@ -91,3 +91,48 @@
     box-shadow: 0 0 0 3px var(--black), 0 10px 0 3px rgba(0, 0, 0, 0.16);
   }
 }
+
+/* ===== TOP BOUNDARY (iPhone status strip) =====
+   iPhone Safari never draws the page behind the status bar: it paints its
+   own strip above the page in the page colour, #FFEDA0 (index.html sets it
+   on html and body, theme-color matches, --warm-base everywhere else). So the
+   page's top edge has to be that same solid yellow, or the strip meets a
+   slightly different colour -- a cream spotlight, a brand shape, a candy --
+   in a visible horizontal line. Each backdrop's glow gets a solid band of
+   the yellow across the top that fades into the glow below it, and the
+   decoration layer (edge shapes, candies, sprinkles) fades in under that
+   band. Nothing moves; only the colour at the top edge changes. Contained
+   mode (Admin Preview's stage) is not the top of a screen, so it keeps its
+   layers as they are. */
+:root {
+  --top-solid: max(4px, env(safe-area-inset-top, 0px));
+  --top-band: calc(env(safe-area-inset-top, 0px) + 48px);
+}
+.cps-glow::before,
+.gp-bg::before,
+.landing-bg::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--top-band);
+  background: linear-gradient(180deg,
+    var(--warm-base, #FFEDA0) 0,
+    var(--warm-base, #FFEDA0) var(--top-solid),
+    rgba(255, 237, 160, 0) 100%);
+  pointer-events: none;
+}
+.cps-decor,
+.gp-shapes,
+.candy-bg {
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, transparent var(--top-solid), #000 var(--top-band));
+  mask-image: linear-gradient(180deg, transparent 0, transparent var(--top-solid), #000 var(--top-band));
+}
+.cbd-contained .gp-bg::before,
+.cbd-contained .landing-bg::before { content: none; }
+.cbd-contained .gp-shapes,
+.cbd-contained .candy-bg {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
