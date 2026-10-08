@@ -137,13 +137,16 @@ function useShortHero(probeRef, enabled) {
 // it, and the wide artwork keeps its natural proportions, never cropped or
 // stretched, with nothing drawn over it. With no artwork, or artwork that
 // fails to load, the visible title and the category matchup show instead
-// of a broken image.
-export function HomeHero({ game, colors, artworkUrl, wideUrl = null, eyebrow }) {
+// of a broken image. `preferWide` (today's puzzle once it is finished)
+// shows the wide artwork whenever the puzzle has it, on every screen; the
+// square poster, then the matchup, are its fallbacks.
+export function HomeHero({ game, colors, artworkUrl, wideUrl = null, eyebrow, preferWide = false }) {
   const [failed, setFailed] = useState(() => new Set());
   const probeRef = useRef(null);
   const square = artworkUrl && !failed.has(artworkUrl) ? artworkUrl : null;
   const wide = wideUrl && !failed.has(wideUrl) ? wideUrl : null;
-  const short = useShortHero(probeRef, Boolean(square && wide));
+  const pickByHeight = Boolean(square && wide && !preferWide);
+  const short = useShortHero(probeRef, pickByHeight);
   const fail = (src) => setFailed((s) => new Set(s).add(src));
   if (!square && !wide) {
     return (
@@ -154,7 +157,7 @@ export function HomeHero({ game, colors, artworkUrl, wideUrl = null, eyebrow }) 
     );
   }
   const alt = game.themeTitle?.trim() || `${game.categoryA} or ${game.categoryB}`;
-  const useWide = Boolean(wide) && (!square || short === true);
+  const useWide = Boolean(wide) && (!square || preferWide || short === true);
   const src = useWide ? wide : square;
   return (
     <>
@@ -164,7 +167,7 @@ export function HomeHero({ game, colors, artworkUrl, wideUrl = null, eyebrow }) 
       <div className={useWide ? "hm-artwork is-wide" : "hm-artwork"}>
         {short !== null && <img key={src} src={src} alt={alt} decoding="async" onError={() => fail(src)}/>}
       </div>
-      {square && wide && <div className="hm-art-probe" ref={probeRef} aria-hidden="true"/>}
+      {pickByHeight && <div className="hm-art-probe" ref={probeRef} aria-hidden="true"/>}
     </>
   );
 }
@@ -303,17 +306,18 @@ function UpNextArt({ game, colors, wideUrl, squareUrl }) {
   );
 }
 
-// Up Next, under today's action: the label, a countdown to the moment the
+// Up Next, under today's action: the label (`title`: "Up next", or
+// "Tomorrow's puzzle" when it opens tomorrow), a countdown to the moment the
 // next published puzzle opens (`opensAt`, ms), and that puzzle's artwork.
 // Nothing else. `onOpen` runs when the countdown reaches zero, so Home can
 // move on to the new day. The countdown says its time to screen readers in
 // words, to the minute; the ticking digits stay silent.
-export function HomeUpNext({ game, colors, wideUrl, squareUrl, opensAt, onOpen }) {
+export function HomeUpNext({ game, colors, wideUrl, squareUrl, opensAt, onOpen, title = "Up next" }) {
   const left = useCountdown(opensAt, onOpen);
   const groups = countdownGroups(left);
   return (
     <section className="hm-next" aria-labelledby="hm-next-title">
-      <h2 className="hm-next-title" id="hm-next-title">Up next</h2>
+      <h2 className="hm-next-title" id="hm-next-title">{title}</h2>
       <div className="hm-next-clock" role="timer" aria-label={`Opens in ${countdownWords(left)}`}>
         {groups.map((g, i) => (
           <span key={g.unit} className="hm-next-group" aria-hidden="true">

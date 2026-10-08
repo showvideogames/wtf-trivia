@@ -18,6 +18,29 @@ export const ARCHIVE_FILTERS = [
   { id: "favorites", label: "Favorites" },
 ];
 
+// The cards' artwork, the player's choice: each puzzle's wide quiz artwork
+// (its own fudge artwork when it has none), or always the fudge artwork --
+// the two category images side by side. Quiz Art is the default. The choice
+// is a display preference only, remembered in this browser (localStorage);
+// where storage is unavailable it simply lasts for the visit.
+export const ARCHIVE_ART_VIEWS = [
+  { id: "quiz", label: "Quiz Art" },
+  { id: "fudge", label: "Fudge Art" },
+];
+export const ARCHIVE_ART_KEY = "wtf-archive-art";
+
+export function readArchiveArtView(storage = globalThis.localStorage) {
+  try {
+    return storage?.getItem(ARCHIVE_ART_KEY) === "fudge" ? "fudge" : "quiz";
+  } catch {
+    return "quiz";
+  }
+}
+
+export function saveArchiveArtView(view, storage = globalThis.localStorage) {
+  try { storage?.setItem(ARCHIVE_ART_KEY, view === "fudge" ? "fudge" : "quiz"); } catch { /* the choice lasts this visit */ }
+}
+
 export const ARCHIVE_SORTS = [
   { id: "newest", label: "Newest first" },
   { id: "oldest", label: "Oldest first" },
@@ -64,15 +87,18 @@ export function hasTopic(game, topic) {
 }
 
 // The topic menu: every topic carried by at least one puzzle in the list,
-// with how many carry it, in the TOPICS order. Callers pass the whole
-// Archive (before search and filters) so the counts hold still while typing.
-// A puzzle with several topics counts once under each.
+// with how many carry it, the most used first; topics with the same count
+// go alphabetically. Callers pass the whole Archive (before search and
+// filters) so the counts and the order hold still while typing. A puzzle
+// with several topics counts once under each.
 export function archiveTopicCounts(puzzles) {
   const counts = new Map();
   for (const g of puzzles) {
     for (const id of normalizeTags(g.tags)) counts.set(id, (counts.get(id) || 0) + 1);
   }
-  return TOPICS.filter((t) => counts.has(t.id)).map((t) => ({ ...t, count: counts.get(t.id) }));
+  return TOPICS.filter((t) => counts.has(t.id))
+    .map((t) => ({ ...t, count: counts.get(t.id) }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "en", { sensitivity: "base" }));
 }
 
 // Search, the All / Unplayed / Completed / Favorites filter and the topic

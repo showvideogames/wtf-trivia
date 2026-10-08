@@ -646,6 +646,21 @@ export async function devBootCheck() {
   if (mode === "hang") await new Promise(() => {});
 }
 
+// localStorage "wtf-dev-games" = "fixture" swaps the demo puzzles for real
+// game rows saved in the git-ignored fixtures.local/live-games.json (a
+// read-only copy of the games table), for reviewing with the real artwork
+// and topics. Plays and favorites still stay in this browser only. Null
+// when the switch is off or the file is missing.
+export async function devFixtureGameRows() {
+  let mode = null;
+  try { mode = localStorage.getItem("wtf-dev-games"); } catch { /* ignore */ }
+  if (mode !== "fixture") return null;
+  try {
+    const res = await fetch("/fixtures.local/live-games.json");
+    return res.ok ? await res.json() : null;
+  } catch { return null; }
+}
+
 export function devGetRecord(puzzleId) {
   return readJSON(RECORD_KEY, {})[puzzleId] || null;
 }
