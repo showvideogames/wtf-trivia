@@ -8,13 +8,9 @@
    prefixed so it outranks the matching rule in game.css whatever the load
    order. */
 
-/* ---------- Header: the logo without TRIVIA on phones ---------- */
-/* The picture only wraps the logo for the media switch; the image itself
-   stays the grid item and keeps its .sh-logo sizing. */
-.sh-logo-pic { display: contents; }
-.sh-logo-pic source { display: none; }
+/* ---------- Header: a slightly smaller wordmark on phones ---------- */
 @media (max-width: 599px) {
-  .sh-logo-pic .sh-logo { height: 46px; max-width: 124px; }
+  .app.gp-fullscreen:has(.gp-wrap.gp-paper) .sh-logo { height: 46px; max-width: 124px; }
 }
 
 /* ---------- Page ---------- */
@@ -47,14 +43,16 @@
 .gp-paper .gp-mu-half .fit-text-box { text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2); }
 .gp-paper .gp-mu-half[style*="var(--black)"] .fit-text-box { text-shadow: none; }
 
-/* The brand's own OR mark, in a thin ink ring. */
+/* The brand's own OR mark, straight over the divider. The artwork already
+   draws its own circle and outline, so nothing is drawn underneath it: no
+   ring, fill or shadow from the classic yellow badge. */
 .gp-paper .gp-mu-or-art {
   width: 44px;
   height: 44px;
-  overflow: hidden;
-  border-width: 2.25px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(26, 26, 26, 0.22);
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
 }
 .gp-mu-or-art img {
   display: block;
@@ -66,25 +64,36 @@
   -webkit-user-drag: none;
 }
 
-/* ---------- Progress: secondary to the question ---------- */
-/* Same spacing in both phases (outranks the question phase's own gaps), so
-   nothing above the choices moves when the player answers. */
-.gp-wrap.gp-paper .gp-progress { gap: 6px; margin-top: 12px; }
-.gp-paper .gp-qpill {
-  padding: 0;
-  background: none;
-  color: rgba(70, 48, 12, 0.62);
-  font-size: 11.5px;
-  letter-spacing: 0.16em;
+/* ---------- Progress: secondary to the question ----------
+   One small centred row, "4 / 12" then the dots: reached dots solid teal,
+   upcoming ones cream with a teal outline; the number in the paper's warm
+   ink. Same spacing in both phases (outranks the question phase's own
+   gaps), so nothing above the choices moves when the player answers. */
+.gp-wrap.gp-paper .gp-progress {
+  flex-direction: row;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
 }
-/* 8 and 12 dots both sit comfortably on one row at 360px (12 x 9 + 11 x 6). */
+.gp-paper .gp-qpill { display: none; }
+.gp-paper .gp-qshort {
+  display: inline-block;
+  color: rgba(36, 27, 21, 0.74);
+  font-family: 'Fredoka One', cursive;
+  font-size: 12.5px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* 8 and 12 dots both sit comfortably on one row at 360px. */
 .gp-paper .gp-dots { gap: 6px; }
 .gp-paper .gp-dot {
   width: 9px;
   height: 9px;
   border-width: 1.5px;
-  border-color: rgba(34, 181, 163, 0.6);
-  background: rgba(255, 255, 255, 0.55);
+  border-color: #22B5A3;
+  background: #FFF8E6;
 }
 .gp-paper .gp-dot.is-reached {
   border-color: #189A8A;
@@ -105,7 +114,7 @@
 .gp-paper .gp-prompt {
   --pp-k: calc(var(--pp-scale, 1) * var(--pp-fit, 1));
   width: calc(min(100%, 92vw) * var(--pp-k));
-  margin: 12px auto 0;
+  margin: 10px auto 0;
 }
 .pp {
   position: relative;
@@ -336,7 +345,7 @@
 @media (min-width: 600px) {
   .gp-paper .gp-mu-bar { height: 74px; border-radius: 22px; }
   .gp-paper .gp-mu-or-art { width: 52px; height: 52px; }
-  .gp-paper .gp-qpill { font-size: 12.5px; }
+  .gp-paper .gp-qshort { font-size: 13.5px; }
   .gp-paper .gp-prompt { width: min(100%, 620px); }
   .pp { padding: 8px 34px; }
   .gp-prompt.lg .pp-text { font-size: 50px; }
@@ -477,7 +486,7 @@
   /* 5: header and matchup bar */
   .app.gp-fullscreen:has(.gp-wrap.gp-paper:is([data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"])) .ph-top { padding-top: max(6px, env(safe-area-inset-top)); }
   .app.gp-fullscreen:has(.gp-wrap.gp-paper:is([data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"])) .sh-bar { padding-top: 3px; padding-bottom: 3px; }
-  .app.gp-fullscreen:has(.gp-wrap.gp-paper:is([data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"])) .sh-logo-pic .sh-logo { height: 36px; max-width: 100px; }
+  .app.gp-fullscreen:has(.gp-wrap.gp-paper:is([data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"])) .sh-logo { height: 36px; max-width: 100px; }
   .app.gp-fullscreen:has(.gp-wrap.gp-paper:is([data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"])) .sh-icon-btn,
   .app.gp-fullscreen:has(.gp-wrap.gp-paper:is([data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"])) .sh-account { width: 36px; height: 36px; min-height: 36px; }
   .gp-wrap.gp-paper:is([data-fit="5"], [data-fit="6"], [data-fit="7"], [data-fit="8"]) .gp-mu-bar { height: 46px; }
@@ -507,7 +516,7 @@
 @media (max-width: 599px) and (max-height: 800px) {
   .app.gp-fullscreen:has(.gp-wrap.gp-paper) .ph-top { padding-top: max(8px, env(safe-area-inset-top)); }
   .app.gp-fullscreen:has(.gp-wrap.gp-paper) .sh-bar { padding-top: 4px; padding-bottom: 4px; }
-  .app.gp-fullscreen:has(.gp-wrap.gp-paper) .sh-logo-pic .sh-logo { height: 40px; max-width: 110px; }
+  .app.gp-fullscreen:has(.gp-wrap.gp-paper) .sh-logo { height: 40px; max-width: 110px; }
   .app.gp-fullscreen:has(.gp-wrap.gp-paper) .sh-icon-btn,
   .app.gp-fullscreen:has(.gp-wrap.gp-paper) .sh-account { width: 38px; height: 38px; min-height: 38px; }
   .gp-wrap.gp-paper,
@@ -518,7 +527,7 @@
   }
   .gp-paper .gp-mu-bar { height: 56px; }
   .gp-paper .gp-mu-or-art { width: 40px; height: 40px; }
-  .gp-wrap.gp-paper .gp-progress { gap: 2px; margin-top: 6px; }
+  .gp-wrap.gp-paper .gp-progress { margin-top: 6px; }
   .gp-paper .gp-prompt { margin-top: 6px; }
   .gp-paper .gp-qmod,
   .gp-wrap.gp-paper.gp-q > .gp-qmod { margin-top: 14px; }
@@ -531,8 +540,8 @@
   .gp-paper .gp-panel-body { font-size: 14.5px; line-height: 1.32; }
 }
 
-/* 700px tall and under: minimal gaps, one-row progress, a lower bar, the
-   paper at 86%, and the info cards' type another step down. */
+/* 700px tall and under: minimal gaps, a lower bar, the paper at 86%, and
+   the info cards' type another step down. */
 @media (max-width: 599px) and (max-height: 700px) {
   .gp-wrap.gp-paper,
   .gp-wrap.gp-paper.gp-q {
@@ -542,22 +551,8 @@
   }
   .gp-paper .gp-mu-bar { height: 50px; }
   .gp-paper .gp-mu-or-art { width: 38px; height: 38px; }
-  .gp-wrap.gp-paper .gp-progress {
-    flex-direction: row;
-    justify-content: center;
-    gap: 10px;
-    margin-top: 6px;
-  }
-  .gp-paper .gp-qpill { display: none; }
-  .gp-paper .gp-qshort {
-    display: inline-block;
-    color: rgba(70, 48, 12, 0.62);
-    font-family: 'Fredoka One', cursive;
-    font-size: 12px;
-    line-height: 1;
-    letter-spacing: 0.08em;
-    white-space: nowrap;
-  }
+  .gp-wrap.gp-paper .gp-progress { margin-top: 6px; }
+  .gp-paper .gp-qshort { font-size: 12px; }
   .gp-paper .gp-prompt { margin-top: 6px; }
   .gp-paper .gp-qmod,
   .gp-wrap.gp-paper.gp-q > .gp-qmod { margin-top: 12px; }
@@ -568,7 +563,9 @@
   .gp-paper .gp-panel-body { font-size: 13.5px; line-height: 1.28; }
 }
 
-/* 600px tall and under: the dots alone. */
+/* 600px tall and under: the number alone. Only the dots go; their row stays
+   (empty), since it is the progress bar assistive tech reads. */
 @media (max-width: 599px) and (max-height: 600px) {
-  .gp-paper .gp-qshort { display: none; }
+  .gp-paper .gp-dot { display: none; }
+  .gp-wrap.gp-paper .gp-progress { gap: 0; }
 }

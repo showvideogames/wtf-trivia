@@ -4,18 +4,21 @@ import "./howToPlay.css";
 // How to Play: three illustrated steps (read the clue, pick a side, enjoy
 // the reveal). The illustrations are pictures only -- nothing in them is a
 // control, and opening the dialog never touches a game record.
-// Escape, a press on the backdrop and Let's play! all close it; Tab is
-// kept inside while it is open, and focus goes back to whatever opened it.
-// "Let's play!" calls onPlay (to Home) when given, else just closes.
-export default function HowToPlay({ onClose, onPlay }) {
+// Escape, a press on the backdrop and Got it all close it -- only close it:
+// the screen underneath (a game, a reveal, the Archive) is left exactly as it
+// was. Tab is kept inside while it is open, and focus goes back to whatever
+// opened it.
+export default function HowToPlay({ onClose }) {
   const boxRef = useRef(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
   useEffect(() => {
     const opener = document.activeElement;
-    // Focus the dialog itself so a short screen opens at the title.
-    boxRef.current?.focus();
+    // Focus the dialog itself so a short screen opens at the title. Neither
+    // focus move may scroll the page underneath (Chrome otherwise jumps a
+    // scrolled Archive back to the top).
+    boxRef.current?.focus({ preventScroll: true });
     const onKey = e => {
       if (e.key === "Escape") { e.preventDefault(); closeRef.current(); return; }
       if (e.key !== "Tab" || !boxRef.current) return;
@@ -30,7 +33,7 @@ export default function HowToPlay({ onClose, onPlay }) {
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
-      if (opener && typeof opener.focus === "function" && document.contains(opener)) opener.focus();
+      if (opener && typeof opener.focus === "function" && document.contains(opener)) opener.focus({ preventScroll: true });
     };
   }, []);
 
@@ -73,8 +76,8 @@ export default function HowToPlay({ onClose, onPlay }) {
         </ol>
 
         <p className="htp-outro">Finish the puzzle, compare scores, and share without spoilers.</p>
-        <button type="button" className="htp-play" onClick={onPlay || onClose}>
-          <span className="htp-play-label">Let’s play!</span>
+        <button type="button" className="htp-play" onClick={onClose}>
+          <span className="htp-play-label">Got it</span>
         </button>
       </div>
     </div>

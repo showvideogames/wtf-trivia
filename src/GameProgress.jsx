@@ -1,10 +1,10 @@
 // ---- GAME PROGRESS ----
 // The "QUESTION N OF TOTAL" label, then exactly one dot per real
-// question -- solid teal once reached (answered or current), pale mint with
-// a teal outline while upcoming. Never a colour that would leak whether an
+// question -- solid teal once reached (answered or current), pale with a
+// teal outline while upcoming. Never a colour that would leak whether an
 // earlier answer was right. A short "N / TOTAL" form of the label is also
-// rendered, for short phone screens, where paperLook.css shows it on one row
-// with the dots instead of the full label. Assistive tech hears it once, as a
+// rendered: the paper look (paperLook.css) shows it on one row with the
+// dots instead of the full label. Assistive tech hears it once, as a
 // progress bar ("Question 3 of 10"); both labels and the dots themselves are
 // hidden from it, so nothing is announced twice or dot by dot. Styles:
 // game.css, paperLook.css.
