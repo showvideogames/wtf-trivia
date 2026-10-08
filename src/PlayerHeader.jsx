@@ -25,10 +25,11 @@ import { PlayerChromeContext } from "./playerChrome.js";
 // The header keeps its exact geometry but is inert.
 // compact: always the phone row, whatever the window width -- for Admin
 // Preview, whose stage is a phone-width screen inside a desktop window.
-// sticky: pinned to the top while the page scrolls (Home and Archive). Only
-// the cream bar is opaque; around it the frame is transparent, so the page
-// shows naturally beside and above the bar. Only the class changes, so the
-// header is never remounted between screens. The ad slot is never part of
+// sticky: every scrolling page (all but gameplay). On phones (up to 599px)
+// the header becomes a full-width cream bar pinned to the top that the page
+// scrolls under; from 600px it stays the floating bar and scrolls away with
+// the page (site.css). Only the class changes, so the header is never
+// remounted between screens. The ad slot is never part of
 // the pinned frame: on sticky screens it sits just after it, in the page's
 // own flow, so only the navigation stays on screen while the page scrolls.
 // (The frame is always the first element, so moving the slot never
