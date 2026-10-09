@@ -9,6 +9,10 @@ export const StreakOverrideContext = createContext(null);
 // guest (false); null everywhere else, so Home uses the real account.
 export const SignedInOverrideContext = createContext(null);
 
+// Likewise for whether the lab pretends today's puzzle is already completed
+// (true) or not (false); null everywhere else.
+export const CompletedOverrideContext = createContext(null);
+
 // The quick values the lab offers.
 export const LAB_QUICK_VALUES = [1, 10, 25, 50, 75, 90, 95, 100, 101, 150, 200, 201, 300, 301, 1000];
 

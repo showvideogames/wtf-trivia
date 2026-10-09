@@ -32,7 +32,7 @@ import { statsAfterFinish } from "./playerStats.js";
 import { buildResultsShareText, normalizeShareLabel } from "./share.js";
 import { puzzleIdFromPath, puzzlePath } from "./puzzleLink.js";
 import { parseResultCode, resultCircles, resultCodeFromPath, resultShareFor } from "./shareLink.js";
-import { SignedInOverrideContext, StreakOverrideContext } from "./streakOverride.js";
+import { CompletedOverrideContext, SignedInOverrideContext, StreakOverrideContext } from "./streakOverride.js";
 import { SITE_NAME, puzzleMeta } from "./puzzleMeta.js";
 import { answerButtonName } from "./categoryNames.js";
 import PlayerHeader from "./PlayerHeader.jsx";
@@ -2810,9 +2810,12 @@ function HomePuzzleArt({game}){
 // published puzzle is scheduled after today. With no puzzle scheduled today
 // it points at the Archive instead. `game` is null then. Stats and Archive
 // are in App's shared PlayerHeader.
-function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onShare}){
+function HomeScreen({game,gameRecord:realRecord,upNext,stats,player,onPlay,onNav,onHelp,onShare}){
   // /streak-lab shows a given streak here, display only; null everywhere else.
   const labStreak = useContext(StreakOverrideContext);
+  // Likewise, /streak-lab can pretend today's puzzle is finished (display only).
+  const labCompleted = useContext(CompletedOverrideContext);
+  const gameRecord = labCompleted===true ? {completed:true,score:7,totalQuestions:game?.questions.length||8,answers:[]} : realRecord;
   const answered = gameRecord?.answers?.length||0;
   const total = gameRecord?.totalQuestions||game?.questions.length||0;
   const done = Boolean(gameRecord?.completed);
@@ -2840,7 +2843,7 @@ function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onS
   return(
     <HomePage>
       {/* The streak leads the page, above the puzzle (nothing at zero). */}
-      <HomeStreak streak={labStreak ?? stats.currentStreak} onSignIn={signedIn?null:()=>onNav("account")} flame={<StreakFlame fallbackSrc={ICONS.flame}/>}/>
+      <HomeStreak streak={labStreak ?? stats.currentStreak} onSignIn={signedIn?null:()=>onNav("account")} compact={done} flame={<StreakFlame fallbackSrc={ICONS.flame}/>}/>
       {game?(
         <>
           <HomeHero game={game} colors={categoryColors(game)} artworkUrl={artworkUrl} wideUrl={wideUrl} preferWide={done} hideEyebrow
