@@ -300,13 +300,13 @@ describe("game and session state survive navigation", () => {
     expect(path()).toBe("/");
   }, 30_000);
 
-  it("today's game started from the Archive moves to /, and Back returns to the Archive with the game saved", async () => {
+  it("today's game started from the Archive plays at its quiz link, and Back returns to the Archive with the game saved", async () => {
     await openAt("/archive");
     const today = [...host.querySelectorAll(".arc-card")].find((c) => c.querySelector(".arc-tag")?.textContent === "Today");
     click(today.querySelector(".arc-action"));
     await flush(500);
     expect(screen()).toBe("game");
-    expect(path()).toBe("/");
+    expect(path()).toBe("/quiz/oct-8-puzzle");
     click(host.querySelector(".ans-box"));
     await flush(400);
     click(host.querySelector(".gp-next"));
@@ -326,21 +326,22 @@ describe("game and session state survive navigation", () => {
 });
 
 describe("existing addresses still work", () => {
-  it("/puzzle/<id> opens that puzzle's page; the header leaves it and Back returns to it", async () => {
+  it("/puzzle/<id> opens that puzzle's page at its quiz link; the header leaves it and Back returns to it", async () => {
     await openAt("/puzzle/t-oct7");
+    expect(path()).toBe("/quiz/oct-7-puzzle");
     expect(text()).toContain("Archive puzzle");
     expect(current()).toBeNull();
     await nav("Archive");
     expect([path(), screen()]).toEqual(["/archive", "archive"]);
     await back();
-    expect(path()).toBe("/puzzle/t-oct7");
+    expect(path()).toBe("/quiz/oct-7-puzzle");
     expect(text()).toContain("Archive puzzle");
   }, 30_000);
 
-  it("/puzzle/<today> is Home itself, and stays at its link", async () => {
+  it("/puzzle/<today> is Home itself, at today's quiz link", async () => {
     await openAt("/puzzle/t-oct8");
     expect(screen()).toBe("home");
-    expect(path()).toBe("/puzzle/t-oct8");
+    expect(path()).toBe("/quiz/oct-8-puzzle");
   }, 30_000);
 
   it("/s/<code> opens the shared result; Back from the site returns to it", async () => {

@@ -8,6 +8,7 @@
 // title, the two categories and the artwork. Never a question or an answer.
 
 import { SITE_ORIGIN, puzzleUrl } from "./puzzleLink.js";
+import { quizUrl } from "./quizSlug.js";
 import { shareCategoryName } from "./share.js";
 
 export const SITE_NAME = "What The Fudge Trivia";
@@ -72,7 +73,9 @@ export function puzzleMeta(game, origin = SITE_ORIGIN) {
     pageTitle: title === SITE_NAME ? SITE_NAME : `${title} · ${SITE_NAME}`,
     title,
     description,
-    url: puzzleUrl(game.id, origin),
+    // The quiz's public address when it has one (quizSlug.js), else its
+    // older puzzle link.
+    url: game?.slug ? quizUrl(game.slug, origin) : puzzleUrl(game.id, origin),
     image: previewImage(game, origin),
   };
 }

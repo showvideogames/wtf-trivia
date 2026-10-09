@@ -14,7 +14,7 @@
     "db:reset": "supabase db reset",
     "db:status": "supabase status",
     "test:unit": "vitest run",
-    "test:db": "node --test --test-concurrency=1 tests/db/accounts.test.mjs tests/db/content-safety.test.mjs",
+    "test:db": "node --test --test-concurrency=1 tests/db/accounts.test.mjs tests/db/content-safety.test.mjs tests/db/quiz-slugs.test.mjs",
     "workos": "node tools/workos.mjs",
     "hosted": "node tools/hosted.mjs"
   },
