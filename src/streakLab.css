@@ -1,0 +1,40 @@
+/* /streak-lab controls (StreakLab.jsx): plain and compact, above the real app. */
+.sl-bar {
+  /* On phones the real header is fixed over the top of the screen: start the
+     controls below it, and let the app's own top spacing (which reserves the
+     same height) collapse so the page isn't pushed down twice. */
+  padding: calc(env(safe-area-inset-top, 0px) + var(--ph-fixed-h, 0px) + 8px) 12px 10px;
+  background: #1A1A1A;
+  color: #fff;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+}
+.sl-title { margin: 0 0 6px; font: 400 15px/1.2 'Fredoka One', cursive; letter-spacing: 0.08em; color: #FFD21F; }
+.sl-field { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.sl-field input {
+  width: 120px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 2px solid #fff;
+  border-radius: 10px;
+  background: #fff;
+  color: #1A1A1A;
+  font: 800 18px 'Nunito', sans-serif; /* 16px+ so iOS doesn't zoom on focus */
+}
+.sl-check { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
+.sl-check input { width: 20px; height: 20px; }
+.sl-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.sl-quick button {
+  min-width: 40px;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font: 800 14px 'Nunito', sans-serif;
+  cursor: pointer;
+}
+.sl-quick button.is-on { background: #FFD21F; border-color: #FFD21F; color: #1A1A1A; }
+.sl-note { margin: 8px 0 0; font-size: 12px; font-weight: 700; color: #cfcfcf; }
+.sl-app .app:has(> .ph-top.ph-sticky) { padding-top: 0; }

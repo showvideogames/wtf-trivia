@@ -182,7 +182,7 @@
      the progress line ~30px more, or the score panel down to See my
      results ~204px, plus a little air at the bottom. */
   --hm-reserve: 340px;
-  --hm-art: min(100%, 680px, max(200px, 100svh - var(--hm-reserve)));
+  --hm-art: min(100%, 680px, max(200px, 100svh - var(--hm-reserve) - var(--hm-top-extra, 0px)));
   --hm-hero-w: min(100%, max(var(--hm-art), 480px));
 }
 .hm-main:has(> .hm-artwork):has(.hm-progress) { --hm-reserve: 370px; }
@@ -205,7 +205,7 @@
    square, it narrows when even its own height wouldn't leave the action on
    screen (phones turned sideways), but never below 320px. */
 .hm-artwork.is-wide {
-  width: min(100%, 680px, max(320px, (100svh - var(--hm-reserve)) * 1.9));
+  width: min(100%, 680px, max(320px, (100svh - var(--hm-reserve) - var(--hm-top-extra, 0px)) * 1.9));
   aspect-ratio: auto;
 }
 .hm-artwork.is-wide img {
@@ -221,7 +221,7 @@
   top: 0;
   left: 0;
   width: 0;
-  height: max(0px, 100svh - var(--hm-reserve));
+  height: max(0px, 100svh - var(--hm-reserve) - var(--hm-top-extra, 0px));
   visibility: hidden;
   pointer-events: none;
 }
@@ -329,32 +329,163 @@
 .hm-link-cream .hm-link-label { flex: none; text-align: center; }
 .hm-chev { flex: none; width: 18px; height: 18px; }
 
-/* ===== FOOTER LINE ===== */
-.hm-foot {
+/* ===== STREAK (leads the page) =====
+   The number is the real streak; --sk-t (0 on day 1 of a 100-day lap, 1 on
+   day 100, eased in; see streakPrestige.js) is the only thing its SIZE
+   depends on, so every lap starts as small as the first. --sk-px is its font
+   size for this screen width (Home.jsx, streakPrestige.js): it keeps rising
+   every day, and a number too wide for the screen is squashed, not capped.
+   The growth is real layout, on purpose: a big number pushes the puzzle down
+   the page. The DAY STREAK label wears the same theme
+   (--sk-fill, --sk-label) as the number, so the two read as one unit. */
+.hm-sk {
+  --sk-fill: linear-gradient(180deg, #FFC47A 0%, #FF9A3C 55%, #F5841F 100%);
+  --sk-label: #D2600B;
+  --sk-badge: #FFD39A;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 8px 14px;
-  margin-top: 18px;
+  max-width: 100%;
+  margin-top: 14px;
+  text-align: center;
+}
+.hm-sk-flame {
+  display: block;
+  width: calc(24px + 44px * var(--sk-t));
+  height: calc(24px + 44px * var(--sk-t));
+}
+/* Sized by Home.jsx to the number's squashed width, so the page never scrolls
+   sideways; the number inside is scaled horizontally to fit when it must be. */
+.hm-sk-numbox {
+  margin-top: calc(-2px - 8px * var(--sk-t));
+  max-width: 100%;
+}
+.hm-sk-num {
+  width: max-content;
+  max-width: none;
+  transform-origin: left center;
+  margin-top: 0;
+  padding: 0 0.03em 0.03em;
+  font-family: 'Fredoka One', cursive;
+  font-weight: 400;
+  font-size: calc(var(--sk-px) * 1px);
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: transparent;
+  background: var(--sk-fill);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-stroke: 0.045em var(--black);
+  filter: drop-shadow(0 0.05em 0 var(--black));
+}
+/* Same fill, outline and drop shadow as the number, scaled down to a label. */
+/* The DAY STREAK label: flat and plain, in the number's theme colour. */
+.hm-sk-label {
+  margin-top: calc(1px + 5px * var(--sk-t));
+  padding-left: 0.14em; /* balances the trailing letter-spacing: centred */
+  font-family: 'Fredoka One', cursive;
+  font-weight: 400;
+  font-size: calc(13px + 6px * var(--sk-t));
+  letter-spacing: 0.14em;
+  line-height: 1;
+  color: var(--sk-label);
+}
+/* The flame row: the flame stays centred whatever is beside it. */
+.hm-sk-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  width: 100%;
+}
+.hm-sk-flame { grid-column: 2; }
+.hm-sk.has-hint { width: 100%; }
+/* The guest nudge, off to the right of the flame, above the number, so it
+   never touches the number or the label and wraps in the room it has. */
+.hm-sk-hint {
+  grid-column: 3;
+  justify-self: end;
+  min-width: 0;
+  max-width: min(100%, 8.6em); /* two short lines, clear of the flame */
+  margin: 2px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 12.5px;
+  line-height: 1.1;
+  text-align: right;
+  overflow-wrap: anywhere;
+  color: var(--cs-ink-soft);
+  cursor: pointer;
+}
+.hm-sk-hint:focus-visible { outline: 2px solid var(--black); outline-offset: 2px; border-radius: 4px; }
+/* Completed 100-day laps. Quiet next to the number: a small medal pill. */
+.hm-sk-badge {
+  margin-top: 6px;
+  min-height: 32px;
+  padding: 1px 14px;
+  border: 2px solid var(--black);
+  border-radius: 999px;
+  background: var(--sk-badge);
+  box-shadow: 0 3px 0 var(--black);
+  color: var(--black);
+  font-family: 'Fredoka One', cursive;
+  font-size: 16px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.hm-sk-badge:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--black); }
+.hm-sk-total {
+  margin: 6px 0 0;
   font-family: 'Nunito', sans-serif;
   font-weight: 800;
   font-size: 14px;
   color: var(--cs-ink-soft);
 }
-.hm-streak {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px 4px 8px;
-  border: 2px solid var(--black);
-  border-radius: 999px;
-  background: #FFD39A;
-  color: var(--black);
-  font-family: 'Fredoka One', cursive;
-  font-weight: 400;
-  font-size: 15px;
+
+/* Prestige looks. One block per theme (see PRESTIGE_THEMES). */
+.hm-sk[data-theme="gold"] {
+  --sk-fill: linear-gradient(180deg, #FFF6B0 0%, #FFD21F 48%, #E39A00 100%);
+  --sk-badge: #FFE27A;
+  --sk-label: #A87300;
 }
+.hm-sk[data-theme="gold"] .hm-sk-flame { filter: saturate(1.3) brightness(1.12) hue-rotate(8deg); }
+.hm-sk[data-theme="platinum"] {
+  --sk-fill: linear-gradient(180deg, #FFFFFF 0%, #D5DEE9 45%, #8D9CB0 100%);
+  --sk-badge: #E3EAF2;
+  --sk-label: #6B7C93;
+}
+.hm-sk[data-theme="platinum"] .hm-sk-flame { filter: grayscale(1) brightness(0.95) contrast(1.15) drop-shadow(0 0 1px #46566B); }
+.hm-sk[data-theme="fudge"] {
+  --sk-fill: linear-gradient(180deg, #C58B5C 0%, #7A4223 50%, #46230F 100%);
+  --sk-badge: #E3B793;
+  --sk-label: #5C3317;
+}
+.hm-sk[data-theme="fudge"] .hm-sk-flame { filter: sepia(0.8) brightness(0.85) saturate(1.3) drop-shadow(0 0 1px #2A1408); }
+.hm-sk[data-theme="candy"] {
+  --sk-fill: linear-gradient(90deg, #FF5FA2, #FFB02E 20%, #FFE34D 38%, #4ADE80 55%, #2CC9B3 70%, #6C8CFF 85%, #C084FC);
+  --sk-badge: #FFC2DD;
+}
+/* Candy: the rainbow, in deeper tones so it reads flat on the custard page. */
+.hm-sk[data-theme="candy"] .hm-sk-label {
+  color: transparent;
+  background: linear-gradient(90deg, #E0357F, #E8750F 22%, #B88A00 40%, #1FA85A 58%, #17A08F 72%, #4A68E0 86%, #9A4FD8);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.hm-sk[data-theme="candy"] .hm-sk-flame { filter: hue-rotate(-50deg) saturate(1.4); }
+
+/* The streak takes the place of the old "Today's puzzle" line above the
+   poster, so the poster's size budget sets aside room for the smallest
+   version of it (day 1). Bigger ones push the page down instead. The poster
+   sits right under the streak unit: only a few pixels between them. */
+.hm-main:has(> .hm-sk) { --hm-top-extra: 44px; }
+.hm-main > .hm-sk + .hm-heading { margin-top: 6px; }
+.hm-main > .hm-sk ~ .hm-artwork,
+.hm-main > .hm-sk ~ .hm-matchup { margin-top: 5px; }
 
 /* ===== TODAY FINISHED ===== */
 .hm-done {

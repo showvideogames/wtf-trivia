@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, useId } from "react";
+import { Fragment, useContext, useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, useId } from "react";
 // [accounts] The project is configuration (src/game/config.js) and the one
 // Supabase client lives in src/account/supabaseClient.js. The shared sign-in
 // is src/account/platformSignIn.js; the guest handoff is guestHandoff.js.
@@ -31,6 +31,7 @@ import { sessionGameDay } from "./dailySession.js";
 import { statsAfterFinish } from "./playerStats.js";
 import { buildResultsShareText, normalizeShareLabel } from "./share.js";
 import { puzzleIdFromPath, puzzlePath } from "./puzzleLink.js";
+import { SignedInOverrideContext, StreakOverrideContext } from "./streakOverride.js";
 import { SITE_NAME, puzzleMeta } from "./puzzleMeta.js";
 import { answerButtonName } from "./categoryNames.js";
 import PlayerHeader from "./PlayerHeader.jsx";
@@ -46,7 +47,7 @@ import ResultsNerdMode from "./ResultsNerdMode.jsx";
 import ResultsScore from "./ResultsScore.jsx";
 import CandyPageShell from "./CandyPageShell.jsx";
 import CategoryArtImage from "./CategoryArtImage.jsx";
-import { HomeBigButton, HomeCandyArt, HomeDonePanel, HomeFoot, HomeHeading, HomeHero, HomeLinks, HomePage, HomeUpNext } from "./Home.jsx";
+import { HomeBigButton, HomeCandyArt, HomeDonePanel, HomeHeading, HomeHero, HomeLinks, HomePage, HomeStreak, HomeUpNext } from "./Home.jsx";
 import { ARCHIVE_ART_VIEWS, ARCHIVE_FILTERS, archivePuzzles, archiveTopicCounts, filterArchive, playCount, readArchiveArtView, saveArchiveArtView, sortArchive, sortAvailable } from "./archiveList.js";
 import { emptyFavorites, toggleFavorite } from "./archiveFavorites.js";
 import ArchiveTopicFilter from "./ArchiveTopicFilter.jsx";
@@ -2806,11 +2807,14 @@ function HomePuzzleArt({game}){
 // it points at the Archive instead. `game` is null then. Stats and Archive
 // are in App's shared PlayerHeader.
 function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onShare}){
+  // /streak-lab shows a given streak here, display only; null everywhere else.
+  const labStreak = useContext(StreakOverrideContext);
   const answered = gameRecord?.answers?.length||0;
   const total = gameRecord?.totalQuestions||game?.questions.length||0;
   const done = Boolean(gameRecord?.completed);
   const inProgress = Boolean(gameRecord && !gameRecord.completed && answered>0);
-  const signedIn = player && !player.isGuest;
+  const labSignedIn = useContext(SignedInOverrideContext);
+  const signedIn = labSignedIn ?? (player && !player.isGuest);
   const artworkUrl = game ? puzzleArtworkUrl(game) : null;
   const wideUrl = game ? wideArtworkUrl(game) : null;
   const opensAt = upNext ? releaseTime(upNext.date)?.getTime() : null;
@@ -2829,20 +2833,13 @@ function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onS
     <HomeUpNext game={upNext} colors={categoryColors(upNext)} wideUrl={wideArtworkUrl(upNext)} squareUrl={puzzleArtworkUrl(upNext)}
       opensAt={opensAt} title={nextTitle}/>
   );
-  const foot = (stats.currentStreak>0||!signedIn)&&(
-    <HomeFoot>
-      {stats.currentStreak>0&&(
-        <span className="hm-streak"><FI name="flame" size={18}/>{stats.currentStreak}-day streak</span>
-      )}
-      {!signedIn&&<span className="hm-signin-hint">Sign in to save your streak</span>}
-    </HomeFoot>
-  );
-
   return(
     <HomePage>
+      {/* The streak leads the page, above the puzzle (nothing at zero). */}
+      <HomeStreak streak={labStreak ?? stats.currentStreak} onSignIn={signedIn?null:()=>onNav("account")} flame={<FI name="flame" size="100%" style={{display:"block"}}/>}/>
       {game?(
         <>
-          <HomeHero game={game} colors={categoryColors(game)} artworkUrl={artworkUrl} wideUrl={wideUrl} preferWide={done}
+          <HomeHero game={game} colors={categoryColors(game)} artworkUrl={artworkUrl} wideUrl={wideUrl} preferWide={done} hideEyebrow
             eyebrow={done?<>Today&rsquo;s puzzle &middot; Completed</>:<>Today&rsquo;s puzzle</>}/>
           {done?(
             <HomeDonePanel score={gameRecord.score} total={gameRecord.totalQuestions}
@@ -2870,7 +2867,6 @@ function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onS
           <HomeLinks links={[{id:"help", label:"How to Play", tone:"cream", chevron:false, onClick:onHelp}]}/>
         </>
       )}
-      {foot}
     </HomePage>
   );
 }

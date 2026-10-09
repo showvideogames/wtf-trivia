@@ -5,9 +5,21 @@
   "rewrites": [
     { "source": "/admin", "destination": "/index.html" },
     { "source": "/admin/", "destination": "/index.html" },
+    { "source": "/streak-lab", "destination": "/index.html" },
+    { "source": "/streak-lab/", "destination": "/index.html" },
     { "source": "/auth/callback", "destination": "/index.html" },
     { "source": "/auth/callback/", "destination": "/index.html" },
     { "source": "/puzzle/:id", "destination": "/api/puzzle?id=:id" },
     { "source": "/puzzle/:id/", "destination": "/api/puzzle?id=:id" }
+  ],
+  "headers": [
+    {
+      "source": "/streak-lab",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+    },
+    {
+      "source": "/streak-lab/",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+    }
   ]
 }
