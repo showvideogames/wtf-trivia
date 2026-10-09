@@ -3,6 +3,7 @@ import ColorSwatches from "./ColorSwatches.jsx";
 import DatePicker from "./DatePicker.jsx";
 import Icon from "./Icon.jsx";
 import ImageField from "./ImageField.jsx";
+import QuizLink from "./QuizLink.jsx";
 import { paletteColor, useStudio } from "./StudioContext.js";
 import { TOPICS, normalizeTags, toggleTag } from "../topics.js";
 import { answerButtonName } from "../categoryNames.js";
@@ -444,6 +445,7 @@ export default function SetupTab({game, set, games, trackImage, onDelete, onReti
   return(
     <div className="ps-setup">
       <PuzzleBasics game={game} set={set} games={games}/>
+      <QuizLink game={game} set={set} games={games}/>
       <CategoryNames game={game} set={set}/>
       <Topics game={game} set={set}/>
       <CategoryAppearance game={game} set={set} trackImage={trackImage}/>

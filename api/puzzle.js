@@ -1,5 +1,7 @@
-// /puzzle/<id> (vercel.json rewrites it here as /api/puzzle?id=<id>): the
-// app's own page, with that puzzle's link preview written into the HTML.
+// /quiz/<slug> and the older /puzzle/<id> (vercel.json rewrites them here
+// as /api/puzzle?slug=<slug> and /api/puzzle?id=<id>): the app's own page,
+// with that quiz's link preview written into the HTML. Both name the quiz's
+// public address (/quiz/<slug>, src/quizSlug.js) as its canonical URL.
 //
 // Messaging apps and social sites read a link's title, description and
 // picture from the first HTML response and never run the app, so the tags
@@ -15,6 +17,7 @@
 // site's ordinary preview, which names no puzzle.
 
 import { isPuzzleId, puzzleIdFromPath } from "../src/puzzleLink.js";
+import { isQuizSlug, quizSlugFromPath, resolveQuizSlugs } from "../src/quizSlug.js";
 import { previewReleased, puzzleMeta, withPuzzleMeta } from "../src/puzzleMeta.js";
 
 const TIMEOUT_MS = 4000;
@@ -66,6 +69,28 @@ export async function loadPreviewGame(id, { fetchImpl = fetch, env = process.env
   return null;
 }
 
+// Every quiz's public link name: Map(id -> slug), resolved as the app does
+// (stored slugs, else derived from titles in the same order), so a link the
+// app hands out is the one served here. Only ids, dates, statuses, titles
+// and slugs are read. Throws when it can't tell.
+const SLUG_COLUMNS = ["id,date,status,theme_title,slug", "id,date,status,theme_title"];
+export async function loadQuizSlugs({ fetchImpl = fetch, env = process.env } = {}) {
+  const config = supabaseConfig(env);
+  if (!config) throw new Error("Supabase is not configured.");
+  for (const [i, columns] of SLUG_COLUMNS.entries()) {
+    const res = await fetchImpl(`${config.url}/rest/v1/games?select=${columns}`,
+      { headers: { apikey: config.key, Accept: "application/json" }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    // 400: a database without the slug column yet (0004_quiz_slugs.sql).
+    if (res.status === 400 && i < SLUG_COLUMNS.length - 1) continue;
+    if (!res.ok) throw new Error(`Supabase error ${res.status}`);
+    const rows = await res.json();
+    return resolveQuizSlugs((Array.isArray(rows) ? rows : []).map((r) => ({
+      id: r.id, date: r.date, status: r.status, themeTitle: r.theme_title || "", slug: r.slug || "",
+    })));
+  }
+  return new Map();
+}
+
 // This deployment's index.html, fetched from itself once per instance (it
 // never changes within a deployment). Preview deployments sit behind Vercel
 // sign-in, so the visitor's own cookie, or the automation bypass secret when
@@ -94,15 +119,21 @@ export function clearShellCache() {
   shellCache = null;
 }
 
-function requestedId(req) {
+// {slug} for a quiz link, else {id} for a puzzle link ("" when unusable).
+function requestedLink(req) {
   const url = new URL(req.url || "/", "http://localhost");
+  const slug = req.query?.slug ?? url.searchParams.get("slug");
+  if (typeof slug === "string") return { slug: slug.toLowerCase() };
+  const fromPath = quizSlugFromPath(url.pathname);
+  if (fromPath !== null) return { slug: fromPath };
   const fromQuery = req.query?.id ?? url.searchParams.get("id");
-  if (typeof fromQuery === "string") return fromQuery;
-  return puzzleIdFromPath(url.pathname) || "";
+  if (typeof fromQuery === "string") return { id: fromQuery };
+  return { id: puzzleIdFromPath(url.pathname) || "" };
 }
 
 export default async function handler(req, res, deps = {}) {
-  const id = requestedId(req);
+  const wanted = requestedLink(req);
+  const bySlug = "slug" in wanted;
   let shell;
   try {
     shell = await loadShell(req, deps);
@@ -111,16 +142,37 @@ export default async function handler(req, res, deps = {}) {
     // this same link (and puts /puzzle/<id> back in the address bar).
     console.error("[puzzle] page unavailable", error);
     res.statusCode = 302;
-    res.setHeader("Location", isPuzzleId(id) ? `/?puzzle=${encodeURIComponent(id)}` : "/");
+    res.setHeader("Location", bySlug
+      ? (isQuizSlug(wanted.slug) ? `/?quiz=${encodeURIComponent(wanted.slug)}` : "/")
+      : (isPuzzleId(wanted.id) ? `/?puzzle=${encodeURIComponent(wanted.id)}` : "/"));
     res.setHeader("Cache-Control", "no-store");
     res.end();
     return;
   }
   let game = null;
   let lookupFailed = false;
-  if (isPuzzleId(id)) {
-    try { game = await loadPreviewGame(id, deps); }
-    catch (error) { lookupFailed = true; console.error("[puzzle] lookup failed", error); }
+  try {
+    // A quiz link: which quiz answers to that name, then its preview.
+    let slugs = null;
+    let id = wanted.id;
+    if (bySlug) {
+      id = "";
+      if (isQuizSlug(wanted.slug)) {
+        slugs = await loadQuizSlugs(deps);
+        id = [...slugs].find(([, slug]) => slug === wanted.slug)?.[0] ?? "";
+      }
+    }
+    if (isPuzzleId(id)) game = await loadPreviewGame(id, deps);
+    // Its public address, for the canonical URL. A puzzle link's preview
+    // works without it (its own address stands in).
+    if (game && previewReleased(game)) {
+      try { slugs ??= await loadQuizSlugs(deps); game.slug = slugs.get(game.id) || ""; }
+      catch (error) { console.error("[puzzle] quiz slugs unavailable", error); }
+    }
+  } catch (error) {
+    game = null;
+    lookupFailed = true;
+    console.error("[puzzle] lookup failed", error);
   }
   const released = Boolean(game) && previewReleased(game);
   res.statusCode = 200;

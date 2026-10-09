@@ -1179,3 +1179,17 @@ span.ps-qrow-main { cursor: default; }
   .ps-cat-card .ps-swatch { width: 29px; height: 29px; }
   .ps-cat-card .ps-swatch .ps-icon { width: 14px; height: 14px; }
 }
+
+/* Quiz link (QuizLink.jsx): the permanent /quiz/<slug> address and Copy. */
+.ps-quizlink-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.ps-quizlink-url {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 2px solid var(--ps-line, #E4DCCB);
+  border-radius: 12px;
+  background: #fff;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}

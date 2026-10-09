@@ -29,8 +29,8 @@ before(() => {
 
 // ── Baseline ─────────────────────────────────────────────────
 
-test("T1 baseline: live tables declared, account tables start empty, ledger holds 0001-0003, RLS on everywhere", () => {
-  assert.equal(sql("select string_agg(version, ',' order by version) from supabase_migrations.schema_migrations"), "0001,0002,0003");
+test("T1 baseline: live tables declared, account tables start empty, ledger holds 0001-0004, RLS on everywhere", () => {
+  assert.equal(sql("select string_agg(version, ',' order by version) from supabase_migrations.schema_migrations"), "0001,0002,0003,0004");
   for (const t of ["games", "players", "game_records", "player_stats", "puzzle_stats", "puzzle_favorites", "puzzle_favorite_counts", "accounts", "admins", "guest_handoffs"]) {
     assert.equal(sql(`select to_regclass('public.${t}') is not null`), "t", `${t} exists`);
     assert.equal(sql(`select relrowsecurity from pg_class where oid = 'public.${t}'::regclass`), "t", `RLS on ${t}`);

@@ -1,5 +1,6 @@
 // Puzzle (app shape) <-> public.games row (database shape).
 import { normalizeTags } from "./topics.js";
+import { isQuizSlug } from "./quizSlug.js";
 
 // Share names (the category labels in the copied Results text) live in two
 // optional columns added by supabase/share_names.sql. They are only sent when
@@ -29,6 +30,11 @@ import { normalizeTags } from "./topics.js";
 //
 // Silhouette artwork (supabase/silhouette_artwork.sql) is the optional wide
 // teaser image for Home's Up Next / Tomorrow section only, same rule again.
+//
+// The quiz's public URL name (supabase/migrations/0004_quiz_slugs.sql,
+// quizSlug.js) is sent only once the row came back with a slug column. A
+// draft without one sends null, and the database names it when it is
+// published; a published quiz's slug can't change (the database keeps it).
 function trimmedShareName(value){
   return typeof value==="string" && value.trim() ? value.trim() : null;
 }
@@ -60,7 +66,8 @@ export function gameToRow(g){
     ...(btnA||btnB||g.buttonNameColumns ? {category_a_button_name:btnA, category_b_button_name:btnB} : {}),
     ...(tags.length||g.tagsColumn ? {tags} : {}),
     ...(wide||g.wideImageColumn ? {wide_image:wide} : {}),
-    ...(silhouette||g.silhouetteImageColumn ? {silhouette_image:silhouette} : {})
+    ...(silhouette||g.silhouetteImageColumn ? {silhouette_image:silhouette} : {}),
+    ...(g.slugColumn ? {slug:isQuizSlug(g.slug) ? g.slug : null} : {})
   };
 }
 export function rowToGame(r){
@@ -90,6 +97,8 @@ export function rowToGame(r){
     buttonNameColumns: "category_a_button_name" in r,
     tags: normalizeTags(r.tags),
     tagsColumn: "tags" in r,
+    slug: r.slug||"",
+    slugColumn: "slug" in r,
     status: r.status,
     questions: r.questions||[]
   };

@@ -176,7 +176,21 @@ export function HomeHero({ game, colors, artworkUrl, wideUrl = null, eyebrow, pr
 }
 
 // The one big yellow-to-orange action.
-export function HomeBigButton({ children, onClick, describedBy }) {
+// With an href it is a real link (open in a new tab, copy, share); a plain
+// click still runs onClick, which moves the address itself.
+export function HomeBigButton({ children, onClick, describedBy, href }) {
+  if (href) {
+    const follow = (e) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      onClick?.();
+    };
+    return (
+      <a className="hm-play" href={href} onClick={follow} aria-describedby={describedBy}>
+        <span className="hm-play-label">{children}</span>
+      </a>
+    );
+  }
   return (
     <button type="button" className="hm-play" onClick={onClick} aria-describedby={describedBy}>
       <span className="hm-play-label">{children}</span>

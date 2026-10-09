@@ -31,6 +31,7 @@ import { sessionGameDay } from "./dailySession.js";
 import { statsAfterFinish } from "./playerStats.js";
 import { buildResultsShareText, normalizeShareLabel } from "./share.js";
 import { puzzleIdFromPath, puzzlePath } from "./puzzleLink.js";
+import { quizPath, quizSlugFromPath, resolveQuizSlugs, slugifyTitle } from "./quizSlug.js";
 import { parseResultCode, resultCircles, resultCodeFromPath, resultShareFor, shareCopyText } from "./shareLink.js";
 import { CompletedOverrideContext, SignedInOverrideContext, StreakOverrideContext } from "./streakOverride.js";
 import { SITE_NAME, puzzleMeta } from "./puzzleMeta.js";
@@ -2004,6 +2005,9 @@ async function dbSaveGame(game){
     isExternal: isImportableExternalImageUrl
   });
   const row = gameToRow(uploaded);
+  // The quiz's slug as the database stored it (it names a quiz on its first
+  // publish, and keeps a published one's): the editor shows that one.
+  let storedSlug = null;
   if(OFFLINE_PREVIEW){
     devSaveGameRow(row);
   }else{
@@ -2012,8 +2016,9 @@ async function dbSaveGame(game){
       headers:{"Prefer":"resolution=merge-duplicates,return=representation"},
       body: JSON.stringify(row)
     });
-    const confirmed = Array.isArray(saved) && saved.some(r=>r.id===row.id && r.date===row.date && r.status===row.status);
-    if(!confirmed) throw new Error("The database didn't confirm the save.");
+    const back = Array.isArray(saved) ? saved.find(r=>r.id===row.id && r.date===row.date && r.status===row.status) : null;
+    if(!back) throw new Error("The database didn't confirm the save.");
+    if("slug" in back) storedSlug = back.slug||"";
   }
   // A save that carried share names, subtitles, button names, tags or wide artwork proves the columns
   // exist, so later saves from this editor always send them (clearing a name
@@ -2025,7 +2030,8 @@ async function dbSaveGame(game){
     ...("category_a_button_name" in row ? {buttonNameColumns:true} : {}),
     ...("tags" in row ? {tagsColumn:true} : {}),
     ...("wide_image" in row ? {wideImageColumn:true} : {}),
-    ...("silhouette_image" in row ? {silhouetteImageColumn:true} : {})
+    ...("silhouette_image" in row ? {silhouetteImageColumn:true} : {}),
+    ...(storedSlug!==null ? {slug:storedSlug, slugColumn:true} : {})
   };
   return { game: saved, imageFailures: failures };
 }
@@ -2046,6 +2052,10 @@ function describeSaveError(e){
   if(msg.includes("silhouette_image")) return "the database doesn't have the silhouette artwork column yet (run supabase/silhouette_artwork.sql). Remove the silhouette artwork to save without it.";
   if(msg.includes("wide_image")) return "the database doesn't have the wide artwork column yet (run supabase/wide_artwork.sql). Remove the wide artwork to save without it.";
   if(msg.includes("'tags' column")) return "the database doesn't have the topic tags column yet (supabase/puzzle_tags.sql). Deselect every topic to save without it.";
+  if(msg.includes("games_slug_key")) return "another quiz already uses that quiz URL. Pick another name for it.";
+  if(msg.includes("games_slug_locked")) return "this quiz is published, so its quiz URL can't change (links people already shared would break).";
+  if(msg.includes("games_slug_format")) return "a quiz URL can only use lowercase letters, numbers and single hyphens.";
+  if(msg.includes("'slug' column")) return "the database doesn't have quiz URLs yet (supabase/migrations/0004_quiz_slugs.sql).";
   if(msg.includes("games_one_published_per_date")) return "another published puzzle already has that date. Pick another day.";
   if(msg.includes("game_records_puzzle_id_fkey")) return "players have already played this puzzle, so it can't be deleted. Retire it instead.";
   if(status) return `the database returned an error (${status}).`;
@@ -2910,10 +2920,10 @@ function PuzzleLinkPage({game,record,onPlay,onShare}){
 
 // A shared result's page (/s/<code>, shareLink.js): who it is from, the
 // answers, the score and the puzzle's artwork, with one big button that
-// opens that same puzzle (its normal /puzzle/<id> page: today's puzzle plays
-// as usual, an earlier one replays). Everything shown comes from the link
+// opens that same quiz: a link to its public page (/quiz/<slug>: today's
+// quiz plays as usual, an earlier one replays). Everything shown comes from the link
 // and the puzzle itself, never from this browser's own saved games.
-function ResultLinkPage({result,game,onPlay}){
+function ResultLinkPage({result,game,playHref,onPlay}){
   return(
     <HomePage>
       <HomeHero game={game} colors={categoryColors(game)} artworkUrl={puzzleArtworkUrl(game)} wideUrl={wideArtworkUrl(game)}
@@ -2926,7 +2936,7 @@ function ResultLinkPage({result,game,onPlay}){
         <p className="hm-done-msg">Can you beat it?</p>
       </section>
       <div className="hm-cta">
-        <HomeBigButton onClick={onPlay}>PLAY THIS QUIZ</HomeBigButton>
+        <HomeBigButton href={playHref} onClick={onPlay}>PLAY THIS QUIZ</HomeBigButton>
       </div>
     </HomePage>
   );
@@ -3995,7 +4005,7 @@ function PlaysGlyph(){
 // plays: the puzzle's play count (playCount, archiveList.js), or null while
 // the community stats load or when they couldn't (no count rather than a
 // wrong one).
-function ArchiveCard({game,record,isToday,onAction,eager,favorite,plays=null,artView="quiz"}){
+function ArchiveCard({game,record,isToday,onAction,onOpen,href,eager,favorite,plays=null,artView="quiz"}){
   const done = Boolean(record?.completed);
   const retired = game.status==="retired";
   const canReplay = !retired && game.questions?.length>0;
@@ -4003,17 +4013,28 @@ function ArchiveCard({game,record,isToday,onAction,eager,favorite,plays=null,art
   const resume = isToday && !done && record?.answers?.length>0;
   const score = done ? `${record.score} / ${record.totalQuestions}` : null;
   const run = ()=>onAction(game);
+  // The quiz's own page (/quiz/<slug>) is the card's link, on its title: it
+  // opens in a new tab, copies and shares like any link. A plain click stays
+  // in the app and does what the card does (play, resume, replay), or opens
+  // the quiz's page when there is nothing to start (today's, finished).
+  // Retired quizzes have no page to link to.
+  const link = !retired && href && (action || isToday) ? href : null;
   const onCardClick = e=>{
-    if(!action || e.target.closest("button")) return;
+    if(!action || e.target.closest("button, a")) return;
     if(window.getSelection?.()?.toString()) return;
     run();
+  };
+  const onLinkClick = e=>{
+    if(e.button!==0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    if(action) run(); else onOpen?.(game);
   };
   return(
     <li className={`arc-card${action?" is-actionable":""}${retired?" is-retired":""}`} onClick={onCardClick}>
       <ArchiveCardArt game={game} eager={eager} artView={artView}/>
       <div className="arc-foot">
         <div className="arc-text">
-          <h2 className="arc-card-title">{game.themeTitle}</h2>
+          <h2 className="arc-card-title">{link?<a className="arc-card-link" href={link} onClick={onLinkClick}>{game.themeTitle}</a>:game.themeTitle}</h2>
           <div className="arc-meta">
             <time dateTime={game.date}>{archiveDateLabel(game.date)}</time>
             {isToday&&<span className="arc-tag">Today</span>}
@@ -4052,7 +4073,7 @@ function ArchiveCard({game,record,isToday,onAction,eager,favorite,plays=null,art
 // `today` is the clock's game day (App's liveDay): past midnight the Archive
 // lists the new day's puzzle as Today even while Home still holds the
 // session's earlier one, and its Today card starts the new day.
-function ArchiveScreen({games,playerId,onReplay,onPlayToday,today}){
+function ArchiveScreen({games,playerId,onReplay,onPlayToday,onOpen,hrefFor,today}){
   const[records,setRecords]=useState({});
   const[query,setQuery]=useState("");
   const[filterChoice,setFilter]=useState("all");
@@ -4226,7 +4247,7 @@ function ArchiveScreen({games,playerId,onReplay,onPlayToday,today}){
           <ul className={artView==="quiz"?"arc-grid is-quiz-art":"arc-grid"}>
             {shown.map((g,i)=>(
               <ArchiveCard key={g.id} game={g} record={records[g.id]} isToday={g===todayGame}
-                           onAction={g===todayGame?onPlayToday:onReplay} eager={i<4} favorite={favoriteFor(g)} plays={playsFor(g)}
+                           onAction={g===todayGame?onPlayToday:onReplay} onOpen={onOpen} href={hrefFor?.(g)} eager={i<4} favorite={favoriteFor(g)} plays={playsFor(g)}
                            artView={artView}/>
             ))}
           </ul>
@@ -4348,18 +4369,34 @@ const ADMIN_SESSION_KEY = "wtf-admin-in";
 // (admin/signInResume.js).
 const WRITES_PAUSED = "Saving is paused: Puzzle Studio needs a signed-in admin account. Your changes are still here.";
 const isAdminPath = ()=>window.location.pathname.replace(/\/+$/,"")===ADMIN_PATH;
-// The puzzle a link opens: its id, "" for a puzzle link that can't be used,
-// or null when the address isn't a puzzle link. /?puzzle=<id> is the same
-// link handed over by api/puzzle.js when it couldn't build the page; the
-// address bar gets /puzzle/<id> back.
+// The quiz a link opens: {slug} for a public quiz link (/quiz/<slug>,
+// quizSlug.js), {id} for an older puzzle link (/puzzle/<id>), or null when
+// the address isn't either. A link that can't be used carries "", so the
+// page can say the quiz isn't available. /?quiz=<slug> and /?puzzle=<id>
+// are the same links handed over by api/puzzle.js when it couldn't build the
+// page; the address bar gets the link back.
+function linkFromPath(pathname){
+  const slug = quizSlugFromPath(pathname);
+  if(slug!==null) return {slug};
+  const id = puzzleIdFromPath(pathname);
+  return id!==null ? {id} : null;
+}
 function readPuzzleLink(){
-  const fromPath = puzzleIdFromPath(window.location.pathname);
-  if(fromPath!==null) return fromPath;
-  const handed = new URLSearchParams(window.location.search).get("puzzle");
-  if(handed===null || window.location.pathname!=="/") return null;
+  const fromPath = linkFromPath(window.location.pathname);
+  if(fromPath) return fromPath;
+  if(window.location.pathname!=="/") return null;
+  const params = new URLSearchParams(window.location.search);
+  const quiz = params.get("quiz");
+  if(quiz!==null){
+    const slug = quizSlugFromPath(quizPath(quiz)) || "";
+    if(slug) window.history.replaceState(null,"",quizPath(slug));
+    return {slug};
+  }
+  const handed = params.get("puzzle");
+  if(handed===null) return null;
   const id = puzzleIdFromPath(puzzlePath(handed)) || "";
   if(id) window.history.replaceState(null,"",puzzlePath(id));
-  return id;
+  return {id};
 }
 // The screen a site address opens on (siteRoutes.js): /archive and /stats
 // their own, / and /how-to-play Home (the dialog opens over it).
@@ -4865,11 +4902,12 @@ function AdminPreview({game,onBack}){
 // ROOT APP
 // ============================================================
 export default function WhatTheFudgeTrivia(){
-  // A puzzle link (/puzzle/<id>) opens that puzzle's page (see "puzzle" below).
-  const[linkId,setLinkId]=useState(()=>isAdminPath()?null:readPuzzleLink());
+  // A quiz link (/quiz/<slug>, or the older /puzzle/<id>) opens that quiz's
+  // page (see "puzzle" below).
+  const[link,setLink]=useState(()=>isAdminPath()?null:readPuzzleLink());
   // A shared result link (/s/<code>) opens that result's page ("result").
   const[resultCode,setResultCode]=useState(()=>isAdminPath()?null:resultCodeFromPath(window.location.pathname));
-  const[view,setView]=useState(()=>isAdminPath()?"admin":linkId!==null?"puzzle":resultCode!==null?"result":viewFromSection(sectionFromPath(window.location.pathname)));
+  const[view,setView]=useState(()=>isAdminPath()?"admin":link?"puzzle":resultCode!==null?"result":viewFromSection(sectionFromPath(window.location.pathname)));
   // Back from an admin sign-in started in the editor: reopen that puzzle.
   const[adminResume]=useState(()=>isAdminPath()&&readAdminSession()?takeAdminResume():null);
   const[adminView,setAdminView]=useState(()=>adminResume?"editor":readAdminSession()?"dashboard":"login");
@@ -4896,12 +4934,12 @@ export default function WhatTheFudgeTrivia(){
       const section=sectionFromPath(window.location.pathname);
       if(section==="help"){ setShowHelp(true); return; }
       if(helpOpenRef.current){ setShowHelp(false); return; }
-      const id=puzzleIdFromPath(window.location.pathname);
-      if(id!==null) setLinkId(id);
+      const quizLink=linkFromPath(window.location.pathname);
+      if(quizLink) setLink(quizLink);
       const rc=resultCodeFromPath(window.location.pathname);
       if(rc!==null) setResultCode(rc);
       const entry=entryView(window.location.pathname, e.state);
-      setView(v=>id!==null?"puzzle":rc!==null?"result":entry==="account"?"account":section?viewFromSection(section):v==="admin"||v==="puzzle"||v==="result"?"home":v);
+      setView(v=>quizLink?"puzzle":rc!==null?"result":entry==="account"?"account":section?viewFromSection(section):v==="admin"||v==="puzzle"||v==="result"?"home":v);
     };
     window.addEventListener("popstate",onPop);
     return ()=>window.removeEventListener("popstate",onPop);
@@ -5116,9 +5154,22 @@ export default function WhatTheFudgeTrivia(){
   // puzzle is Home itself (a normal, scored daily play), an earlier released
   // puzzle replays as it would from the Archive, and anything else (not out
   // yet on this player's day, a draft, retired, unknown) can't be opened.
-  const linkGame = view==="puzzle"&&linkId ? games.find(g=>g.id===linkId)||null : null;
+  // Every quiz's public link name (quizSlug.js): stored, or derived from its
+  // title by the same rules the database uses.
+  const quizSlugs = useMemo(()=>resolveQuizSlugs(games),[games]);
+  const quizPathFor = g=>quizSlugs.has(g?.id) ? quizPath(quizSlugs.get(g.id)) : puzzlePath(g.id);
+  const linkGame = view==="puzzle"&&link ? games.find(g=>link.slug ? quizSlugs.get(g.id)===link.slug : g.id===link.id)||null : null;
   const linkIsToday = Boolean(linkGame&&todayGame&&linkGame.id===todayGame.id);
   const linkReplay = Boolean(linkGame&&!linkIsToday&&isReleased(linkGame, sessionDay));
+  // An older /puzzle/<id> link that opened a quiz shows the quiz's public
+  // address instead (the same history entry, so Back is unchanged). One
+  // that can't be opened keeps its address.
+  const linkGameId = linkGame?.id;
+  const linkOpens = linkIsToday||linkReplay;
+  useEffect(()=>{
+    if(!linkOpens || !link?.id || puzzleIdFromPath(window.location.pathname)!==link.id || !quizSlugs.has(linkGameId)) return;
+    window.history.replaceState(window.history.state,"",quizPath(quizSlugs.get(linkGameId))+window.location.search);
+  },[linkOpens, link, linkGameId, quizSlugs]);
   // A shared result's puzzle: only one this player's day has released.
   const sharedResult = view==="result" ? parseResultCode(resultCode) : null;
   const sharedGame = sharedResult ? games.find(g=>g.id===sharedResult.puzzleId&&isReleased(g, sessionDay))||null : null;
@@ -5316,6 +5367,16 @@ export default function WhatTheFudgeTrivia(){
     try{ latest = await dbLoadGames(); }catch(e){ console.error(e); }
     const conflict = sg.status==="retired" ? null : findDateConflict(latest, sg);
     if(conflict) throw new Error(`That day already has "${conflict.themeTitle||"another puzzle"}". Pick another date.`);
+    // A quiz URL name typed in the Studio (QuizLink): tidied into a slug and
+    // never one another quiz already answers to. Blank lets the database
+    // name the quiz when it is published.
+    if(sg.slugColumn){
+      const slug = sg.slug ? slugifyTitle(sg.slug) : "";
+      const taken = slug ? resolveQuizSlugs(latest.filter(g=>g.id!==sg.id)) : null;
+      const owner = slug ? latest.find(g=>g.id!==sg.id && taken.get(g.id)===slug) : null;
+      if(owner) throw new Error(`"${slug}" is already the quiz URL of "${owner.themeTitle||"another puzzle"}". Pick another name.`);
+      sg = {...sg, slug};
+    }
     let result;
     try{
       result = await dbSaveGame(sg);
@@ -5346,8 +5407,10 @@ export default function WhatTheFudgeTrivia(){
 
   // Start game: the session's daily puzzle, or `game` when the Archive's
   // Today card starts the clock's day while the session still holds an
-  // earlier one -- that moves the session on to the new day.
-  const handlePlay = async(game=todayGame) => {
+  // earlier one -- that moves the session on to the new day. `path`: the
+  // address the game plays at, when it starts from somewhere else (the
+  // Archive's card: the quiz's own link, as a new history entry).
+  const handlePlay = async(game=todayGame, {path=null}={}) => {
     const daily = game===todayGame || (game?.date===liveDay && isReleased(game, liveDay)) ? game : null;
     if(!daily) return;
     const record = daily===todayGame ? todayRecord : null;
@@ -5377,6 +5440,7 @@ export default function WhatTheFudgeTrivia(){
         setSessionDay(daily.date);
       }
       setGameRecord(rec);
+      if(path) setPath(path);
       setView("game");
     } catch(e){
       console.error("Start game error:", e);
@@ -5439,12 +5503,22 @@ export default function WhatTheFudgeTrivia(){
   // Replay. Only a released puzzle (schedule.js: published, dated today or
   // earlier) can start, whatever asks: a puzzle scheduled after today stays
   // a teaser (Up Next) until its day, even if a stale list still offers it.
-  const handleReplay = g => {
+  const handleReplay = (g, {path=null}={}) => {
     if(!isReleased(g, liveDay)) return;
     primeActiveWindow(getPuzzleImageUrls(g), 0, g.id);
     setReplayGame(g);
     setReplayRecord(newRecordFor(g));
+    if(path) setPath(path);
     setView("replay");
+  };
+  // A quiz's own page, by its public link (/quiz/<slug>), as a new history
+  // entry: from the Archive (a card with nothing to start, like today's
+  // finished one) or a shared result's PLAY THIS QUIZ.
+  const openQuizPage = g => {
+    sound.play("click");
+    setPath(quizPathFor(g));
+    setLink(quizSlugs.has(g.id) ? {slug:quizSlugs.get(g.id)} : {id:g.id});
+    setView("puzzle");
   };
 
   // The shared header every player screen shows (PlayerHeader.jsx): Play
@@ -5545,8 +5619,8 @@ export default function WhatTheFudgeTrivia(){
           )}
 
           {view==="result"&&(sharedGame&&sharedResult
-            ? <ResultLinkPage result={sharedResult} game={sharedGame}
-                onPlay={()=>{sound.play("click");setLinkId(sharedGame.id);setPath(puzzlePath(sharedGame.id));setView("puzzle");}}/>
+            ? <ResultLinkPage result={sharedResult} game={sharedGame} playHref={quizPathFor(sharedGame)}
+                onPlay={()=>openQuizPage(sharedGame)}/>
             : <PuzzleUnavailablePage hasToday={Boolean(todayGame)} onNav={v=>{sound.play("click");setView(v);}}/>)}
 
           {view==="puzzle"&&!linkIsToday&&!linkReplay&&(
@@ -5596,8 +5670,10 @@ export default function WhatTheFudgeTrivia(){
             <ArchiveScreen
               games={games}
               playerId={player?.id}
-              onReplay={handleReplay}
-              onPlayToday={handlePlay}
+              onReplay={g=>handleReplay(g,{path:quizPathFor(g)})}
+              onPlayToday={g=>handlePlay(g,{path:quizPathFor(g)})}
+              onOpen={openQuizPage}
+              hrefFor={quizPathFor}
               today={liveDay}
             />
           )}

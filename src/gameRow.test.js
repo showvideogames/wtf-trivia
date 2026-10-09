@@ -137,3 +137,25 @@ describe("wide artwork in the games row", () => {
     expect(row).not.toHaveProperty("wideImageColumn");
   });
 });
+
+describe("the quiz slug in the games row (0004_quiz_slugs.sql)", () => {
+  it("a legacy row (no slug column) loads without one and saves exactly as before", () => {
+    const game = rowToGame(LEGACY_ROW);
+    expect(game.slug).toBe("");
+    expect(game.slugColumn).toBe(false);
+    expect("slug" in gameToRow(game)).toBe(false);
+  });
+
+  it("an existing quiz with a slug round-trips it unchanged", () => {
+    const game = rowToGame({ ...LEGACY_ROW, slug: "board-game-or-nicolas-cage-movie" });
+    expect(game.slug).toBe("board-game-or-nicolas-cage-movie");
+    expect(game.slugColumn).toBe(true);
+    expect(gameToRow(game).slug).toBe("board-game-or-nicolas-cage-movie");
+  });
+
+  it("a draft without one sends null, so the database names it when it is published", () => {
+    const game = rowToGame({ ...LEGACY_ROW, status: "draft", slug: null });
+    expect(gameToRow(game)).toHaveProperty("slug", null);
+    expect(gameToRow({ ...game, slug: "Not A Slug!" })).toHaveProperty("slug", null);
+  });
+});

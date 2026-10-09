@@ -260,6 +260,7 @@
   border-radius: 24px;
   background: linear-gradient(180deg, #FFEA6B 0%, #FFD23F 42%, #FFAA2B 78%, #FF9418 100%);
   color: var(--black);
+  text-decoration: none;
   font-family: 'Fredoka One', cursive;
   font-size: clamp(26px, 2.9vw, 36px);
   line-height: 1.05;
