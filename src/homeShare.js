@@ -34,11 +34,12 @@ const usesShareSheet = (nav) => isPhoneOrTablet(nav) && typeof nav.share === "fu
 //               missing or failed for a reason other than cancelling)
 //   "failed"    the clipboard write failed
 //
-// With a `url` (the result link, shareLink.js) the link is the whole payload:
-// no text goes with it, so messaging apps show the rich result card alone
-// instead of the score as plain text above it. Without one, `text` is shared.
+// A result share is the result link (shareLink.js, whose preview card carries
+// the score and dare) plus just the answer circles as `text`; both go to the
+// share sheet, or onto the clipboard as two lines. A share with only `text`
+// (a game without a usable id) sends just that.
 export async function shareResult({ text, url }, nav) {
-  const payload = url ? { url } : { text };
+  const payload = { ...(text ? { text } : {}), ...(url ? { url } : {}) };
   if (usesShareSheet(nav)) {
     try {
       await nav.share(payload);
@@ -47,7 +48,7 @@ export async function shareResult({ text, url }, nav) {
       if (err?.name === "AbortError") return "cancelled";
     }
   }
-  return copyText(url || text, nav);
+  return copyText([text, url].filter(Boolean).join("\n"), nav);
 }
 
 // What Share shows for shareResult's outcome: "copied" (only after a real

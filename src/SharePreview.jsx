@@ -25,7 +25,7 @@ export default function SharePreview({ text }) {
   return (
     <div className="share-box rs-share-preview" aria-label="Share preview">
       {text.split("\n").map((line, i) => {
-        const className = LINE_CLASS[i] || "rs-share-line";
+        const className = /^https?:///.test(line) ? "rs-share-url" : LINE_CLASS[i] || "rs-share-line";
         const perChar = FIT_EMS[className];
         const style = perChar ? { "--fit-ems": [...line].length * perChar + 0.2 } : undefined;
         return (
