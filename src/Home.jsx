@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import CandyPageShell from "./CandyPageShell.jsx";
 import CategoryArtImage from "./CategoryArtImage.jsx";
 import { shareFeedback } from "./homeShare.js";
+import { MAX_INDIVIDUAL_MEDALS, prestigeTheme, streakCycle, streakFontForWidth, streakGrowth, streakSqueeze, totalStreakText } from "./streakPrestige.js";
 import { countdownGroups, countdownTier, countdownWords } from "./schedule.js";
 
 // ---- HOME ----
@@ -24,10 +25,12 @@ export function HomePage({ children }) {
   );
 }
 
-export function HomeHeading({ eyebrow, title }) {
+// `hideEyebrow` keeps the eyebrow for screen readers only (Home drops the
+// visible "Today's puzzle" label; its streak display leads the page instead).
+export function HomeHeading({ eyebrow, title, hideEyebrow = false }) {
   return (
     <div className="hm-heading">
-      <p className="hm-eyebrow">{eyebrow}</p>
+      <p className={hideEyebrow ? "hm-sr-only" : "hm-eyebrow"}>{eyebrow}</p>
       <h1 className="hm-title">{title}</h1>
     </div>
   );
@@ -140,7 +143,7 @@ function useShortHero(probeRef, enabled) {
 // of a broken image. `preferWide` (today's puzzle once it is finished)
 // shows the wide artwork whenever the puzzle has it, on every screen; the
 // square poster, then the matchup, are its fallbacks.
-export function HomeHero({ game, colors, artworkUrl, wideUrl = null, eyebrow, preferWide = false }) {
+export function HomeHero({ game, colors, artworkUrl, wideUrl = null, eyebrow, preferWide = false, hideEyebrow = false }) {
   const [failed, setFailed] = useState(() => new Set());
   const probeRef = useRef(null);
   const square = artworkUrl && !failed.has(artworkUrl) ? artworkUrl : null;
@@ -151,7 +154,7 @@ export function HomeHero({ game, colors, artworkUrl, wideUrl = null, eyebrow, pr
   if (!square && !wide) {
     return (
       <>
-        <HomeHeading eyebrow={eyebrow} title={game.themeTitle}/>
+        <HomeHeading eyebrow={eyebrow} title={game.themeTitle} hideEyebrow={hideEyebrow}/>
         <HomeMatchup game={game} colors={colors}/>
       </>
     );
@@ -161,8 +164,8 @@ export function HomeHero({ game, colors, artworkUrl, wideUrl = null, eyebrow, pr
   const src = useWide ? wide : square;
   return (
     <>
-      <div className="hm-heading">
-        <h1 className="hm-eyebrow">{eyebrow}</h1>
+      <div className={hideEyebrow ? undefined : "hm-heading"}>
+        <h1 className={hideEyebrow ? "hm-sr-only" : "hm-eyebrow"}>{eyebrow}</h1>
       </div>
       <div className={useWide ? "hm-artwork is-wide" : "hm-artwork"}>
         {short !== null && <img key={src} src={src} alt={alt} decoding="async" onError={() => fail(src)}/>}
@@ -362,6 +365,65 @@ export function HomeCandyArt({ busy = false }) {
       </span>
       <img className="hm-candy hm-candy-b" src="/candy-pink.png" alt=""/>
     </div>
+  );
+}
+
+// The streak, leading Home. The number is the player's real streak, always;
+// only its SIZE follows the day within the current 100-day lap
+// (streakPrestige.js), so it collapses to small at 101, 201, ... on purpose.
+// It is deliberately in normal flow, so a big one pushes the puzzle down the
+// page. Prestige (completed laps) changes the look of the number and its
+// DAY STREAK label together (data-theme) and adds a medal badge. `streak` is
+// the player's actual streak (nothing here changes it); `flame` is the icon.
+export function HomeStreak({ streak, flame }) {
+  const [open, setOpen] = useState(false);
+  const numRef = useRef(null);
+  // Font size and horizontal squash for this screen width (null until
+  // measured, so the first paint is the wide-screen size).
+  const [fit, setFit] = useState(null);
+  const { cycleDay, prestigeCount } = streakCycle(streak);
+  useLayoutEffect(() => {
+    const el = numRef.current;
+    if (!el || cycleDay === 0) return;
+    const measure = () => {
+      const vw = document.documentElement.clientWidth;
+      const px = streakFontForWidth(cycleDay, vw);
+      const naturalEm = el.offsetWidth / parseFloat(getComputedStyle(el).fontSize);
+      const k = streakSqueeze(px, naturalEm, Math.min(vw - 24, 960));
+      setFit((f) => (f && Math.abs(f.px - px) < 0.05 && Math.abs(f.k - k) < 0.001 ? f : { px, k, w: px * naturalEm * k }));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    ro?.observe(el);
+    ro?.observe(document.documentElement);
+    return () => { window.removeEventListener("resize", measure); ro?.disconnect(); };
+  }, [cycleDay, streak]);
+  if (cycleDay === 0) return null;
+  const total = totalStreakText(streak); // "237-day total streak", for the badge
+  const medals = prestigeCount <= MAX_INDIVIDUAL_MEDALS ? "\u{1F3C5}".repeat(prestigeCount) : `\u{1F3C5} × ${prestigeCount}`;
+  const laps = `${prestigeCount} ${prestigeCount === 1 ? "prestige" : "prestiges"}`;
+  const growth = streakGrowth(cycleDay);
+  const shown = String(streakCycle(streak).actual);
+  return (
+    <section className="hm-sk" data-theme={prestigeTheme(prestigeCount)}
+      style={{ "--sk-t": growth.toFixed(4), "--sk-px": (fit ? fit.px : streakFontForWidth(cycleDay, 1280)).toFixed(1) }}
+      aria-label={`${shown}-day streak`}>
+      <span className="hm-sk-flame" aria-hidden="true">{flame}</span>
+      <div className="hm-sk-numbox" style={fit ? { width: fit.w } : undefined}>
+        <div className="hm-sk-num" ref={numRef} style={fit && fit.k < 1 ? { transform: `scaleX(${fit.k.toFixed(4)})` } : undefined}>{shown}</div>
+      </div>
+      <div className="hm-sk-label">DAY STREAK</div>
+      {prestigeCount > 0 && (
+        <>
+          <button type="button" className="hm-sk-badge" aria-expanded={open}
+            aria-label={`${laps}. ${total}.`} title={total} onClick={() => setOpen((o) => !o)}>
+            <span aria-hidden="true">{medals}</span>
+          </button>
+          {open && <p className="hm-sk-total">{total} &middot; {laps}</p>}
+        </>
+      )}
+    </section>
   );
 }
 

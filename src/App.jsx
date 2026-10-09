@@ -46,7 +46,7 @@ import ResultsNerdMode from "./ResultsNerdMode.jsx";
 import ResultsScore from "./ResultsScore.jsx";
 import CandyPageShell from "./CandyPageShell.jsx";
 import CategoryArtImage from "./CategoryArtImage.jsx";
-import { HomeBigButton, HomeCandyArt, HomeDonePanel, HomeFoot, HomeHeading, HomeHero, HomeLinks, HomePage, HomeUpNext } from "./Home.jsx";
+import { HomeBigButton, HomeCandyArt, HomeDonePanel, HomeFoot, HomeHeading, HomeHero, HomeLinks, HomePage, HomeStreak, HomeUpNext } from "./Home.jsx";
 import { ARCHIVE_ART_VIEWS, ARCHIVE_FILTERS, archivePuzzles, archiveTopicCounts, filterArchive, playCount, readArchiveArtView, saveArchiveArtView, sortArchive, sortAvailable } from "./archiveList.js";
 import { emptyFavorites, toggleFavorite } from "./archiveFavorites.js";
 import ArchiveTopicFilter from "./ArchiveTopicFilter.jsx";
@@ -2829,20 +2829,19 @@ function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onS
     <HomeUpNext game={upNext} colors={categoryColors(upNext)} wideUrl={wideArtworkUrl(upNext)} squareUrl={puzzleArtworkUrl(upNext)}
       opensAt={opensAt} title={nextTitle}/>
   );
-  const foot = (stats.currentStreak>0||!signedIn)&&(
+  const foot = !signedIn&&(
     <HomeFoot>
-      {stats.currentStreak>0&&(
-        <span className="hm-streak"><FI name="flame" size={18}/>{stats.currentStreak}-day streak</span>
-      )}
-      {!signedIn&&<span className="hm-signin-hint">Sign in to save your streak</span>}
+      <span className="hm-signin-hint">Sign in to save your streak</span>
     </HomeFoot>
   );
 
   return(
     <HomePage>
+      {/* The streak leads the page, above the puzzle (nothing at zero). */}
+      <HomeStreak streak={stats.currentStreak} flame={<FI name="flame" size="100%" style={{display:"block"}}/>}/>
       {game?(
         <>
-          <HomeHero game={game} colors={categoryColors(game)} artworkUrl={artworkUrl} wideUrl={wideUrl} preferWide={done}
+          <HomeHero game={game} colors={categoryColors(game)} artworkUrl={artworkUrl} wideUrl={wideUrl} preferWide={done} hideEyebrow
             eyebrow={done?<>Today&rsquo;s puzzle &middot; Completed</>:<>Today&rsquo;s puzzle</>}/>
           {done?(
             <HomeDonePanel score={gameRecord.score} total={gameRecord.totalQuestions}
