@@ -349,6 +349,12 @@
   margin-top: 14px;
   text-align: center;
 }
+.hm-sk-flame-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 .hm-sk-flame {
   display: block;
   width: calc(24px + 44px * var(--sk-t));

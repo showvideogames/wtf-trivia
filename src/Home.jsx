@@ -380,6 +380,25 @@ export function HomeCandyArt({ busy = false }) {
 // (absolute, beside the label), so the streak and label stay exactly centred
 // as if it weren't there; where there isn't room beside the label it drops to
 // its own line below, still leaving the streak where it is.
+// The streak flame: the animated flame GIF (public/streak-flame.gif), or, for
+// people who prefer reduced motion, its first frame as a still
+// (public/streak-flame-still.png): a <picture> picks between them by the
+// media query, so nothing runs in script. If either fails to load it falls
+// back to `fallbackSrc`, the app's built-in static flame icon.
+export const STREAK_FLAME_GIF = "/streak-flame.gif";
+export const STREAK_FLAME_STILL = "/streak-flame-still.png";
+
+export function StreakFlame({ fallbackSrc }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <img className="hm-sk-flame-img" src={fallbackSrc} alt=""/>;
+  return (
+    <picture>
+      <source media="(prefers-reduced-motion: reduce)" srcSet={STREAK_FLAME_STILL}/>
+      <img className="hm-sk-flame-img" src={STREAK_FLAME_GIF} alt="" decoding="async" onError={() => setFailed(true)}/>
+    </picture>
+  );
+}
+
 const HINT_GAP_PX = 10;
 const HINT_WIDTH_PX = 94;
 
