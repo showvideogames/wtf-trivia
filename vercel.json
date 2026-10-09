@@ -9,7 +9,6 @@
     { "source": "/streak-lab/", "destination": "/index.html" },
     { "source": "/auth/callback", "destination": "/index.html" },
     { "source": "/auth/callback/", "destination": "/index.html" },
-    { "source": "/s/:code/og.png", "destination": "/api/share-image?code=:code" },
     { "source": "/s/:code", "destination": "/api/share?code=:code" },
     { "source": "/s/:code/", "destination": "/api/share?code=:code" },
     { "source": "/puzzle/:id", "destination": "/api/puzzle?id=:id" },

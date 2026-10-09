@@ -1,10 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { Buffer } from "node:buffer";
-import sharp from "sharp";
+import { readFileSync } from "node:fs";
 import shareHandler from "../api/share.js";
-import imageHandler from "../api/share-image.js";
 import { clearShellCache } from "../api/puzzle.js";
 import { parseResultCode, resultCode, resultCodeFromPath, resultUrl, resultUrlFor } from "./shareLink.js";
 import { resultMeta } from "./shareResultMeta.js";
@@ -22,19 +19,14 @@ const bits = (s) => [...s].map((c) => ({ correct: c === "1" }));
 const A = "111110111111"; // 11/12
 const B = "101001100110"; // 6/12
 
-let art;
-beforeEach(async () => {
+beforeEach(() => {
   clearShellCache();
-  art = await sharp({ create: { width: 1200, height: 630, channels: 3, background: "#7a3cff" } })
-    .composite([{ input: Buffer.from('<svg width="1200" height="630"><rect x="100" y="100" width="1000" height="430" fill="#ff7ab8"/></svg>') }])
-    .webp().toBuffer();
 });
 
 const fakeFetch = (rows = [ROW]) => vi.fn(async (url) => {
   const u = String(url);
   if (u.includes("/index.html")) return new Response(SHELL, { status: 200, headers: { "content-type": "text/html" } });
   if (u.includes("/rest/v1/games")) return new Response(JSON.stringify(rows), { status: 200 });
-  if (u.includes("wide.webp")) return new Response(art, { status: 200 });
   return new Response("", { status: 404 });
 });
 const fakeRes = () => ({
@@ -77,10 +69,11 @@ describe("result page metadata (initial HTML)", () => {
     const b = (await call(shareHandler, `g-cage.${B}`)).body;
     expect(tag(a, "og:url")).toBe(`https://whatthefudge.gg/s/g-cage.${A}`);
     expect(tag(b, "og:url")).toBe(`https://whatthefudge.gg/s/g-cage.${B}`);
-    expect(tag(a, "og:image")).toBe(`https://whatthefudge.gg/s/g-cage.${A}/og.png`);
-    expect(tag(b, "og:image")).toBe(`https://whatthefudge.gg/s/g-cage.${B}/og.png`);
-    expect(tag(a, "og:title")).toBe("11/12 ➜ Can you beat my score?!");
-    expect(tag(b, "og:title")).toBe("6/12 ➜ Can you beat my score?!");
+    // The picture is the quiz artwork alone, for every result.
+    expect(tag(a, "og:image")).toBe("https://cdn.test/wide.webp");
+    expect(tag(b, "og:image")).toBe("https://cdn.test/wide.webp");
+    expect(tag(a, "og:title")).toBe("11/12 → Can you beat my score?!");
+    expect(tag(b, "og:title")).toBe("6/12 → Can you beat my score?!");
     expect(tag(a, "og:description")).toBe("🟢🟢🟢🟢🟢🔴🟢🟢🟢🟢🟢🟢");
     expect(tag(a, "twitter:card")).toBe("summary_large_image");
     expect(tag(a, "twitter:image")).toBe(tag(a, "og:image"));
@@ -102,39 +95,10 @@ describe("result page metadata (initial HTML)", () => {
     expect(ok.headers["x-share-preview"]).toBe("result");
     const bad = await call(shareHandler, `g-cage.${A}`, fakeFetch([{ ...ROW, questions: new Array(8).fill({}) }]));
     expect(bad.headers["x-share-preview"]).toBe("site");
-    expect((await call(imageHandler, `g-cage.${A}`, fakeFetch([{ ...ROW, questions: new Array(8).fill({}) }]))).statusCode).toBe(404);
   });
   it("never echoes hostile text", () => {
     const meta = resultMeta({ ...ROW, themeTitle: '"><script>x</script>' }, parseResultCode(`g-cage.${A}`));
     expect(JSON.stringify(meta.title + meta.description)).not.toContain("script");
-  });
-});
-
-describe("result image", () => {
-  const png = async (code, rows) => {
-    const res = await call(imageHandler, code, fakeFetch(rows));
-    return res;
-  };
-  it("renders a different 1200x630 PNG per result, built on the quiz art", async () => {
-    const a = await png(`g-cage.${A}`);
-    const b = await png(`g-cage.${B}`);
-    expect(a.statusCode).toBe(200);
-    expect(a.headers["content-type"]).toBe("image/png");
-    const meta = await sharp(a.body).metadata();
-    expect([meta.width, meta.height]).toEqual([1200, 630]);
-    expect(Buffer.compare(a.body, b.body)).not.toBe(0);
-    // The artwork's pink block is in the picture.
-    const px = await sharp(a.body).extract({ left: 600, top: 150, width: 1, height: 1 }).raw().toBuffer();
-    [0xff, 0x7a, 0xb8].forEach((v, i) => expect(Math.abs(px[i] - v)).toBeLessThan(4));
-    const out = new URL("../.share-samples/", import.meta.url);
-    mkdirSync(out, { recursive: true });
-    writeFileSync(new URL("a-11of12.png", out), a.body);
-    writeFileSync(new URL("b-6of12.png", out), b.body);
-  });
-  it("fails gracefully", async () => {
-    expect((await png("g-cage.bad")).statusCode).toBe(404);
-    expect((await png(`g-none.${A}`, [])).statusCode).toBe(404);
-    expect((await png(`g-cage.${A}`, [{ ...ROW, status: "draft" }])).statusCode).toBe(404);
   });
 });
 
