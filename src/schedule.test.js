@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { countdownGroups, countdownParts, countdownWords, gameDayKey, isReleased, nextPuzzle, releaseTime } from "./schedule.js";
+import { countdownGroups, countdownParts, countdownWords, gameDayKey, isReleased, nextPuzzle, releaseTime, shiftDay } from "./schedule.js";
 
 const g = (id, date, status = "published") => ({ id, date, status });
 
@@ -37,6 +37,20 @@ describe("releaseTime", () => {
     expect(releaseTime("2026-02-30")).toBeNull();
     expect(releaseTime("")).toBeNull();
     expect(releaseTime(undefined)).toBeNull();
+  });
+});
+
+describe("shiftDay", () => {
+  it("steps whole local calendar days, across months and years", () => {
+    expect(shiftDay("2026-10-08", -1)).toBe("2026-10-07");
+    expect(shiftDay("2026-10-08", 1)).toBe("2026-10-09");
+    expect(shiftDay("2026-11-01", -1)).toBe("2026-10-31");
+    expect(shiftDay("2026-12-31", 1)).toBe("2027-01-01");
+    expect(shiftDay("2028-03-01", -1)).toBe("2028-02-29");
+  });
+  it("is null for anything that isn't a real date", () => {
+    expect(shiftDay(null, 1)).toBeNull();
+    expect(shiftDay("2026-02-30", 1)).toBeNull();
   });
 });
 

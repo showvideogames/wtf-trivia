@@ -26,8 +26,9 @@ import { archivePuzzleImages, describeImageWarning, failureReason, imageName, is
 import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats } from "./crowdStats.js";
 import { gameToRow, rowToGame } from "./gameRow.js";
 import { copyText, puzzleArtworkUrl, shareResult, wideArtworkUrl } from "./homeShare.js";
-import { gameDayKey, isReleased, nextPuzzle, releaseTime } from "./schedule.js";
-import { isHoldingHome, nextHomeHold } from "./homeHold.js";
+import { gameDayKey, isReleased, nextPuzzle, releaseTime, shiftDay } from "./schedule.js";
+import { sessionGameDay } from "./dailySession.js";
+import { statsAfterFinish } from "./playerStats.js";
 import { buildResultsShareText, normalizeShareLabel } from "./share.js";
 import { puzzleIdFromPath, puzzlePath } from "./puzzleLink.js";
 import { SITE_NAME, puzzleMeta } from "./puzzleMeta.js";
@@ -2263,18 +2264,8 @@ async function dbGetStats(playerId){
   } catch(e){ return {currentStreak:0,longestStreak:0,lastPlayedDate:null,totalPlayed:0,totalCorrect:0,totalQuestions:0,bestCombo:0}; }
 }
 async function dbUpdateStats(playerId, date, score, totalQuestions, answers){
-  const s = await dbGetStats(playerId);
-  const yd = new Date(); yd.setDate(yd.getDate()-1);
-  const yds = yd.toLocaleDateString("en-CA");
-  if(s.lastPlayedDate===yds) s.currentStreak+=1;
-  else if(s.lastPlayedDate!==date) s.currentStreak=1;
-  s.longestStreak = Math.max(s.longestStreak, s.currentStreak);
-  s.lastPlayedDate = date;
-  s.totalPlayed+=1;
-  s.totalCorrect+=score;
-  s.totalQuestions+=totalQuestions;
-  const best = calcBestCombo(answers);
-  if(best>s.bestCombo) s.bestCombo=best;
+  // Streaks go by the puzzle's date (playerStats.js), not the clock.
+  const s = statsAfterFinish(await dbGetStats(playerId), {date, score, totalQuestions, bestCombo:calcBestCombo(answers)});
   await sbFetch("/rest/v1/player_stats", {
     method:"POST",
     headers:{"Prefer":"resolution=merge-duplicates"},
@@ -2298,7 +2289,8 @@ function safeWrite(k,v){try{localStorage.setItem(k,JSON.stringify(v));return tru
 function safeRemove(k){try{localStorage.removeItem(k);return true;}catch{return false;}}
 function calcBestCombo(answers){let best=0,cur=0;for(const a of answers){if(a.correct){cur++;best=Math.max(best,cur);}else cur=0;}return best;}
 function getLocalGameDay(){return gameDayKey();} // the release rule's day (schedule.js)
-function getCountdown(){const n=new Date();const t=new Date(n);t.setDate(t.getDate()+1);t.setHours(0,0,0,0);const d=t-n;return`${String(Math.floor(d/3600000)).padStart(2,"0")}:${String(Math.floor((d%3600000)/60000)).padStart(2,"0")}:${String(Math.floor((d%60000)/1000)).padStart(2,"0")}`;}
+// Time left until `opensAt` (ms), never below zero; without it, until the next local midnight.
+function getCountdown(opensAt){const n=new Date();const t=new Date(n);t.setDate(t.getDate()+1);t.setHours(0,0,0,0);const d=Math.max(0,(opensAt??t.getTime())-n.getTime());return`${String(Math.floor(d/3600000)).padStart(2,"0")}:${String(Math.floor((d%3600000)/60000)).padStart(2,"0")}:${String(Math.floor((d%60000)/1000)).padStart(2,"0")}`;}
 function parseYouTubeStart(value){
   const raw = String(value||"").trim();
   if(!raw) return 0;
@@ -2375,7 +2367,9 @@ function scoreMsg(s,t){const p=s/t;if(p===1)return"🏆 PERFECT!! Absolutely fla
 // ============================================================
 // SMALL SHARED COMPONENTS
 // ============================================================
-function Countdown(){const[t,setT]=useState(getCountdown());useEffect(()=>{const id=setInterval(()=>setT(getCountdown()),1000);return()=>clearInterval(id);},[]);return(<div className="cdown-box"><div className="cdown-lbl">Next game in</div><div className="cdown-time">{t}</div></div>);}
+// Counts down to the day after `day` (the shown puzzle's), so Results seen
+// past midnight reads 00:00:00 rather than counting to the following night.
+function Countdown({day}){const opensAt=releaseTime(shiftDay(day,1))?.getTime();const[t,setT]=useState(()=>getCountdown(opensAt));useEffect(()=>{const id=setInterval(()=>setT(getCountdown(opensAt)),1000);return()=>clearInterval(id);},[opensAt]);return(<div className="cdown-box"><div className="cdown-lbl">Next game in</div><div className="cdown-time">{t}</div></div>);}
 // Decorative backdrop for the landing page: a warm spotlight gradient plus a
 // small amount of candy artwork. Sprinkle PNGs sit inside a large transparent
 // canvas (~36% of it is artwork), so element widths are ~2.7x the intended
@@ -2827,7 +2821,7 @@ function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onS
   // the next one under its own heading: "Tomorrow's puzzle" when it opens
   // tomorrow, else "Up next". With no puzzle today, it shows straight away.
   // "Tomorrow" is the day after the puzzle shown as today's (so a page held
-  // past midnight, homeHold.js, keeps its heading), else after today.
+  // past midnight, dailySession.js, keeps its heading), else after today.
   const tomorrow = (game&&releaseTime(game.date)) || new Date();
   tomorrow.setDate(tomorrow.getDate()+1);
   const nextTitle = upNext?.date===gameDayKey(tomorrow) ? "Tomorrow’s puzzle" : "Up next";
@@ -3830,7 +3824,7 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
             {isReplay?"← Back to archive":"← Back to home"}
           </button>
 
-          {!isReplay&&<Countdown/>}
+          {!isReplay&&<Countdown day={game?.date}/>}
         </div>
       </div>
     </div>
@@ -4024,8 +4018,10 @@ function ArchiveCard({game,record,isToday,onAction,eager,favorite,plays=null,art
   );
 }
 
-function ArchiveScreen({games,playerId,onReplay,onPlayToday}){
-  const today=getLocalGameDay();
+// `today` is the clock's game day (App's liveDay): past midnight the Archive
+// lists the new day's puzzle as Today even while Home still holds the
+// session's earlier one, and its Today card starts the new day.
+function ArchiveScreen({games,playerId,onReplay,onPlayToday,today}){
   const[records,setRecords]=useState({});
   const[query,setQuery]=useState("");
   const[filterChoice,setFilter]=useState("all");
@@ -4891,12 +4887,25 @@ export default function WhatTheFudgeTrivia(){
   const authUserIdRef = useRef(null);
 
   const sound=useSoundEngine();
-  // The game day is read on every render (loadAppData depends on it). Home
-  // never moves to the new day by itself: at the next puzzle's opening its
-  // countdown becomes PLAY NOW, which reloads the page.
-  const today=getLocalGameDay();
+  // Two days (dailySession.js):
+  // - liveDay: the clock's game day, read on every render. Date-aware screens
+  //   that aren't the daily session (the Archive, Replay) go by it.
+  // - sessionDay: the day of the daily puzzle this page's session plays --
+  //   Home, the daily game, its Results and Share. Taken when the page loads,
+  //   it stays put past midnight while the session owns that puzzle (playing,
+  //   started or finished), so the game keeps its puzzle, date and Results;
+  //   otherwise it catches up with liveDay. Starting the new day's puzzle
+  //   (PLAY NOW, or the Archive's Today card) moves it on.
+  const liveDay=getLocalGameDay();
+  const[sessionDay,setSessionDay]=useState(getLocalGameDay);
+  // The day loadAppData last loaded the daily record for, and the one it
+  // loads now (loadAppData is stable, so it reads the session day here).
+  const loadedDayRef = useRef(sessionDay);
+  const sessionDayRef = useRef(sessionDay);
+  useEffect(()=>{ sessionDayRef.current = sessionDay; },[sessionDay]);
 
   const loadAppData = useCallback(async(sessionOverride=null,{recoverAuth=false}={})=>{
+    const today = sessionDayRef.current;
     const session = sessionOverride || await authEnsureSession({recover:recoverAuth});
     // [accounts] a non-guest session must be a WTF account; see authResolveAccount.
     const resolved = await authResolveAccount(session);
@@ -4929,7 +4938,8 @@ export default function WhatTheFudgeTrivia(){
     } else {
       setGameRecord(null);
     }
-  },[today]);
+    loadedDayRef.current = today;
+  },[]);
 
   // Boot and listen for auth session changes
   useEffect(()=>{
@@ -5008,32 +5018,33 @@ export default function WhatTheFudgeTrivia(){
     };
   },[loadAppData]);
 
-  const todayGame = games.find(g=>g.date===today&&g.status==="published") || null;
-  // Home's Up Next: the soonest published puzzle after today. Drafts and
-  // retired puzzles never show there (schedule.js).
-  const upNextGame = nextPuzzle(games, today);
+  // The session's daily puzzle ("today's" on Home, in the game and Results).
+  const todayGame = games.find(g=>g.date===sessionDay&&g.status==="published") || null;
+  // Home's Up Next: the soonest published puzzle after the session's day.
+  // Drafts and retired puzzles never show there (schedule.js).
+  const upNextGame = nextPuzzle(games, sessionDay);
   // The player's record counts as today's only if it belongs to today's
   // puzzle: if the puzzle on today's date changes, another puzzle's result
   // is never shown, resumed or shared as today's.
   const todayRecord = gameRecord && todayGame && gameRecord.puzzleId===todayGame.id ? gameRecord : null;
-  // Finished today's puzzle and still on Home or its Results when the day
-  // rolls over: those two keep showing it until PLAY NOW reloads the page
-  // (homeHold.js). Everything else uses the live day.
-  const[homeHold,setHomeHold]=useState(null);
-  const liveHome = {view, day:today, game:todayGame, record:todayRecord, upNext:upNextGame};
-  const hold = nextHomeHold(homeHold, liveHome);
-  if(hold!==homeHold) setHomeHold(hold);
-  const holdingHome = isHoldingHome(hold, liveHome);
-  const homeGame = holdingHome ? hold.game : todayGame;
-  const homeRecord = holdingHome ? hold.record : todayRecord;
-  const homeUpNext = holdingHome ? hold.upNext : upNextGame;
+  // Past midnight, the session's day stays while it owns its puzzle (on
+  // screen, started or finished) and otherwise catches up with the clock.
+  const nextSessionDay = sessionGameDay({gameDay:sessionDay, liveDay, view, record:todayRecord});
+  if(nextSessionDay!==sessionDay) setSessionDay(nextSessionDay);
+  // Caught up with the clock: reload the app data for the new day, as a new
+  // visit would, behind the page (nothing of the old day was played).
+  useEffect(()=>{
+    if(loading || loadedDayRef.current===sessionDay) return;
+    loadedDayRef.current = sessionDay;
+    loadAppData().catch(e=>console.error("[new day] reload failed", e));
+  },[sessionDay, loading, loadAppData]);
   // A puzzle link's page follows the same rules as everywhere else: today's
   // puzzle is Home itself (a normal, scored daily play), an earlier released
   // puzzle replays as it would from the Archive, and anything else (not out
   // yet on this player's day, a draft, retired, unknown) can't be opened.
   const linkGame = view==="puzzle"&&linkId ? games.find(g=>g.id===linkId)||null : null;
   const linkIsToday = Boolean(linkGame&&todayGame&&linkGame.id===todayGame.id);
-  const linkReplay = Boolean(linkGame&&!linkIsToday&&isReleased(linkGame, today));
+  const linkReplay = Boolean(linkGame&&!linkIsToday&&isReleased(linkGame, sessionDay));
   // This player's own result for an earlier puzzle opened by link, once read.
   const[linkRecord,setLinkRecord]=useState(null); // {puzzleId, record}
   useEffect(()=>{
@@ -5256,9 +5267,13 @@ export default function WhatTheFudgeTrivia(){
     setEditGame(null);
   };
 
-  // Start game
-  const handlePlay = async() => {
-    if(!todayGame) return;
+  // Start game: the session's daily puzzle, or `game` when the Archive's
+  // Today card starts the clock's day while the session still holds an
+  // earlier one -- that moves the session on to the new day.
+  const handlePlay = async(game=todayGame) => {
+    const daily = game===todayGame || (game?.date===liveDay && isReleased(game, liveDay)) ? game : null;
+    if(!daily) return;
+    const record = daily===todayGame ? todayRecord : null;
     sound.play("click");
     // Prioritize the active window in this same click, before any of the
     // awaits below -- not waiting for GameScreen to mount a moment later --
@@ -5266,7 +5281,7 @@ export default function WhatTheFudgeTrivia(){
     // question screen that's about to appear. (GameScreen's own effect
     // re-primes on mount too; this is what makes the window start warming
     // immediately rather than one render cycle later.)
-    primeActiveWindow(getPuzzleImageUrls(todayGame), todayRecord?.currentIndex ?? 0, todayGame.id);
+    primeActiveWindow(getPuzzleImageUrls(daily), record?.currentIndex ?? 0, daily.id);
     try {
       let activePlayer = player;
       if(!activePlayer){
@@ -5278,7 +5293,12 @@ export default function WhatTheFudgeTrivia(){
         showToast("Still connecting... try again in a sec.");
         return;
       }
-      const rec = await dbInitGameRecord(activePlayer.id, todayGame);
+      const rec = await dbInitGameRecord(activePlayer.id, daily);
+      if(daily.date!==sessionDay){
+        // The record is in hand, so the new day needs no reload.
+        loadedDayRef.current = daily.date;
+        setSessionDay(daily.date);
+      }
       setGameRecord(rec);
       setView("game");
     } catch(e){
@@ -5335,13 +5355,13 @@ export default function WhatTheFudgeTrivia(){
     if(!game || !record?.completed) return null;
     return shareResult({ text: buildResultsShareText({ game, record }) }, navigator);
   };
-  const handleShareToday = () => shareFinished(homeGame, homeRecord);
+  const handleShareToday = () => shareFinished(todayGame, todayRecord);
 
   // Replay. Only a released puzzle (schedule.js: published, dated today or
   // earlier) can start, whatever asks: a puzzle scheduled after today stays
   // a teaser (Up Next) until its day, even if a stale list still offers it.
   const handleReplay = g => {
-    if(!isReleased(g, getLocalGameDay())) return;
+    if(!isReleased(g, liveDay)) return;
     primeActiveWindow(getPuzzleImageUrls(g), 0, g.id);
     setReplayGame(g);
     setReplayRecord(newRecordFor(g));
@@ -5393,9 +5413,7 @@ export default function WhatTheFudgeTrivia(){
     : null;
   if(adminEditor) return adminEditor;
 
-  // A held Home (see homeHold.js) stays on screen through the new day's
-  // background reload, rather than giving way to the loading page.
-  if((loading||error)&&!holdingHome) return(
+  if(loading||error) return(
     <PlayerChromeContext.Provider value={playerChrome}>
       <style>{styles}</style>
       <div className="app">
@@ -5432,9 +5450,9 @@ export default function WhatTheFudgeTrivia(){
         <PlayerHeader sticky={!isGameplay}/>
         <div className="main">
           {(view==="home"||(view==="puzzle"&&linkIsToday))&&(
-            <HomeScreen game={homeGame} gameRecord={homeRecord} upNext={homeUpNext} stats={stats}
+            <HomeScreen game={todayGame} gameRecord={todayRecord} upNext={upNextGame} stats={stats}
               player={player}
-              onPlay={handlePlay}
+              onPlay={()=>handlePlay()}
               onNav={v=>{sound.play("click");setView(v);}}
               onHelp={()=>setShowHelp(true)}
               onShare={handleShareToday}
@@ -5472,8 +5490,8 @@ export default function WhatTheFudgeTrivia(){
             />
           )}
 
-          {view==="score"&&homeRecord&&(
-            <ScoreScreen gameRecord={homeRecord} game={homeGame} crowd={crowd} onNav={setView} sound={sound} withChrome/>
+          {view==="score"&&todayRecord&&(
+            <ScoreScreen gameRecord={todayRecord} game={todayGame} crowd={crowd} onNav={setView} sound={sound} withChrome/>
           )}
 
           {view==="replay-score"&&replayRecord&&(
@@ -5496,6 +5514,7 @@ export default function WhatTheFudgeTrivia(){
               playerId={player?.id}
               onReplay={handleReplay}
               onPlayToday={handlePlay}
+              today={liveDay}
             />
           )}
         </div>
