@@ -7,7 +7,8 @@ import StreakLab from "./StreakLab.jsx";
 // /auth/callback is the only page that turns a sign-in code into a session.
 // /streak-lab is a hidden QA page (StreakLab.jsx), not linked from anywhere.
 // Everything else is the game (including /admin, which App routes itself).
-// No router: Vercel serves index.html for these paths (vercel.json).
+// No router: Vercel serves index.html for these paths (vercel.json), and
+// App moves between the site's own sections itself (siteRoutes.js).
 const path = window.location.pathname.replace(/\/+$/, "");
 const isAuthCallback = path === "/auth/callback";
 const isStreakLab = path === "/streak-lab";

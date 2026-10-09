@@ -217,8 +217,14 @@
   gap: 6px;
 }
 
+/* The page links are real links (<a href>) drawn exactly like the buttons
+   they replaced: centred in the same pill, never underlined. */
 .sh-link {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
   border: 0;
   background: transparent;
   color: var(--black);
@@ -245,6 +251,8 @@
   border-radius: 50%;
   border: 2.5px solid var(--black);
   background: var(--cs-cream);
+  color: var(--black);
+  text-decoration: none;
   font-size: 19px;
   line-height: 1;
   cursor: pointer;
@@ -312,6 +320,7 @@
   border-radius: 14px;
   background: transparent;
   color: var(--black);
+  text-decoration: none;
   font-family: 'Fredoka One', cursive;
   font-size: 18px;
   line-height: 1;

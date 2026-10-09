@@ -3,6 +3,12 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/archive", "destination": "/index.html" },
+    { "source": "/archive/", "destination": "/index.html" },
+    { "source": "/stats", "destination": "/index.html" },
+    { "source": "/stats/", "destination": "/index.html" },
+    { "source": "/how-to-play", "destination": "/index.html" },
+    { "source": "/how-to-play/", "destination": "/index.html" },
     { "source": "/admin", "destination": "/index.html" },
     { "source": "/admin/", "destination": "/index.html" },
     { "source": "/streak-lab", "destination": "/index.html" },

@@ -8,7 +8,9 @@ import { useEffect, useId, useRef, useState } from "react";
 // the dev Admin entry), the logo centred, sound and a compact account
 // button on the right. Every player screen shows it, through PlayerHeader.
 //
-//   nav:     [{id, label, onClick}] -- real destinations or actions only
+//   nav:     [{id, label, href?, onClick}] -- real destinations or actions
+//            only. With an href the item is a real link (its address opens in
+//            a new tab, copies, ...); a plain click runs onClick instead.
 //   current: id of the link for the page being shown (pink, aria-current)
 //   sound:   the sound engine ({muted, setMuted}), optional
 //   account: {label, title, signedIn, onClick}
@@ -37,6 +39,20 @@ function CurrentGlyph() {
   );
 }
 
+// A header destination: a link when it has an address, a button otherwise
+// (Admin Preview's inert stand-ins). A plain left click stays in the app
+// (onClick, which moves the address itself); a modified or middle click is
+// left to the browser, so "open in new tab" works.
+function NavItem({ item, onClick = item.onClick, children, ...props }) {
+  if (!item.href) return <button type="button" onClick={onClick} {...props}>{children}</button>;
+  const follow = (e) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    onClick();
+  };
+  return <a href={item.href} onClick={follow} {...props}>{children}</a>;
+}
+
 // The phone menu: a disclosure (button + panel). Opening focuses the first
 // link; Escape closes and returns focus to the button; a press anywhere
 // outside the header closes it; choosing an item closes it and puts focus back
@@ -51,7 +67,7 @@ function HeaderMenu({ items, current }) {
 
   useEffect(() => {
     if (!open) return;
-    panelRef.current?.querySelector("button")?.focus();
+    panelRef.current?.querySelector("a, button")?.focus();
     const onKey = (e) => {
       if (e.key === "Escape") { setOpen(false); buttonRef.current?.focus({ preventScroll: true }); }
     };
@@ -78,14 +94,14 @@ function HeaderMenu({ items, current }) {
           <ul>
             {items.map((item) => (
               <li key={item.id}>
-                <button type="button"
-                        className={currentClass("sh-menu-item", item.id, current)}
-                        aria-current={ariaCurrent(item.id, current)}
-                        onClick={() => { setOpen(false); buttonRef.current?.focus({ preventScroll: true }); item.onClick(); }}>
+                <NavItem item={item}
+                         className={currentClass("sh-menu-item", item.id, current)}
+                         aria-current={ariaCurrent(item.id, current)}
+                         onClick={() => { setOpen(false); buttonRef.current?.focus({ preventScroll: true }); item.onClick(); }}>
                   {item.icon && <span className="sh-menu-icon" aria-hidden="true">{item.icon}</span>}
                   <span className="sh-menu-label">{item.label}</span>
                   {item.id === current && <CurrentGlyph/>}
-                </button>
+                </NavItem>
               </li>
             ))}
           </ul>
@@ -167,21 +183,20 @@ export default function SiteHeader({ nav, current, sound, account, admin }) {
       <div className="sh-left">
         <HeaderMenu items={menuItems} current={current}/>
         {archive && (
-          <button type="button" className={currentClass("sh-icon-btn sh-shortcut", "archive", current)}
-                  aria-current={ariaCurrent("archive", current)}
-                  aria-label={archive.label} title={archive.label} onClick={archive.onClick}>
+          <NavItem item={archive} className={currentClass("sh-icon-btn sh-shortcut", "archive", current)}
+                   aria-current={ariaCurrent("archive", current)}
+                   aria-label={archive.label} title={archive.label}>
             <GridGlyph/>
-          </button>
+          </NavItem>
         )}
       </div>
       <nav className="sh-nav" aria-label="Main">
         {nav.map((item) => (
-          <button key={item.id} type="button"
-                  className={currentClass("sh-link", item.id, current)}
-                  aria-current={ariaCurrent(item.id, current)}
-                  onClick={item.onClick}>
+          <NavItem key={item.id} item={item}
+                   className={currentClass("sh-link", item.id, current)}
+                   aria-current={ariaCurrent(item.id, current)}>
             {item.label}
-          </button>
+          </NavItem>
         ))}
       </nav>
       {/* The approved wordmark: the logo without its TRIVIA line (the same
@@ -189,10 +204,10 @@ export default function SiteHeader({ nav, current, sound, account, admin }) {
       <img src="/wtf-logo-wordmark.png" alt="What The Fudge" className="sh-logo"/>
       <div className="sh-tools">
         {help && (
-          <button type="button" className={currentClass("sh-icon-btn sh-shortcut sh-help", "help", current)}
-                  aria-label={help.label} title={help.label} onClick={help.onClick}>
+          <NavItem item={help} className={currentClass("sh-icon-btn sh-shortcut sh-help", "help", current)}
+                   aria-label={help.label} title={help.label}>
             <span aria-hidden="true">?</span>
-          </button>
+          </NavItem>
         )}
         {sound && (
           <button type="button" className="sh-icon-btn" onClick={() => sound.setMuted((m) => !m)}

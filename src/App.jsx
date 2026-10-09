@@ -40,6 +40,7 @@ import GameProgress from "./GameProgress.jsx";
 import PaperPrompt from "./PaperPrompt.jsx";
 import { PAPER_LOOK } from "./gameplayLook.js";
 import { PlayerChromeContext } from "./playerChrome.js";
+import { SECTION_PATHS, addressForView, entryView, sectionFromPath } from "./siteRoutes.js";
 import { answerWriteFilter, saveAnswerThenSync } from "./answerSync.js";
 import SharePreview from "./SharePreview.jsx";
 import ResultsCopyButton from "./ResultsCopyButton.jsx";
@@ -4360,8 +4361,9 @@ function readPuzzleLink(){
   if(id) window.history.replaceState(null,"",puzzlePath(id));
   return id;
 }
-// The screens that belong to the site itself rather than to one puzzle.
-const SITE_VIEWS = new Set(["home","archive","stats","account"]);
+// The screen a site address opens on (siteRoutes.js): /archive and /stats
+// their own, / and /how-to-play Home (the dialog opens over it).
+const viewFromSection = section=>section==="archive"||section==="stats" ? section : "home";
 const readAdminSession = ()=>{ try { return sessionStorage.getItem(ADMIN_SESSION_KEY)==="1"; } catch { return false; } };
 const writeAdminSession = on=>{ try { if(on) sessionStorage.setItem(ADMIN_SESSION_KEY,"1"); else sessionStorage.removeItem(ADMIN_SESSION_KEY); } catch { /* storage blocked */ } };
 const setPath = path=>{ if(window.location.pathname!==path) window.history.pushState(null,"",path); };
@@ -4867,36 +4869,74 @@ export default function WhatTheFudgeTrivia(){
   const[linkId,setLinkId]=useState(()=>isAdminPath()?null:readPuzzleLink());
   // A shared result link (/s/<code>) opens that result's page ("result").
   const[resultCode,setResultCode]=useState(()=>isAdminPath()?null:resultCodeFromPath(window.location.pathname));
-  const[view,setView]=useState(()=>isAdminPath()?"admin":linkId!==null?"puzzle":resultCode!==null?"result":"home");
+  const[view,setView]=useState(()=>isAdminPath()?"admin":linkId!==null?"puzzle":resultCode!==null?"result":viewFromSection(sectionFromPath(window.location.pathname)));
   // Back from an admin sign-in started in the editor: reopen that puzzle.
   const[adminResume]=useState(()=>isAdminPath()&&readAdminSession()?takeAdminResume():null);
   const[adminView,setAdminView]=useState(()=>adminResume?"editor":readAdminSession()?"dashboard":"login");
   const[adminIn,setAdminIn]=useState(readAdminSession);
-  // Back/forward between /admin, puzzle links and the site.
-  useEffect(()=>{
-    const onPop=()=>{
-      if(isAdminPath()){ setView("admin"); return; }
-      const id=puzzleIdFromPath(window.location.pathname);
-      if(id!==null) setLinkId(id);
-      const rc=resultCodeFromPath(window.location.pathname);
-      if(rc!==null) setResultCode(rc);
-      setView(v=>id!==null?"puzzle":rc!==null?"result":v==="admin"||v==="puzzle"||v==="result"?"home":v);
-    };
-    window.addEventListener("popstate",onPop);
-    return ()=>window.removeEventListener("popstate",onPop);
-  },[]);
-  // Leaving a puzzle link's page for the rest of the site (the header,
-  // Back to home, ...) puts the site's own address back. Playing from the
-  // page keeps the link, so a refresh comes back to the same puzzle.
-  useEffect(()=>{
-    if(SITE_VIEWS.has(view) && (puzzleIdFromPath(window.location.pathname)!==null || resultCodeFromPath(window.location.pathname)!==null)) setPath("/");
-  },[view]);
   const[editGame,setEditGame]=useState(adminResume);
   const[replayGame,setReplayGame]=useState(null);
   const[replayRecord,setReplayRecord]=useState(null);
   const[toast,setToast]=useState(null);
-  // How to Play, opened from the shared header on any player screen.
-  const[showHelp,setShowHelp]=useState(false);
+  // How to Play, opened from the shared header on any player screen. It has
+  // its own address (/how-to-play) and history entry, over the page it was
+  // opened on: Back (or Got it) closes it and leaves that page as it was.
+  const[showHelp,setShowHelp]=useState(()=>!isAdminPath()&&sectionFromPath(window.location.pathname)==="help");
+  const helpOpenRef = useRef(showHelp);
+  useEffect(()=>{ helpOpenRef.current = showHelp; },[showHelp]);
+  // Set while Got it steps back over the dialog's own entry, which it has
+  // already closed.
+  const skipHelpPopRef = useRef(false);
+  // Back/forward (and swipe-back) between the site's sections, How to Play,
+  // /admin, puzzle links and shared results.
+  useEffect(()=>{
+    const onPop=e=>{
+      if(skipHelpPopRef.current){ skipHelpPopRef.current=false; return; }
+      if(isAdminPath()){ setShowHelp(false); setView("admin"); return; }
+      const section=sectionFromPath(window.location.pathname);
+      if(section==="help"){ setShowHelp(true); return; }
+      if(helpOpenRef.current){ setShowHelp(false); return; }
+      const id=puzzleIdFromPath(window.location.pathname);
+      if(id!==null) setLinkId(id);
+      const rc=resultCodeFromPath(window.location.pathname);
+      if(rc!==null) setResultCode(rc);
+      const entry=entryView(window.location.pathname, e.state);
+      setView(v=>id!==null?"puzzle":rc!==null?"result":entry==="account"?"account":section?viewFromSection(section):v==="admin"||v==="puzzle"||v==="result"?"home":v);
+    };
+    window.addEventListener("popstate",onPop);
+    return ()=>window.removeEventListener("popstate",onPop);
+  },[]);
+  // The address follows the screen (siteRoutes.js): moving to another
+  // section -- the header, Home's links, Back to home, leaving a puzzle
+  // link's page -- adds its history entry. Playing from a puzzle link keeps
+  // the link, so a refresh comes back to the same puzzle. Arriving by
+  // Back/Forward, the address already matches and nothing is added.
+  useEffect(()=>{
+    const here=window.location.pathname;
+    if(sectionFromPath(here)==="help") return;
+    const address=addressForView(view, here);
+    if(!address) return;
+    const [path, entry]=address;
+    if(entryView(here, window.history.state)===entry && sectionFromPath(here)===sectionFromPath(path)){
+      // The same entry; only a trailing slash to tidy.
+      if(here!==path) window.history.replaceState(window.history.state,"",path+window.location.search);
+      return;
+    }
+    window.history.pushState({wtfView:entry},"",path);
+  },[view]);
+  const openHelp=()=>{
+    setShowHelp(true);
+    if(sectionFromPath(window.location.pathname)!=="help") window.history.pushState({wtfHelp:true},"",SECTION_PATHS.help);
+  };
+  // Opened here: step back over its entry. Opened by its own address (a
+  // link or a refresh): there is no page under it here, so Home takes its
+  // place in history.
+  const closeHelp=()=>{
+    setShowHelp(false);
+    if(sectionFromPath(window.location.pathname)!=="help") return;
+    if(window.history.state?.wtfHelp){ skipHelpPopRef.current=true; window.history.back(); }
+    else window.history.replaceState({wtfView:"home"},"","/");
+  };
 
   // Supabase state
   const[games,setGames]=useState([]);
@@ -5426,10 +5466,10 @@ export default function WhatTheFudgeTrivia(){
     // restores the page's own.
     current: showHelp ? "help" : view==="home" ? "play" : view==="archive" ? "archive" : view==="stats" ? "stats" : null,
     nav: [
-      {id:"play", label:"Play", onClick:()=>goTo("home")},
-      {id:"archive", label:"Archive", onClick:()=>goTo("archive")},
-      {id:"stats", label:"Stats", onClick:()=>goTo("stats")},
-      {id:"help", label:"How to Play", onClick:()=>setShowHelp(true)},
+      {id:"play", label:"Play", href:SECTION_PATHS.home, onClick:()=>goTo("home")},
+      {id:"archive", label:"Archive", href:SECTION_PATHS.archive, onClick:()=>goTo("archive")},
+      {id:"stats", label:"Stats", href:SECTION_PATHS.stats, onClick:()=>goTo("stats")},
+      {id:"help", label:"How to Play", href:SECTION_PATHS.help, onClick:openHelp},
     ],
     sound,
     account: {
@@ -5493,7 +5533,7 @@ export default function WhatTheFudgeTrivia(){
               player={player}
               onPlay={()=>handlePlay()}
               onNav={v=>{sound.play("click");setView(v);}}
-              onHelp={()=>setShowHelp(true)}
+              onHelp={openHelp}
               onShare={handleShareToday}
             />
           )}
@@ -5564,7 +5604,7 @@ export default function WhatTheFudgeTrivia(){
         </div>
 
         {toast&&<Toast message={toast} onDone={()=>setToast(null)}/>}
-        {showHelp&&<HowToPlay onClose={()=>setShowHelp(false)}/>}
+        {showHelp&&<HowToPlay onClose={closeHelp}/>}
         {/* [accounts] asked once, after the first sign-in from a browser whose guest had history */}
         {handoff&&<ImportPrompt summary={handoff} onAdd={handleAddProgress} onStartFresh={handleStartFresh}/>}
       </div>
