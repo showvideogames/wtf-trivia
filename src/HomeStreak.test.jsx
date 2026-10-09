@@ -77,17 +77,39 @@ ${sel} {`);
   });
 });
 
+describe("HomeStreak centring", () => {
+  const css = readFileSync(new URL("./homePage.css", import.meta.url), "utf8");
+  const rule = (sel) => {
+    const start = css.indexOf(`
+${sel} {`);
+    return css.slice(start, css.indexOf("}", start));
+  };
+
+  it("hangs the guest nudge off the label on its own, so it never takes part in centring", () => {
+    expect(rule(".hm-sk-hint")).toContain("position: absolute");
+    expect(rule(".hm-sk-hint")).toContain("left: calc(100% + 10px)");
+    expect(rule(".hm-sk-labelline")).toContain("position: relative");
+    expect(rule(".hm-sk-labelline")).toContain("align-self: center");
+  });
+
+  it("centres the squashed number: a centred box, scaled about its own centre", () => {
+    expect(rule(".hm-sk-numbox")).toContain("justify-content: center");
+    expect(rule(".hm-sk-num")).toContain("transform-origin: center center");
+    expect(rule(".hm-sk-num")).toContain("flex: none");
+  });
+});
+
 describe("HomeStreak guest sign-in nudge", () => {
   const withHint = (n) => renderToStaticMarkup(<HomeStreak streak={n} flame={<i/>} onSignIn={() => {}}/>);
 
-  it("shows the existing copy beside the flame for a guest, as a button", () => {
+  it("shows the existing copy beside DAY STREAK for a guest, as a button", () => {
     const html = withHint(50);
     expect(html).toContain("Sign in to save your streak");
     expect(html).toContain('<button type="button" class="hm-signin-hint hm-sk-hint">Sign in to save your streak</button>');
-    expect(html).toContain('class="hm-sk has-hint"');
-    // In the flame row, above the number and the label, which stay on their own.
-    expect(html.indexOf("hm-sk-hint")).toBeLessThan(html.indexOf("hm-sk-num"));
-    expect(html.indexOf("hm-sk-hint")).toBeLessThan(html.indexOf("hm-sk-label"));
+    expect(html).toContain('class="hm-sk-labelline has-hint"');
+    // Right after the DAY STREAK label, in the same line, below the number.
+    expect(html.indexOf("hm-sk-num")).toBeLessThan(html.indexOf("hm-sk-label"));
+    expect(html.indexOf("hm-sk-label")).toBeLessThan(html.indexOf("hm-sk-hint"));
   });
 
   it("is not shown when signed in, or without a streak", () => {
