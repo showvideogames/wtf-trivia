@@ -48,7 +48,7 @@ import ResultsNerdMode from "./ResultsNerdMode.jsx";
 import ResultsScore from "./ResultsScore.jsx";
 import CandyPageShell from "./CandyPageShell.jsx";
 import CategoryArtImage from "./CategoryArtImage.jsx";
-import { HomeBigButton, HomeCandyArt, HomeDonePanel, HomeHeading, HomeHero, HomeLinks, HomePage, HomeStreak, HomeUpNext } from "./Home.jsx";
+import { HomeBigButton, HomeCandyArt, HomeDonePanel, HomeHeading, HomeHero, HomeLinks, HomePage, HomeStreak, HomeUpNext, StreakFlame } from "./Home.jsx";
 import { ARCHIVE_ART_VIEWS, ARCHIVE_FILTERS, archivePuzzles, archiveTopicCounts, filterArchive, playCount, readArchiveArtView, saveArchiveArtView, sortArchive, sortAvailable } from "./archiveList.js";
 import { emptyFavorites, toggleFavorite } from "./archiveFavorites.js";
 import ArchiveTopicFilter from "./ArchiveTopicFilter.jsx";
@@ -2840,7 +2840,7 @@ function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onS
   return(
     <HomePage>
       {/* The streak leads the page, above the puzzle (nothing at zero). */}
-      <HomeStreak streak={labStreak ?? stats.currentStreak} onSignIn={signedIn?null:()=>onNav("account")} flame={<FI name="flame" size="100%" style={{display:"block"}}/>}/>
+      <HomeStreak streak={labStreak ?? stats.currentStreak} onSignIn={signedIn?null:()=>onNav("account")} flame={<StreakFlame fallbackSrc={ICONS.flame}/>}/>
       {game?(
         <>
           <HomeHero game={game} colors={categoryColors(game)} artworkUrl={artworkUrl} wideUrl={wideUrl} preferWide={done} hideEyebrow
