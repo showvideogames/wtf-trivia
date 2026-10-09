@@ -74,7 +74,9 @@ describe("result page metadata (initial HTML)", () => {
     expect(tag(b, "og:image")).toBe("https://cdn.test/wide.webp");
     expect(tag(a, "og:title")).toBe("11/12 → Can you beat my score?!");
     expect(tag(b, "og:title")).toBe("6/12 → Can you beat my score?!");
-    expect(tag(a, "og:description")).toBe("🟢🟢🟢🟢🟢🔴🟢🟢🟢🟢🟢🟢");
+    expect(tag(a, "og:description")).toBe("Daily trivia. Two choices.");
+    expect(tag(b, "og:description")).toBe("Daily trivia. Two choices.");
+    expect(tag(a, "twitter:description")).toBe("Daily trivia. Two choices.");
     expect(tag(a, "twitter:card")).toBe("summary_large_image");
     expect(tag(a, "twitter:image")).toBe(tag(a, "og:image"));
     // The matchup title is not visible text: only the page title and alt.
