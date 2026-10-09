@@ -49,6 +49,15 @@ export function releaseTime(day) {
   return at.getFullYear() === y && at.getMonth() === mo - 1 && at.getDate() === d ? at : null;
 }
 
+// The game day `n` days after `day` (before, for negative n), by the same
+// local calendar as gameDayKey. Null for anything that isn't a real date.
+export function shiftDay(day, n) {
+  const at = releaseTime(day);
+  if (!at) return null;
+  at.setDate(at.getDate() + n);
+  return gameDayKey(at);
+}
+
 // Milliseconds left, split for display. Never negative.
 export function countdownParts(ms) {
   const total = Math.max(0, Math.floor((Number(ms) || 0) / 1000));

@@ -2,12 +2,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { demoGame } from "./dev/offlineBackend.js";
 
 // The whole app across midnight, offline (the dev backend, never a
 // database), with two fixed puzzles: Oct 8 (today) and Oct 9 (tomorrow).
 // Each case renders the whole app, so it gets more than the default 5s.
-// A finished Home holds through the opening and unrelated updates until
-// PLAY NOW reloads; an unfinished one rolls over to the new day as always.
+// A session that started or finished Oct 8 keeps it -- the game, its save,
+// streak, Results and Share -- through the opening and unrelated updates
+// until PLAY NOW reloads (dailySession.js); a Home with nothing played rolls
+// over to the new day as always, and a new page load always opens the new day.
 
 vi.stubEnv("VITE_SUPABASE_URL", "");
 vi.stubEnv("VITE_SUPABASE_ANON_KEY", "");
@@ -28,6 +31,8 @@ vi.mock("./dev/offlineBackend.js", async (importOriginal) => {
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const RECORD_KEY = "wtf-dev-records-by-puzzle";
+const STATS_KEY = "wtf-dev-stats";
+const LOG_KEY = "wtf-dev-log";
 
 let root = null;
 let host = null;
@@ -142,5 +147,180 @@ describe("Home across midnight", () => {
     expect(host.querySelector(".hm-next-play")).toBeNull();
     expect(text()).toContain("PLAY TODAY’S PUZZLE");
     expect(host.querySelector(".hm-artwork img")?.getAttribute("alt") || host.querySelector(".hm-title")?.textContent).toContain("Oct 9");
+  }, 30_000);
+});
+
+// ---- A DAILY GAME ACROSS MIDNIGHT ----
+const QUESTIONS = demoGame().questions;
+const stored = (key, fallback) => JSON.parse(localStorage.getItem(key) || "null") ?? fallback;
+const records = () => stored(RECORD_KEY, {});
+const homeTitle = () => host.querySelector(".hm-artwork img")?.getAttribute("alt") || host.querySelector(".hm-title")?.textContent || "";
+const prompt = () => host.querySelector(".gp-prompt, .gp-clue-text")?.textContent;
+const button = (label) => [...host.querySelectorAll("button")].find((b) => b.textContent.includes(label));
+const loadingPage = () => text().includes("Mixing today") || text().includes("Couldn't connect");
+const toggleSound = async () => {
+  click(host.querySelector('button[aria-label="Turn sound off"]'));
+  await flush(100);
+  click(host.querySelector('button[aria-label="Turn sound on"]'));
+  await flush(100);
+};
+const nav = async (label) => {
+  click([...host.querySelectorAll(".sh-link")].find((b) => b.textContent === label));
+  await flush(1000);
+};
+const archiveCard = (title) => [...host.querySelectorAll(".arc-card")].find((c) => c.querySelector(".arc-card-title")?.textContent === title);
+const archiveToday = () => [...host.querySelectorAll(".arc-card")].find((c) => c.querySelector(".arc-tag")?.textContent === "Today");
+async function answerQuestion() {
+  click(host.querySelector(".ans-box"));
+  await flush(400);
+  click(host.querySelector(".gp-next"));
+  await flush(200);
+}
+function seedStats() {
+  localStorage.setItem(STATS_KEY, JSON.stringify({ currentStreak: 3, longestStreak: 3, lastPlayedDate: "2026-10-07", totalPlayed: 3, totalCorrect: 20, totalQuestions: 24, bestCombo: 3 }));
+}
+function startedOct8(answered) {
+  localStorage.setItem(RECORD_KEY, JSON.stringify({
+    "t-oct8": { puzzleId: "t-oct8", date: "2026-10-08", themeTitle: "Oct 8 Puzzle", answers: QUESTIONS.slice(0, answered).map((q, i) => ({ questionIndex: i, chosenCategory: q.correctCategory, correct: true })), score: answered, totalQuestions: QUESTIONS.length, currentIndex: answered, completed: false, startedAt: "2026-10-08T20:00:00Z", completedAt: null },
+  }));
+}
+
+describe("A daily game across midnight", () => {
+  it("a game started before midnight stays Oct 8's, saves as Oct 8 and keeps the streak (Scenario A)", async () => {
+    seedStats();
+    await mountApp();
+    expect(homeTitle()).toContain("Oct 8");
+    click(button("PLAY TODAY’S PUZZLE"));
+    await flush(200);
+    expect(prompt()).toBe(QUESTIONS[0].itemText);
+    await answerQuestion();
+    await answerQuestion();
+
+    // Midnight passes mid-game; answer saves and sound toggles re-render the app.
+    await flush(11_000);
+    expect(new Date().toLocaleDateString("en-CA")).toBe("2026-10-09");
+    await toggleSound();
+    expect(prompt()).toBe(QUESTIONS[2].itemText); // the same game, same place
+    await answerQuestion();
+    expect(prompt()).toBe(QUESTIONS[3].itemText);
+    expect(loadingPage()).toBe(false);
+
+    for (let i = 3; i < QUESTIONS.length; i++) await answerQuestion();
+    await flush(1000);
+
+    // Saved once, as Oct 8's puzzle; nothing is written for Oct 9.
+    expect(Object.keys(records())).toEqual(["t-oct8"]);
+    expect(records()["t-oct8"]).toMatchObject({ date: "2026-10-08", completed: true, currentIndex: QUESTIONS.length });
+    expect(stored(LOG_KEY, []).filter((e) => e === "save:confirmed")).toHaveLength(1);
+    expect(stored(STATS_KEY, {})).toMatchObject({ lastPlayedDate: "2026-10-08", currentStreak: 4, totalPlayed: 4 });
+
+    // Results are Oct 8's: its share text links Oct 8's puzzle, and the next
+    // game is already open (the countdown is at zero, not tomorrow night).
+    expect(text()).toContain("Back to home");
+    expect(host.querySelector(".cdown-time")?.textContent).toBe("00:00:00");
+    click(button("Preview share text"));
+    await flush(100);
+    expect(text()).toContain("/puzzle/t-oct8");
+    expect(text()).not.toContain("t-oct9");
+
+    // The Archive meanwhile treats Oct 9 as today.
+    await nav("Archive");
+    expect(archiveToday()?.querySelector(".arc-card-title")?.textContent).toBe("Oct 9 Puzzle");
+
+    // Home: Oct 8 completed with PLAY NOW for Oct 9; PLAY NOW moves on.
+    await nav("Play");
+    expect(text()).toContain("Today’s puzzle · Completed");
+    expect(homeTitle()).toContain("Oct 8");
+    expect(reload).not.toHaveBeenCalled();
+    click(playNow());
+    expect(reload).toHaveBeenCalledTimes(1);
+    unmountApp();
+    await mountApp();
+    expect(homeTitle()).toContain("Oct 9");
+    expect(text()).toContain("PLAY TODAY’S PUZZLE");
+    expect(stored(STATS_KEY, {})).toMatchObject({ lastPlayedDate: "2026-10-08", currentStreak: 4, totalPlayed: 4 });
+  }, 60_000);
+
+  it("Results of a game finished before midnight stay put, with Share still for Oct 8 (Scenario B)", async () => {
+    finishOct8();
+    await mountApp();
+    click(button("See my results"));
+    await flush(500);
+    expect(text()).toContain("Back to home");
+    expect(host.querySelector(".cdown-time")?.textContent).not.toBe("00:00:00");
+
+    await flush(11_000);
+    await toggleSound();
+    await flush(3000);
+    expect(loadingPage()).toBe(false);
+    expect(text()).toContain("Back to home");
+    expect(host.querySelector(".cdown-time")?.textContent).toBe("00:00:00");
+    click(button("Preview share text"));
+    await flush(100);
+    expect(text()).toContain("/puzzle/t-oct8");
+    expect(Object.keys(records())).toEqual(["t-oct8"]);
+    expect(reload).not.toHaveBeenCalled();
+  }, 30_000);
+
+  it("an unfinished game left on Home keeps its day and resumes where it was", async () => {
+    startedOct8(2);
+    await mountApp();
+    expect(text()).toContain("KEEP GOING!");
+    await flush(11_000);
+    await toggleSound();
+    await flush(1000);
+    expect(loadingPage()).toBe(false);
+    expect(homeTitle()).toContain("Oct 8");
+    expect(text()).toContain(`2 of ${QUESTIONS.length} answered`);
+    click(button("KEEP GOING!"));
+    await flush(200);
+    expect(prompt()).toBe(QUESTIONS[2].itemText);
+    expect(Object.keys(records())).toEqual(["t-oct8"]);
+  }, 30_000);
+
+  it("past midnight the Archive knows Oct 9, Home keeps finished Oct 8 until Oct 9 is started from it", async () => {
+    finishOct8();
+    await mountApp();
+    await flush(11_000);
+    await toggleSound();
+
+    // The Archive goes by the clock: Oct 9 is out and is Today.
+    await nav("Archive");
+    expect(archiveToday()?.querySelector(".arc-card-title")?.textContent).toBe("Oct 9 Puzzle");
+    expect(archiveCard("Oct 8 Puzzle")?.textContent).toContain("6 / 8"); // Oct 8's own score
+
+    // Back on Home, the session still holds Oct 8, finished, with PLAY NOW.
+    await nav("Play");
+    expect(text()).toContain("Today’s puzzle · Completed");
+    expect(homeTitle()).toContain("Oct 8");
+    expect(playNow()).not.toBeNull();
+
+    // The Archive's Today card starts Oct 9 in place: the session moves on.
+    await nav("Archive");
+    click(archiveToday().querySelector(".arc-action"));
+    await flush(500);
+    expect(prompt()).toBe(QUESTIONS[0].itemText);
+    expect(records()["t-oct9"]).toMatchObject({ date: "2026-10-09", completed: false });
+    expect(records()["t-oct8"]).toMatchObject({ date: "2026-10-08", completed: true, score: 6 });
+    await answerQuestion();
+    await nav("Play");
+    expect(homeTitle()).toContain("Oct 9");
+    expect(text()).toContain(`1 of ${QUESTIONS.length} answered`);
+    expect(loadingPage()).toBe(false);
+    expect(reload).not.toHaveBeenCalled();
+  }, 30_000);
+
+  it("a fresh page load after midnight opens the new day, not yesterday's game (Scenario C)", async () => {
+    vi.setSystemTime(new Date(2026, 9, 9, 0, 10));
+    for (const seed of [() => startedOct8(2), finishOct8]) {
+      localStorage.clear();
+      seed();
+      await mountApp();
+      expect(homeTitle()).toContain("Oct 9");
+      expect(text()).toContain("PLAY TODAY’S PUZZLE");
+      expect(text()).not.toContain("KEEP GOING!");
+      expect(text()).not.toContain("Completed");
+      unmountApp();
+    }
   }, 30_000);
 });
