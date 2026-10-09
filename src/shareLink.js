@@ -60,11 +60,20 @@ export function resultUrlFor(game, record) {
   return code ? resultUrl(code) : null;
 }
 
-// What sharing a finished game sends: the result link plus the answer circles
-// as its only text (the score and dare are in the link's preview), or null.
+// The result as text: the answer circles, then the score and the dare.
+export const resultText = (answers) => {
+  const score = answers.filter(Boolean).length;
+  return `${resultCircles(answers)}\n${score}/${answers.length} → Can you beat my score?!`;
+};
+
+// What sharing a finished game sends: the result link and the result text
+// (no puzzle title; the link's preview carries the artwork), or null.
+// Copies put the link first, then the text (shareCopyText).
 export function resultShareFor(game, record) {
   const url = resultUrlFor(game, record);
-  return url ? { url, text: resultCircles(record.answers.map((a) => Boolean(a?.correct))) } : null;
+  return url ? { url, text: resultText(record.answers.map((a) => Boolean(a?.correct))) } : null;
 }
+
+export const shareCopyText = ({ url, text }) => [url, text].filter(Boolean).join("\n");
 
 export const resultCircles = (answers) => answers.map((ok) => (ok ? "🟢" : "🔴")).join("");

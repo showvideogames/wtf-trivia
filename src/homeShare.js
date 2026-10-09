@@ -48,7 +48,7 @@ export async function shareResult({ text, url }, nav) {
       if (err?.name === "AbortError") return "cancelled";
     }
   }
-  return copyText([text, url].filter(Boolean).join("\n"), nav);
+  return copyText([url, text].filter(Boolean).join("\n"), nav);
 }
 
 // What Share shows for shareResult's outcome: "copied" (only after a real

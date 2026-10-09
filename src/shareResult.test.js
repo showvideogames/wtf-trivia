@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import shareHandler from "../api/share.js";
 import { clearShellCache } from "../api/puzzle.js";
-import { parseResultCode, resultCode, resultCodeFromPath, resultShareFor, resultUrl, resultUrlFor } from "./shareLink.js";
+import { parseResultCode, resultCode, resultCodeFromPath, resultShareFor, resultUrl, shareCopyText, resultUrlFor } from "./shareLink.js";
 import { resultMeta } from "./shareResultMeta.js";
 import { shareResult } from "./homeShare.js";
 
@@ -72,16 +72,19 @@ describe("result page metadata (initial HTML)", () => {
     // The picture is the quiz artwork alone, for every result.
     expect(tag(a, "og:image")).toBe("https://cdn.test/wide.webp");
     expect(tag(b, "og:image")).toBe("https://cdn.test/wide.webp");
-    expect(tag(a, "og:title")).toBe("11/12 → Can you beat my score?!");
-    expect(tag(b, "og:title")).toBe("6/12 → Can you beat my score?!");
-    expect(tag(a, "og:description")).toBe("Daily trivia. Two choices.");
-    expect(tag(b, "og:description")).toBe("Daily trivia. Two choices.");
-    expect(tag(a, "twitter:description")).toBe("Daily trivia. Two choices.");
+    // The card is the artwork plus one plain line; the result is share text.
+    expect(tag(a, "og:title")).toBe("Daily trivia. Two choices.");
+    expect(tag(b, "og:title")).toBe("Daily trivia. Two choices.");
+    expect(tag(a, "twitter:title")).toBe("Daily trivia. Two choices.");
+    for (const html of [a, b]) {
+      expect(html).not.toMatch(/og:description|twitter:description|name="description"/);
+      expect(html).not.toMatch(/🟢|🔴|beat my score/);
+    }
     expect(tag(a, "twitter:card")).toBe("summary_large_image");
     expect(tag(a, "twitter:image")).toBe(tag(a, "og:image"));
     // The matchup title is not visible text: only the page title and alt.
     expect(tag(a, "og:title")).not.toContain("Cage");
-    expect(tag(a, "og:description")).not.toContain("Cage");
+    expect(a).not.toMatch(/og:description[^>]*Cage|twitter:title" content="[^"]*Cage/);
     expect(a).toContain("<title>Board Game or Nicolas Cage Movie? ·");
   });
   it("unusable codes, unknown and unreleased puzzles get the plain site page", async () => {
@@ -104,20 +107,29 @@ describe("result page metadata (initial HTML)", () => {
   });
 });
 
-describe("native share payload", () => {
+describe("share payload", () => {
   const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 Version/18.5 Mobile/15E148 Safari/604.1";
-  it("shares the link plus only the circles as text", async () => {
+  const url = resultUrl(`g-cage.${A}`);
+  const TEXT = "🟢🟢🟢🟢🟢🔴🟢🟢🟢🟢🟢🟢\n11/12 → Can you beat my score?!";
+  const parts = () => resultShareFor({ id: "g-cage" }, { answers: bits(A) });
+  it("is the unique link plus the circles and the score line, no title", () => {
+    expect(parts()).toEqual({ url, text: TEXT });
+    expect(parts().text).not.toContain("Cage");
+  });
+  it("the native share sheet gets the link and the result text", async () => {
     const share = vi.fn().mockResolvedValue(undefined);
     const nav = { userAgent: IPHONE, maxTouchPoints: 5, share, clipboard: { writeText: vi.fn() } };
-    const url = resultUrl(`g-cage.${A}`);
-    expect(await shareResult(resultShareFor({ id: "g-cage" }, { answers: bits(A) }), nav)).toBe("shared");
-    expect(share).toHaveBeenCalledWith({ text: "🟢🟢🟢🟢🟢🔴🟢🟢🟢🟢🟢🟢", url });
+    expect(await shareResult(parts(), nav)).toBe("shared");
+    expect(share).toHaveBeenCalledWith({ text: TEXT, url });
   });
-  it("copies the link on desktop or when the share sheet fails", async () => {
-    const url = resultUrl(`g-cage.${A}`);
+  it("desktop and the fallback copy exactly: link, circles, score line", async () => {
+    const expected = `${url}\n🟢🟢🟢🟢🟢🔴🟢🟢🟢🟢🟢🟢\n11/12 → Can you beat my score?!`;
     const desktop = { userAgent: "Windows NT 10.0", clipboard: { writeText: vi.fn().mockResolvedValue() } };
-    expect(await shareResult(resultShareFor({ id: "g-cage" }, { answers: bits(A) }), desktop)).toBe("copied");
-    expect(desktop.clipboard.writeText).toHaveBeenCalledWith(`🟢🟢🟢🟢🟢🔴🟢🟢🟢🟢🟢🟢
-${url}`);
+    expect(await shareResult(parts(), desktop)).toBe("copied");
+    expect(desktop.clipboard.writeText).toHaveBeenCalledWith(expected);
+    expect(shareCopyText(parts())).toBe(expected);
+    const failing = { userAgent: IPHONE, maxTouchPoints: 5, share: vi.fn().mockRejectedValue(Object.assign(new Error("x"), { name: "NotAllowedError" })), clipboard: { writeText: vi.fn().mockResolvedValue() } };
+    expect(await shareResult(parts(), failing)).toBe("copied");
+    expect(failing.clipboard.writeText).toHaveBeenCalledWith(expected);
   });
 });

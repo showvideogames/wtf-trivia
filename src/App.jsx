@@ -31,7 +31,7 @@ import { sessionGameDay } from "./dailySession.js";
 import { statsAfterFinish } from "./playerStats.js";
 import { buildResultsShareText, normalizeShareLabel } from "./share.js";
 import { puzzleIdFromPath, puzzlePath } from "./puzzleLink.js";
-import { parseResultCode, resultCircles, resultCodeFromPath, resultShareFor } from "./shareLink.js";
+import { parseResultCode, resultCircles, resultCodeFromPath, resultShareFor, shareCopyText } from "./shareLink.js";
 import { CompletedOverrideContext, SignedInOverrideContext, StreakOverrideContext } from "./streakOverride.js";
 import { SITE_NAME, puzzleMeta } from "./puzzleMeta.js";
 import { answerButtonName } from "./categoryNames.js";
@@ -3759,7 +3759,7 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
   // circles and own link (shareLink.js), the same Home shares. A game without a
   // usable id falls back to the share text.
   const shareParts=resultShareFor(game||{id:safeRecord.puzzleId}, safeRecord);
-  const txt=shareParts?`${shareParts.text}\n${shareParts.url}`:buildResultsShareText({game:game||{id:safeRecord.puzzleId}, record:safeRecord});
+  const txt=shareParts?shareCopyText(shareParts):buildResultsShareText({game:game||{id:safeRecord.puzzleId}, record:safeRecord});
   // "Copied" only after the clipboard write succeeds (ResultsCopyButton).
   const share=async()=>{
     clearTimeout(copiedTimer.current);
