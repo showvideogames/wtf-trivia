@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import App from "./App.jsx";
-import { LAB_QUICK_VALUES, StreakOverrideContext, parseLabStreak } from "./streakOverride.js";
+import { LAB_QUICK_VALUES, SignedInOverrideContext, StreakOverrideContext, parseLabStreak } from "./streakOverride.js";
 import { prestigeTheme, streakCycle } from "./streakPrestige.js";
 import "./streakLab.css";
 
@@ -14,17 +14,20 @@ import "./streakLab.css";
 // search engines (a robots tag here, and X-Robots-Tag in vercel.json).
 
 const readParam = () => parseLabStreak(new URLSearchParams(window.location.search).get("streak"));
+const readSignedIn = () => new URLSearchParams(window.location.search).get("signedin") === "1";
 
 // The address always names the value on screen, without reloading.
-function writeParam(n) {
+function writeParam(n, signedIn = readSignedIn()) {
   const url = new URL(window.location.href);
   url.searchParams.set("streak", String(n));
+  if (signedIn) url.searchParams.set("signedin", "1"); else url.searchParams.delete("signedin");
   window.history.replaceState(null, "", url);
 }
 
 export default function StreakLab() {
   const [streak, setStreak] = useState(() => readParam() ?? 100);
   const [text, setText] = useState(String(streak));
+  const [signedIn, setSignedIn] = useState(readSignedIn);
 
   useEffect(() => {
     const meta = document.createElement("meta");
@@ -49,6 +52,8 @@ export default function StreakLab() {
     writeParam(n);
   };
 
+  const toggleSignedIn = (on) => { setSignedIn(on); writeParam(streak, on); };
+
   const { cycleDay, prestigeCount } = streakCycle(streak);
   return (
     <>
@@ -58,6 +63,10 @@ export default function StreakLab() {
           <span>Streak:</span>
           <input type="number" inputMode="numeric" min="0" step="1" value={text}
             onChange={(e) => onType(e.target.value)} aria-label="Streak"/>
+        </label>
+        <label className="sl-check">
+          <input type="checkbox" checked={signedIn} onChange={(e) => toggleSignedIn(e.target.checked)}/>
+          <span>Pretend signed in (hides the sign-in nudge)</span>
         </label>
         <div className="sl-quick">
           {LAB_QUICK_VALUES.map((n) => (
@@ -70,9 +79,11 @@ export default function StreakLab() {
         </p>
       </section>
       <StreakOverrideContext.Provider value={streak}>
-        <div className="sl-app" inert>
-          <App/>
-        </div>
+        <SignedInOverrideContext.Provider value={signedIn}>
+          <div className="sl-app" inert>
+            <App/>
+          </div>
+        </SignedInOverrideContext.Provider>
       </StreakOverrideContext.Provider>
     </>
   );

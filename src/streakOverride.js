@@ -5,6 +5,10 @@ import { createContext } from "react";
 // streak display reads it; nothing is saved from it.
 export const StreakOverrideContext = createContext(null);
 
+// Likewise for whether the lab pretends the player is signed in (true) or a
+// guest (false); null everywhere else, so Home uses the real account.
+export const SignedInOverrideContext = createContext(null);
+
 // The quick values the lab offers.
 export const LAB_QUICK_VALUES = [1, 10, 25, 50, 75, 90, 95, 100, 101, 150, 200, 201, 300, 301, 1000];
 

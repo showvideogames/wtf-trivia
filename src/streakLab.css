@@ -21,6 +21,8 @@
   color: #1A1A1A;
   font: 800 18px 'Nunito', sans-serif; /* 16px+ so iOS doesn't zoom on focus */
 }
+.sl-check { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
+.sl-check input { width: 20px; height: 20px; }
 .sl-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .sl-quick button {
   min-width: 40px;

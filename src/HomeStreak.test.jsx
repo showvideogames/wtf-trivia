@@ -50,19 +50,50 @@ describe("HomeStreak", () => {
     expect(html.split("\u{1F3C5}").length - 1).toBe(1);
   });
 
-  it("puts DAY STREAK inside the themed unit, wearing the number's fill", () => {
+  it("puts DAY STREAK inside the themed unit, flat, in the theme's colour", () => {
     const html = streak(237);
     // One element carries data-theme; the number and the label are both inside it.
     expect(html.indexOf('data-theme="platinum"')).toBeLessThan(html.indexOf("hm-sk-num"));
     expect(html.indexOf("hm-sk-num")).toBeLessThan(html.indexOf("hm-sk-label"));
     const css = readFileSync(new URL("./homePage.css", import.meta.url), "utf8");
     const rule = (sel) => {
-      const start = css.indexOf(`\n${sel} {`);
+      const start = css.indexOf(`
+${sel} {`);
       return css.slice(start, css.indexOf("}", start));
     };
-    expect(rule(".hm-sk-label")).toContain("var(--sk-fill)");
+    // The number is dimensional; the label is flat: its colour only.
     expect(rule(".hm-sk-num")).toContain("var(--sk-fill)");
-    expect(rule(".hm-sk-label")).not.toContain("teal");
+    expect(rule(".hm-sk-num")).toContain("drop-shadow");
+    const label = rule(".hm-sk-label");
+    expect(label).toContain("color: var(--sk-label)");
+    for (const bad of ["teal", "text-stroke", "drop-shadow", "text-shadow", "filter", "var(--sk-fill)"]) expect(label).not.toContain(bad);
+    // Every theme sets that colour (classic on the base rule, candy as a rainbow).
+    for (const t of ["gold", "platinum", "fudge"]) {
+      const at = css.indexOf(`.hm-sk[data-theme="${t}"] {`);
+      expect(css.slice(at, css.indexOf("}", at))).toContain("--sk-label:");
+    }
+    expect(rule(".hm-sk")).toContain("--sk-label:");
+    expect(css).toContain('.hm-sk[data-theme="candy"] .hm-sk-label');
+  });
+});
+
+describe("HomeStreak guest sign-in nudge", () => {
+  const withHint = (n) => renderToStaticMarkup(<HomeStreak streak={n} flame={<i/>} onSignIn={() => {}}/>);
+
+  it("shows the existing copy beside the flame for a guest, as a button", () => {
+    const html = withHint(50);
+    expect(html).toContain("Sign in to save your streak");
+    expect(html).toContain('<button type="button" class="hm-signin-hint hm-sk-hint">Sign in to save your streak</button>');
+    expect(html).toContain('class="hm-sk has-hint"');
+    // In the flame row, above the number and the label, which stay on their own.
+    expect(html.indexOf("hm-sk-hint")).toBeLessThan(html.indexOf("hm-sk-num"));
+    expect(html.indexOf("hm-sk-hint")).toBeLessThan(html.indexOf("hm-sk-label"));
+  });
+
+  it("is not shown when signed in, or without a streak", () => {
+    expect(streak(50)).not.toContain("Sign in");
+    expect(streak(50)).toContain('class="hm-sk"');
+    expect(withHint(0)).toBe("");
   });
 });
 

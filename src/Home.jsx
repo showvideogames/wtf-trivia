@@ -375,7 +375,9 @@ export function HomeCandyArt({ busy = false }) {
 // page. Prestige (completed laps) changes the look of the number and its
 // DAY STREAK label together (data-theme) and adds a medal badge. `streak` is
 // the player's actual streak (nothing here changes it); `flame` is the icon.
-export function HomeStreak({ streak, flame }) {
+// `onSignIn`, for a guest only, adds the "Sign in to save your streak" nudge
+// at the right of the flame row, leaving the streak itself centred.
+export function HomeStreak({ streak, flame, onSignIn = null }) {
   const [open, setOpen] = useState(false);
   const numRef = useRef(null);
   // Font size and horizontal squash for this screen width (null until
@@ -406,10 +408,13 @@ export function HomeStreak({ streak, flame }) {
   const growth = streakGrowth(cycleDay);
   const shown = String(streakCycle(streak).actual);
   return (
-    <section className="hm-sk" data-theme={prestigeTheme(prestigeCount)}
+    <section className={onSignIn ? "hm-sk has-hint" : "hm-sk"} data-theme={prestigeTheme(prestigeCount)}
       style={{ "--sk-t": growth.toFixed(4), "--sk-px": (fit ? fit.px : streakFontForWidth(cycleDay, 1280)).toFixed(1) }}
       aria-label={`${shown}-day streak`}>
-      <span className="hm-sk-flame" aria-hidden="true">{flame}</span>
+      <div className="hm-sk-top">
+        <span className="hm-sk-flame" aria-hidden="true">{flame}</span>
+        {onSignIn && <button type="button" className="hm-signin-hint hm-sk-hint" onClick={onSignIn}>Sign in to save your streak</button>}
+      </div>
       <div className="hm-sk-numbox" style={fit ? { width: fit.w } : undefined}>
         <div className="hm-sk-num" ref={numRef} style={fit && fit.k < 1 ? { transform: `scaleX(${fit.k.toFixed(4)})` } : undefined}>{shown}</div>
       </div>
@@ -427,6 +432,3 @@ export function HomeStreak({ streak, flame }) {
   );
 }
 
-export function HomeFoot({ children }) {
-  return <div className="hm-foot">{children}</div>;
-}
