@@ -4,8 +4,8 @@
 //   https://whatthefudge.gg/s/g-1759600000000.111110111111
 //
 // The address carries the whole result, so nothing is stored and nothing
-// depends on the sharer's browser: api/share.js and api/share-image.js read
-// the puzzle id and answers straight from it, and take the title and
+// depends on the sharer's browser: api/share.js reads
+// the puzzle id and answers straight from it, and takes the title and
 // artwork from the puzzle itself. The score and question count are counted
 // from the answers, never written separately, so they can't disagree.
 // Every different result is a different address, which keeps messaging apps'
@@ -43,7 +43,6 @@ export const answersFit = (game, result) => !Number.isInteger(game?.questionCoun
 
 export const resultPath = (code) => `/s/${encodeURIComponent(code)}`;
 export const resultUrl = (code, origin = SITE_ORIGIN) => `${origin}${resultPath(code)}`;
-export const resultImageUrl = (code, origin = SITE_ORIGIN) => `${origin}${resultPath(code)}/og.png`;
 
 // The code in a /s/<code> path (one trailing slash allowed): null when the
 // path isn't a result link, "" when it is but the code is unusable.
