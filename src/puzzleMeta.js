@@ -87,14 +87,16 @@ const escapeHtml = (value) => String(value)
 // The <head> tags for a preview, one per line.
 export function metaTags(meta) {
   const { image } = meta;
+  // A preview with no description (a result link's) leaves all three out.
+  const desc = meta.description ? escapeHtml(meta.description) : "";
   const tags = [
     `<title>${escapeHtml(meta.pageTitle)}</title>`,
-    `<meta name="description" content="${escapeHtml(meta.description)}" />`,
+    ...(desc ? [`<meta name="description" content="${desc}" />`] : []),
     `<link rel="canonical" href="${escapeHtml(meta.url)}" />`,
     `<meta property="og:type" content="website" />`,
     `<meta property="og:site_name" content="${escapeHtml(SITE_NAME)}" />`,
     `<meta property="og:title" content="${escapeHtml(meta.title)}" />`,
-    `<meta property="og:description" content="${escapeHtml(meta.description)}" />`,
+    ...(desc ? [`<meta property="og:description" content="${desc}" />`] : []),
     `<meta property="og:url" content="${escapeHtml(meta.url)}" />`,
     `<meta property="og:image" content="${escapeHtml(image.url)}" />`,
   ];
@@ -107,7 +109,7 @@ export function metaTags(meta) {
     `<meta property="og:image:alt" content="${escapeHtml(image.alt)}" />`,
     `<meta name="twitter:card" content="${image.wide ? "summary_large_image" : "summary"}" />`,
     `<meta name="twitter:title" content="${escapeHtml(meta.title)}" />`,
-    `<meta name="twitter:description" content="${escapeHtml(meta.description)}" />`,
+    ...(desc ? [`<meta name="twitter:description" content="${desc}" />`] : []),
     `<meta name="twitter:image" content="${escapeHtml(image.url)}" />`,
   );
   return tags.join("\n    ");
