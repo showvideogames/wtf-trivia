@@ -23,5 +23,5 @@ export function normalizeEditorDraft(game){
 // draft recorded. A draft from before topics existed keeps the puzzle's tags,
 // and one from before wide artwork existed keeps the puzzle's wide artwork.
 export function restoreEditorDraft(game, saved){
-  return saved?.game ? {...game, ...saved.game, id: game.id, shareNameColumns: game.shareNameColumns, subtitleColumns: game.subtitleColumns, buttonNameColumns: game.buttonNameColumns, tagsColumn: game.tagsColumn, wideImageColumn: game.wideImageColumn} : game;
+  return saved?.game ? {...game, ...saved.game, id: game.id, shareNameColumns: game.shareNameColumns, subtitleColumns: game.subtitleColumns, buttonNameColumns: game.buttonNameColumns, tagsColumn: game.tagsColumn, wideImageColumn: game.wideImageColumn, silhouetteImageColumn: game.silhouetteImageColumn} : game;
 }

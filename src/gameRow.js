@@ -26,6 +26,9 @@ import { normalizeTags } from "./topics.js";
 // kept beside the square poster in header_image. The same rule applies: it
 // is sent when the puzzle has one, or when its row came back with the
 // column (so removing it saves null).
+//
+// Silhouette artwork (supabase/silhouette_artwork.sql) is the optional wide
+// teaser image for Home's Up Next / Tomorrow section only, same rule again.
 function trimmedShareName(value){
   return typeof value==="string" && value.trim() ? value.trim() : null;
 }
@@ -38,6 +41,7 @@ export function gameToRow(g){
   const btnB = trimmedShareName(g.categoryBButtonName);
   const tags = normalizeTags(g.tags);
   const wide = trimmedShareName(g.wideImage);
+  const silhouette = trimmedShareName(g.silhouetteImage);
   return {
     id: g.id,
     date: g.date,
@@ -55,7 +59,8 @@ export function gameToRow(g){
     ...(subA||subB||g.subtitleColumns ? {category_a_subtitle:subA, category_b_subtitle:subB} : {}),
     ...(btnA||btnB||g.buttonNameColumns ? {category_a_button_name:btnA, category_b_button_name:btnB} : {}),
     ...(tags.length||g.tagsColumn ? {tags} : {}),
-    ...(wide||g.wideImageColumn ? {wide_image:wide} : {})
+    ...(wide||g.wideImageColumn ? {wide_image:wide} : {}),
+    ...(silhouette||g.silhouetteImageColumn ? {silhouette_image:silhouette} : {})
   };
 }
 export function rowToGame(r){
@@ -72,6 +77,8 @@ export function rowToGame(r){
     headerImage: r.header_image,
     wideImage: r.wide_image||"",
     wideImageColumn: "wide_image" in r,
+    silhouetteImage: r.silhouette_image||"",
+    silhouetteImageColumn: "silhouette_image" in r,
     categoryAShareName: r.category_a_share_name||"",
     categoryBShareName: r.category_b_share_name||"",
     shareNameColumns: "category_a_share_name" in r,

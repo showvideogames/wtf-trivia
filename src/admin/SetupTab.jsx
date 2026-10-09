@@ -403,6 +403,39 @@ function WideArtwork({game, set, trackImage}){
   );
 }
 
+// The silhouette artwork: an optional wide teaser image used only by Home's
+// Up Next / Tomorrow section, uploaded by hand. Stored in silhouetteImage;
+// empty means Up Next falls back to the wide artwork.
+function SilhouetteArtwork({game, set, trackImage}){
+  return(
+    <section className="ps-panel ps-card" aria-labelledby="ps-silhouette-title">
+      <CardHead icon="image" title={<span id="ps-silhouette-title">Tomorrow teaser / silhouette artwork</span>} sub="Optional. Used for the Tomorrow teaser. Falls back to Wide Artwork if empty."/>
+      <div className="ps-artwork ps-artwork-wide">
+        <div className="ps-artwork-field">
+          <ImageField label="Silhouette artwork" value={game.silhouetteImage||""} onChange={v=>set("silhouetteImage",v)} preset="wide"
+                      onBusyChange={trackImage("silhouetteImage")} fieldId="img-field-silhouetteImage" layout="wide"/>
+          <ul className="ps-art-guide" aria-label="Silhouette artwork guidelines">
+            <li>Same shape as the wide artwork: 1200&times;630</li>
+            <li>Subjects as silhouettes, titles hidden, the OR can stay</li>
+            <li>Only shown in Up Next before the puzzle's day; never in shares, the archive or gameplay</li>
+          </ul>
+        </div>
+        <div className="ps-home-preview">
+          <div className="ps-label">Preview</div>
+          {game.silhouetteImage?(
+            <WideArtworkPreview src={game.silhouetteImage} title={game.themeTitle||"Untitled puzzle"}/>
+          ):(
+            <div className="ps-home-empty">
+              <strong>No silhouette artwork uploaded.</strong>
+              <span>{game.wideImage?"The Tomorrow teaser will use the wide artwork instead.":"The Tomorrow teaser will use the square poster until wide artwork is added."}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // onDelete: any saved puzzle, but the database refuses once anyone has
 // played it. onRetire: published puzzles. A played puzzle is retired
 // instead: hidden from players, its date freed, its plays and stats kept.
@@ -416,6 +449,7 @@ export default function SetupTab({game, set, games, trackImage, onDelete, onReti
       <CategoryAppearance game={game} set={set} trackImage={trackImage}/>
       <Artwork game={game} set={set} trackImage={trackImage}/>
       <WideArtwork game={game} set={set} trackImage={trackImage}/>
+      <SilhouetteArtwork game={game} set={set} trackImage={trackImage}/>
       {onDelete&&(
         <div className="ps-danger">
           <span>{isDraft
