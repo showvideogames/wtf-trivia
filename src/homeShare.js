@@ -33,16 +33,21 @@ const usesShareSheet = (nav) => isPhoneOrTablet(nav) && typeof nav.share === "fu
 //   "copied"    the text is on the clipboard (desktop, or the share sheet is
 //               missing or failed for a reason other than cancelling)
 //   "failed"    the clipboard write failed
-export async function shareResult({ text }, nav) {
+//
+// With a `url` (the result link, shareLink.js) the link is the whole payload:
+// no text goes with it, so messaging apps show the rich result card alone
+// instead of the score as plain text above it. Without one, `text` is shared.
+export async function shareResult({ text, url }, nav) {
+  const payload = url ? { url } : { text };
   if (usesShareSheet(nav)) {
     try {
-      await nav.share({ text });
+      await nav.share(payload);
       return "shared";
     } catch (err) {
       if (err?.name === "AbortError") return "cancelled";
     }
   }
-  return copyText(text, nav);
+  return copyText(url || text, nav);
 }
 
 // What Share shows for shareResult's outcome: "copied" (only after a real
