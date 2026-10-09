@@ -521,6 +521,14 @@
   text-shadow: 3px 3px 0 var(--cs-pink);
 }
 .hm-done-of { font-size: 0.62em; }
+.hm-result-dots {
+  max-width: 100%;
+  font-size: 26px;
+  line-height: 1.2;
+  letter-spacing: 0.06em;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
 .hm-done-msg {
   max-width: 540px;
   margin: 0;

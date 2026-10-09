@@ -86,7 +86,7 @@ afterEach(() => {
 
 function finishOct8() {
   localStorage.setItem(RECORD_KEY, JSON.stringify({
-    "t-oct8": { puzzleId: "t-oct8", date: "2026-10-08", themeTitle: "Oct 8 Puzzle", answers: [], score: 6, totalQuestions: 8, currentIndex: 8, completed: true, startedAt: "2026-10-08T20:00:00Z", completedAt: "2026-10-08T20:10:00Z" },
+    "t-oct8": { puzzleId: "t-oct8", date: "2026-10-08", themeTitle: "Oct 8 Puzzle", answers: Array.from({ length: 8 }, (_, i) => ({ questionIndex: i, correct: i < 6 })), score: 6, totalQuestions: 8, currentIndex: 8, completed: true, startedAt: "2026-10-08T20:00:00Z", completedAt: "2026-10-08T20:10:00Z" },
   }));
 }
 
@@ -214,13 +214,13 @@ describe("A daily game across midnight", () => {
     expect(stored(LOG_KEY, []).filter((e) => e === "save:confirmed")).toHaveLength(1);
     expect(stored(STATS_KEY, {})).toMatchObject({ lastPlayedDate: "2026-10-08", currentStreak: 4, totalPlayed: 4 });
 
-    // Results are Oct 8's: its share text links Oct 8's puzzle, and the next
+    // Results are Oct 8's: its share link is Oct 8's puzzle, and the next
     // game is already open (the countdown is at zero, not tomorrow night).
     expect(text()).toContain("Back to home");
     expect(host.querySelector(".cdown-time")?.textContent).toBe("00:00:00");
     click(button("Preview share text"));
     await flush(100);
-    expect(text()).toContain("/puzzle/t-oct8");
+    expect(text()).toContain("/s/t-oct8.");
     expect(text()).not.toContain("t-oct9");
 
     // The Archive meanwhile treats Oct 9 as today.
@@ -257,7 +257,7 @@ describe("A daily game across midnight", () => {
     expect(host.querySelector(".cdown-time")?.textContent).toBe("00:00:00");
     click(button("Preview share text"));
     await flush(100);
-    expect(text()).toContain("/puzzle/t-oct8");
+    expect(text()).toContain("/s/t-oct8.");
     expect(Object.keys(records())).toEqual(["t-oct8"]);
     expect(reload).not.toHaveBeenCalled();
   }, 30_000);

@@ -18,6 +18,10 @@ const LINE_CLASS = [
 const FIT_EMS = { "rs-share-pips": 1.42 };
 
 export default function SharePreview({ text }) {
+  // A result link alone (the Results page shares just that) is one line.
+  if (!text.includes("\n")) {
+    return <div className="share-box rs-share-preview" aria-label="Share preview"><span className="rs-share-url">{text}</span></div>;
+  }
   return (
     <div className="share-box rs-share-preview" aria-label="Share preview">
       {text.split("\n").map((line, i) => {

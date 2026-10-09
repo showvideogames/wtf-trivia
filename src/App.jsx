@@ -31,6 +31,7 @@ import { sessionGameDay } from "./dailySession.js";
 import { statsAfterFinish } from "./playerStats.js";
 import { buildResultsShareText, normalizeShareLabel } from "./share.js";
 import { puzzleIdFromPath, puzzlePath } from "./puzzleLink.js";
+import { parseResultCode, resultCircles, resultCodeFromPath, resultUrlFor } from "./shareLink.js";
 import { SignedInOverrideContext, StreakOverrideContext } from "./streakOverride.js";
 import { SITE_NAME, puzzleMeta } from "./puzzleMeta.js";
 import { answerButtonName } from "./categoryNames.js";
@@ -2900,6 +2901,30 @@ function PuzzleLinkPage({game,record,onPlay,onShare}){
   );
 }
 
+// A shared result's page (/s/<code>, shareLink.js): who it is from, the
+// answers, the score and the puzzle's artwork, with one big button that
+// opens that same puzzle (its normal /puzzle/<id> page: today's puzzle plays
+// as usual, an earlier one replays). Everything shown comes from the link
+// and the puzzle itself, never from this browser's own saved games.
+function ResultLinkPage({result,game,onPlay}){
+  return(
+    <HomePage>
+      <HomeHero game={game} colors={categoryColors(game)} artworkUrl={puzzleArtworkUrl(game)} wideUrl={wideArtworkUrl(game)}
+        preferWide eyebrow={<>A friend&rsquo;s result</>}/>
+      <section className="hm-done" aria-labelledby="hm-result-score">
+        <div className="hm-result-dots" role="img" aria-label={`${result.score} of ${result.total} right`}>{resultCircles(result.answers)}</div>
+        <div className="hm-done-score" id="hm-result-score">
+          <span className="hm-done-num">{result.score}<span className="hm-done-of">/{result.total}</span></span>
+        </div>
+        <p className="hm-done-msg">Can you beat it?</p>
+      </section>
+      <div className="hm-cta">
+        <HomeBigButton onClick={onPlay}>PLAY THIS QUIZ</HomeBigButton>
+      </div>
+    </HomePage>
+  );
+}
+
 // A puzzle link that can't be opened: not out yet on this player's day, a
 // draft, retired, or no such puzzle. All say the same thing, so a link never
 // reveals whether a draft exists. Points at today's puzzle, else the Archive.
@@ -3723,8 +3748,10 @@ function ScoreScreen({gameRecord,game,crowd,onNav,sound,isReplay=false,withChrom
   const showTiles = Boolean(communityStats)&&communityStats.finishedPlayers>0;
 
   // The share text, ending with the puzzle's own link; the preview shows
-  // this exact string (SharePreview) and the button copies it.
-  const txt=buildResultsShareText({game:game||{id:safeRecord.puzzleId}, record:safeRecord});
+  // this exact string (SharePreview) and the button copies it: the result's
+  // own link (shareLink.js), the same one Home shares. A game without a
+  // usable id falls back to the share text.
+  const txt=resultUrlFor(game||{id:safeRecord.puzzleId}, safeRecord)||buildResultsShareText({game:game||{id:safeRecord.puzzleId}, record:safeRecord});
   // "Copied" only after the clipboard write succeeds (ResultsCopyButton).
   const share=async()=>{
     clearTimeout(copiedTimer.current);
@@ -4831,7 +4858,9 @@ function AdminPreview({game,onBack}){
 export default function WhatTheFudgeTrivia(){
   // A puzzle link (/puzzle/<id>) opens that puzzle's page (see "puzzle" below).
   const[linkId,setLinkId]=useState(()=>isAdminPath()?null:readPuzzleLink());
-  const[view,setView]=useState(()=>isAdminPath()?"admin":linkId!==null?"puzzle":"home");
+  // A shared result link (/s/<code>) opens that result's page ("result").
+  const[resultCode,setResultCode]=useState(()=>isAdminPath()?null:resultCodeFromPath(window.location.pathname));
+  const[view,setView]=useState(()=>isAdminPath()?"admin":linkId!==null?"puzzle":resultCode!==null?"result":"home");
   // Back from an admin sign-in started in the editor: reopen that puzzle.
   const[adminResume]=useState(()=>isAdminPath()&&readAdminSession()?takeAdminResume():null);
   const[adminView,setAdminView]=useState(()=>adminResume?"editor":readAdminSession()?"dashboard":"login");
@@ -4842,7 +4871,9 @@ export default function WhatTheFudgeTrivia(){
       if(isAdminPath()){ setView("admin"); return; }
       const id=puzzleIdFromPath(window.location.pathname);
       if(id!==null) setLinkId(id);
-      setView(v=>id!==null?"puzzle":v==="admin"||v==="puzzle"?"home":v);
+      const rc=resultCodeFromPath(window.location.pathname);
+      if(rc!==null) setResultCode(rc);
+      setView(v=>id!==null?"puzzle":rc!==null?"result":v==="admin"||v==="puzzle"||v==="result"?"home":v);
     };
     window.addEventListener("popstate",onPop);
     return ()=>window.removeEventListener("popstate",onPop);
@@ -4851,7 +4882,7 @@ export default function WhatTheFudgeTrivia(){
   // Back to home, ...) puts the site's own address back. Playing from the
   // page keeps the link, so a refresh comes back to the same puzzle.
   useEffect(()=>{
-    if(SITE_VIEWS.has(view) && puzzleIdFromPath(window.location.pathname)!==null) setPath("/");
+    if(SITE_VIEWS.has(view) && (puzzleIdFromPath(window.location.pathname)!==null || resultCodeFromPath(window.location.pathname)!==null)) setPath("/");
   },[view]);
   const[editGame,setEditGame]=useState(adminResume);
   const[replayGame,setReplayGame]=useState(null);
@@ -5041,6 +5072,9 @@ export default function WhatTheFudgeTrivia(){
   const linkGame = view==="puzzle"&&linkId ? games.find(g=>g.id===linkId)||null : null;
   const linkIsToday = Boolean(linkGame&&todayGame&&linkGame.id===todayGame.id);
   const linkReplay = Boolean(linkGame&&!linkIsToday&&isReleased(linkGame, sessionDay));
+  // A shared result's puzzle: only one this player's day has released.
+  const sharedResult = view==="result" ? parseResultCode(resultCode) : null;
+  const sharedGame = sharedResult ? games.find(g=>g.id===sharedResult.puzzleId&&isReleased(g, sessionDay))||null : null;
   // This player's own result for an earlier puzzle opened by link, once read.
   const[linkRecord,setLinkRecord]=useState(null); // {puzzleId, record}
   useEffect(()=>{
@@ -5060,7 +5094,7 @@ export default function WhatTheFudgeTrivia(){
   const isResults = view==="score"||view==="replay-score";
   // Stats and Account sit over the gameplay backdrop. A puzzle link's page
   // is drawn in Home's own shell.
-  const isHomeShell = view==="home"||view==="puzzle";
+  const isHomeShell = view==="home"||view==="puzzle"||view==="result";
   const usesGameBackdrop = !isHomeShell&&view!=="archive"&&!isGameplay&&!isResults;
 
   // Home-idle preload: once the player is looking at Home with an unfinished
@@ -5343,13 +5377,16 @@ export default function WhatTheFudgeTrivia(){
     setCrowd({puzzleId, score:finalRec.score, ...result});
   };
 
-  // Share a finished result from Home or a puzzle link's page: the same text
-  // Results copies (circles, score and dare, the puzzle's link), through a
+  // Share a finished result from Home or a puzzle link's page, through a
   // phone's share sheet or the clipboard. Resolves to shareResult's outcome;
-  // the panel shows the feedback.
+  // the panel shows the feedback. The payload is the result's own link
+  // (shareLink.js) alone, so apps show its rich card, with the score inside
+  // it, instead of the score as text above it. A game without a usable id
+  // falls back to the share text.
   const shareFinished = (game, record) => {
     if(!game || !record?.completed) return null;
-    return shareResult({ text: buildResultsShareText({ game, record }) }, navigator);
+    const url = resultUrlFor(game, record);
+    return shareResult(url ? { url } : { text: buildResultsShareText({ game, record }) }, navigator);
   };
   const handleShareToday = () => shareFinished(todayGame, todayRecord);
 
@@ -5416,7 +5453,7 @@ export default function WhatTheFudgeTrivia(){
         <PlayerHeader pending/>
         <div className="main">
           {loading
-            ? <HomeLoadingPage link={view==="puzzle"}/>
+            ? <HomeLoadingPage link={view==="puzzle"||view==="result"}/>
             : <HomeErrorPage detail={error} onRetry={()=>window.location.reload()}/>}
         </div>
       </div>
@@ -5460,6 +5497,11 @@ export default function WhatTheFudgeTrivia(){
               onPlay={()=>{sound.play("click");handleReplay(linkGame);}}
               onShare={()=>shareFinished(linkGame, linkGameRecord)}/>
           )}
+
+          {view==="result"&&(sharedGame&&sharedResult
+            ? <ResultLinkPage result={sharedResult} game={sharedGame}
+                onPlay={()=>{sound.play("click");setLinkId(sharedGame.id);setPath(puzzlePath(sharedGame.id));setView("puzzle");}}/>
+            : <PuzzleUnavailablePage hasToday={Boolean(todayGame)} onNav={v=>{sound.play("click");setView(v);}}/>)}
 
           {view==="puzzle"&&!linkIsToday&&!linkReplay&&(
             <PuzzleUnavailablePage hasToday={Boolean(todayGame)} onNav={v=>{sound.play("click");setView(v);}}/>

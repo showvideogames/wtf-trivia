@@ -42,16 +42,19 @@ const rowToPreviewGame = (row) => ({
   categoryBShareName: row.category_b_share_name || "",
   headerImage: row.header_image || null,
   wideImage: row.wide_image || null,
+  // Only the number of questions (when asked for), never the questions.
+  questionCount: Array.isArray(row.questions) ? row.questions.length : null,
 });
 
 // The puzzle's preview fields, or null when there is no such puzzle.
 // Throws when it can't tell (not configured, network, database error).
-export async function loadPreviewGame(id, { fetchImpl = fetch, env = process.env } = {}) {
+// withQuestionCount also reads the questions column, only to count them.
+export async function loadPreviewGame(id, { fetchImpl = fetch, env = process.env, withQuestionCount = false } = {}) {
   const config = supabaseConfig(env);
   if (!config) throw new Error("Supabase is not configured.");
   for (const [i, columns] of COLUMNS.entries()) {
     const res = await fetchImpl(
-      `${config.url}/rest/v1/games?id=eq.${encodeURIComponent(id)}&select=${columns}&limit=1`,
+      `${config.url}/rest/v1/games?id=eq.${encodeURIComponent(id)}&select=${columns}${withQuestionCount ? ",questions" : ""}&limit=1`,
       { headers: { apikey: config.key, Accept: "application/json" }, signal: AbortSignal.timeout(TIMEOUT_MS) },
     );
     // 400: a column this database doesn't have yet; try the basics.

@@ -7,5 +7,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["src/**/*.test.{js,jsx}"],
+    // The card renderer loads its own wasm and fonts with plain Node requires.
+    server: { deps: { external: [/@vercel\/og/, /sharp/] } },
   },
 });
