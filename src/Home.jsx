@@ -376,10 +376,18 @@ export function HomeCandyArt({ busy = false }) {
 // DAY STREAK label together (data-theme) and adds a medal badge. `streak` is
 // the player's actual streak (nothing here changes it); `flame` is the icon.
 // `onSignIn`, for a guest only, adds the "Sign in to save your streak" nudge
-// at the right of the flame row, leaving the streak itself centred.
+// hanging off the right of the DAY STREAK label. It is positioned on its own
+// (absolute, beside the label), so the streak and label stay exactly centred
+// as if it weren't there; where there isn't room beside the label it drops to
+// its own line below, still leaving the streak where it is.
+const HINT_GAP_PX = 10;
+const HINT_WIDTH_PX = 94;
+
 export function HomeStreak({ streak, flame, onSignIn = null }) {
   const [open, setOpen] = useState(false);
   const numRef = useRef(null);
+  const labelRef = useRef(null);
+  const [hintBelow, setHintBelow] = useState(false);
   // Font size and horizontal squash for this screen width (null until
   // measured, so the first paint is the wide-screen size).
   const [fit, setFit] = useState(null);
@@ -392,6 +400,10 @@ export function HomeStreak({ streak, flame, onSignIn = null }) {
       const px = streakFontForWidth(cycleDay, vw);
       const naturalEm = el.offsetWidth / parseFloat(getComputedStyle(el).fontSize);
       const k = streakSqueeze(px, naturalEm, Math.min(vw - 24, 960));
+      // Room for the nudge beside the label: from the label's right edge to the
+      // page margin, the label being centred on the page.
+      const label = labelRef.current;
+      if (label) setHintBelow((vw / 2 - 12) - label.offsetWidth / 2 - HINT_GAP_PX < HINT_WIDTH_PX);
       setFit((f) => (f && Math.abs(f.px - px) < 0.05 && Math.abs(f.k - k) < 0.001 ? f : { px, k, w: px * naturalEm * k }));
     };
     measure();
@@ -408,17 +420,17 @@ export function HomeStreak({ streak, flame, onSignIn = null }) {
   const growth = streakGrowth(cycleDay);
   const shown = String(streakCycle(streak).actual);
   return (
-    <section className={onSignIn ? "hm-sk has-hint" : "hm-sk"} data-theme={prestigeTheme(prestigeCount)}
+    <section className="hm-sk" data-theme={prestigeTheme(prestigeCount)}
       style={{ "--sk-t": growth.toFixed(4), "--sk-px": (fit ? fit.px : streakFontForWidth(cycleDay, 1280)).toFixed(1) }}
       aria-label={`${shown}-day streak`}>
-      <div className="hm-sk-top">
-        <span className="hm-sk-flame" aria-hidden="true">{flame}</span>
-        {onSignIn && <button type="button" className="hm-signin-hint hm-sk-hint" onClick={onSignIn}>Sign in to save your streak</button>}
-      </div>
+      <span className="hm-sk-flame" aria-hidden="true">{flame}</span>
       <div className="hm-sk-numbox" style={fit ? { width: fit.w } : undefined}>
         <div className="hm-sk-num" ref={numRef} style={fit && fit.k < 1 ? { transform: `scaleX(${fit.k.toFixed(4)})` } : undefined}>{shown}</div>
       </div>
-      <div className="hm-sk-label">DAY STREAK</div>
+      <div className={onSignIn ? (hintBelow ? "hm-sk-labelline has-hint is-below" : "hm-sk-labelline has-hint") : "hm-sk-labelline"}>
+        <div className="hm-sk-label" ref={labelRef}>DAY STREAK</div>
+        {onSignIn && <button type="button" className="hm-signin-hint hm-sk-hint" onClick={onSignIn}>Sign in to save your streak</button>}
+      </div>
       {prestigeCount > 0 && (
         <>
           <button type="button" className="hm-sk-badge" aria-expanded={open}

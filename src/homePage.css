@@ -357,15 +357,17 @@
 /* Sized by Home.jsx to the number's squashed width, so the page never scrolls
    sideways; the number inside is scaled horizontally to fit when it must be. */
 .hm-sk-numbox {
+  display: flex;
+  justify-content: center; /* an overflowing number overflows equally both sides */
   margin-top: calc(-2px - 8px * var(--sk-t));
-  max-width: 100%;
 }
 .hm-sk-num {
+  flex: none;
   width: max-content;
-  max-width: none;
-  transform-origin: left center;
-  margin-top: 0;
-  padding: 0 0.03em 0.03em;
+  transform-origin: center center;
+  /* The last digit's negative letter-spacing trails past the box: the extra
+     right padding keeps the visible digits, not the box, centred. */
+  padding: 0 0.06em 0.03em 0.03em;
   font-family: 'Fredoka One', cursive;
   font-weight: 400;
   font-size: calc(var(--sk-px) * 1px);
@@ -382,6 +384,11 @@
 }
 /* Same fill, outline and drop shadow as the number, scaled down to a label. */
 /* The DAY STREAK label: flat and plain, in the number's theme colour. */
+.hm-sk-labelline {
+  position: relative;
+  display: flow-root;
+  align-self: center;
+}
 .hm-sk-label {
   margin-top: calc(1px + 5px * var(--sk-t));
   padding-left: 0.14em; /* balances the trailing letter-spacing: centred */
@@ -392,23 +399,16 @@
   line-height: 1;
   color: var(--sk-label);
 }
-/* The flame row: the flame stays centred whatever is beside it. */
-.hm-sk-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: start;
-  width: 100%;
-}
-.hm-sk-flame { grid-column: 2; }
-.hm-sk.has-hint { width: 100%; }
-/* The guest nudge, off to the right of the flame, above the number, so it
-   never touches the number or the label and wraps in the room it has. */
+/* The guest nudge hangs off the right of the label on its own (absolute), so
+   the centred streak and label never move for it. Two short lines; the line
+   reserves their height so the puzzle below stays clear. Where the room beside
+   the label is too small (is-below, set in Home.jsx) it drops to its own row. */
+.hm-sk-labelline.has-hint:not(.is-below) { min-height: calc(29px + 5px * var(--sk-t)); }
 .hm-sk-hint {
-  grid-column: 3;
-  justify-self: end;
-  min-width: 0;
-  max-width: min(100%, 8.6em); /* two short lines, clear of the flame */
-  margin: 2px 0 0;
+  position: absolute;
+  left: calc(100% + 10px);
+  top: calc(1px + 5px * var(--sk-t));
+  width: 94px;
   padding: 0;
   border: 0;
   background: none;
@@ -416,10 +416,18 @@
   font-weight: 800;
   font-size: 12.5px;
   line-height: 1.1;
-  text-align: right;
-  overflow-wrap: anywhere;
+  text-align: left;
   color: var(--cs-ink-soft);
   cursor: pointer;
+}
+.hm-sk-labelline.is-below { display: contents; }
+.hm-sk-labelline.is-below .hm-sk-hint {
+  position: static;
+  align-self: flex-end;
+  width: auto;
+  max-width: 100%;
+  margin-top: 2px;
+  text-align: right;
 }
 .hm-sk-hint:focus-visible { outline: 2px solid var(--black); outline-offset: 2px; border-radius: 4px; }
 /* Completed 100-day laps. Quiet next to the number: a small medal pill. */
