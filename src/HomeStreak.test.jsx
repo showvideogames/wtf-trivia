@@ -106,6 +106,70 @@ ${sel} {`);
   });
 });
 
+const css = readFileSync(new URL("./homePage.css", import.meta.url), "utf8");
+const rule = (sel) => {
+  const start = css.indexOf(`
+${sel} {`);
+  return css.slice(start, css.indexOf("}", start));
+};
+
+describe("HomeStreak flame behind the number", () => {
+
+  it("puts the flame behind the number, on the number's centre line, taking no part in its centring", () => {
+    const flame = rule(".hm-sk-flame");
+    expect(flame).toContain("position: absolute");
+    expect(flame).toContain("left: 50%");
+    expect(flame).toContain("translateX(-50%)");
+    expect(flame).toContain("z-index: 0");
+    expect(rule(".hm-sk-num")).toContain("z-index: 1");
+    expect(rule(".hm-sk-label")).toContain("z-index: 2");
+    // Inside the number's own box, so they share one centre.
+    const html = streak(50);
+    expect(html.indexOf("hm-sk-numbox")).toBeLessThan(html.indexOf("hm-sk-flame"));
+    expect(html.indexOf("hm-sk-flame")).toBeLessThan(html.indexOf("hm-sk-num\""));
+  });
+
+  it("sizes the flame from the number's font size, so it follows the same 1-100 cycle", () => {
+    const flame = rule(".hm-sk-flame");
+    expect(flame).toContain("var(--sk-px)");
+    expect(streak(101)).toContain(streak(1).match(/--sk-px:[0-9.]+/)[0]);
+    expect(streak(200)).toContain(streak(100).match(/--sk-px:[0-9.]+/)[0]);
+  });
+});
+
+describe("HomeStreak once today's puzzle is finished", () => {
+  const compact = (n) => renderToStaticMarkup(<HomeStreak streak={n} flame={<i/>} compact/>);
+
+  it("collapses to one fixed compact size, whatever the streak", () => {
+    const px = (n) => compact(n).match(/--sk-px:([0-9.]+)/)[1];
+    for (const n of [1, 50, 75, 100, 101, 200, 10000]) {
+      expect(compact(n)).toContain("hm-sk is-compact");
+      expect(px(n)).toBe(px(1));
+    }
+    expect(Number(px(100))).toBeLessThan(45);
+  });
+
+  it("keeps the real number, the theme, the flame, DAY STREAK and the badge", () => {
+    const html = compact(237);
+    expect(html).toContain('<div class="hm-sk-num">237</div>');
+    expect(html).toContain('data-theme="platinum"');
+    expect(html).toContain("hm-sk-flame");
+    expect(html).toContain("DAY STREAK");
+    expect(html).toContain("hm-sk-badge");
+  });
+
+  it("is the full display again when today's puzzle is not finished", () => {
+    expect(streak(100)).not.toContain("is-compact");
+    const big = Number(streak(100).match(/--sk-px:([0-9.]+)/)[1]);
+    expect(big).toBeGreaterThan(300);
+  });
+
+  it("lays the compact row out as a centred row, flame beside the number", () => {
+    expect(rule(".hm-sk.is-compact")).toContain("flex-direction: row");
+    expect(rule(".hm-sk.is-compact .hm-sk-flame")).toContain("position: static");
+  });
+});
+
 describe("HomeStreak guest sign-in nudge", () => {
   const withHint = (n) => renderToStaticMarkup(<HomeStreak streak={n} flame={<i/>} onSignIn={() => {}}/>);
 

@@ -70,6 +70,10 @@ export function streakSqueeze(fontPx, naturalEm, availW) {
   return natural > availW && natural > 0 ? Math.max(0.05, availW / natural) : 1;
 }
 
+// Once today's puzzle is finished, Home shows the streak at one fixed compact
+// size, whatever the streak (display only; nothing about the streak changes).
+export const COMPACT_STREAK_PX = 38;
+
 // Prestige looks, by lap. Add a theme by adding a row here and a
 // `.hm-sk[data-theme="..."]` block in homePage.css. Past the last one the
 // looks repeat from gold.

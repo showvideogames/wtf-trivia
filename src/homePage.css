@@ -348,6 +348,8 @@
   align-items: center;
   max-width: 100%;
   margin-top: 14px;
+  /* Room above the number for the flame's tip, which stands above it. */
+  padding-top: max(10px, calc(var(--sk-px) * 0.4px));
   text-align: center;
 }
 .hm-sk-flame-img {
@@ -356,19 +358,31 @@
   height: 100%;
   object-fit: contain;
 }
+/* The flame sits behind the number on the number's own centre line and is sized
+   from its font size, so it grows with the same 1-100 curve and starts small
+   again at 101. It is absolute, so it takes no part in the number's centring or
+   width; the number is in front (z-index) with the flame showing around it. */
 .hm-sk-flame {
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
   display: block;
-  width: calc(24px + 44px * var(--sk-t));
-  height: calc(24px + 44px * var(--sk-t));
+  width: calc(var(--sk-px) * 1.45px);
+  height: calc(var(--sk-px) * 1.45px);
+  pointer-events: none;
 }
 /* Sized by Home.jsx to the number's squashed width, so the page never scrolls
    sideways; the number inside is scaled horizontally to fit when it must be. */
 .hm-sk-numbox {
+  position: relative;
   display: flex;
   justify-content: center; /* an overflowing number overflows equally both sides */
-  margin-top: calc(-2px - 8px * var(--sk-t));
 }
 .hm-sk-num {
+  position: relative;
+  z-index: 1;
   flex: none;
   width: max-content;
   transform-origin: center center;
@@ -392,6 +406,8 @@
 /* Same fill, outline and drop shadow as the number, scaled down to a label. */
 /* The DAY STREAK label: flat and plain, in the number's theme colour. */
 .hm-sk-label {
+  position: relative;
+  z-index: 2; /* in front of the flame */
   margin-top: calc(1px + 5px * var(--sk-t));
   padding-left: 0.14em; /* balances the trailing letter-spacing: centred */
   font-family: 'Fredoka One', cursive;
@@ -430,6 +446,28 @@
   transform: none;
   text-align: right;
 }
+/* Today's puzzle finished: one compact row, whatever the streak. */
+.hm-sk.is-compact {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px 10px;
+  padding-top: 0;
+  margin-top: 12px;
+}
+.hm-sk.is-compact .hm-sk-numbox { align-items: center; gap: 6px; width: auto; }
+.hm-sk.is-compact .hm-sk-flame {
+  position: static;
+  transform: none;
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+.hm-sk.is-compact .hm-sk-label { margin-top: 0; padding-left: 0; font-size: 15px; }
+.hm-sk.is-compact .hm-sk-badge { margin-top: 0; }
+.hm-sk.is-compact .hm-sk-total { flex-basis: 100%; }
+.hm-sk.is-compact.is-corner { padding-top: 30px; }
 .hm-sk-hint:focus-visible { outline: 2px solid var(--black); outline-offset: 2px; border-radius: 4px; }
 /* Completed 100-day laps. Quiet next to the number: a small medal pill. */
 .hm-sk-badge {
@@ -492,6 +530,9 @@
    version of it (day 1). Bigger ones push the page down instead. The poster
    sits right under the streak unit: only a few pixels between them. */
 .hm-main:has(> .hm-sk) { --hm-top-extra: 44px; }
+/* A big flame is cut at the edge of the screen, never scrolls the page. (On the
+   full-width page, not the content column, so the guest nudge is not cut.) */
+.hm-page:has(.hm-sk) { overflow-x: clip; }
 .hm-main > .hm-sk + .hm-heading { margin-top: 6px; }
 .hm-main > .hm-sk ~ .hm-artwork,
 .hm-main > .hm-sk ~ .hm-matchup { margin-top: 5px; }

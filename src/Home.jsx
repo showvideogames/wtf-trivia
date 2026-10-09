@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import CandyPageShell from "./CandyPageShell.jsx";
 import CategoryArtImage from "./CategoryArtImage.jsx";
 import { shareFeedback } from "./homeShare.js";
-import { MAX_INDIVIDUAL_MEDALS, prestigeTheme, streakCycle, streakFontForWidth, streakGrowth, streakSqueeze, totalStreakText } from "./streakPrestige.js";
+import { COMPACT_STREAK_PX, MAX_INDIVIDUAL_MEDALS, prestigeTheme, streakCycle, streakFontForWidth, streakGrowth, streakSqueeze, totalStreakText } from "./streakPrestige.js";
 import { countdownGroups, countdownTier, countdownWords } from "./schedule.js";
 
 // ---- HOME ----
@@ -402,10 +402,15 @@ const HINT_WIDTH_PX = 104;
 // number, DAY STREAK) never moves for it: to the right of the whole stack,
 // vertically centred against it; where there isn't room there, in the
 // top-right corner of the content area instead (never below the streak).
-export function HomeStreak({ streak, flame, onSignIn = null }) {
+// The flame sits behind the number, on its own centre line, and grows with it
+// (it is sized from the number's font size and takes no part in its centring).
+// `compact`, once today's puzzle is finished, replaces the whole escalating
+// display with one small fixed row: flame, number, DAY STREAK.
+export function HomeStreak({ streak, flame, onSignIn = null, compact = false }) {
   const [open, setOpen] = useState(false);
   const numRef = useRef(null);
   const labelRef = useRef(null);
+  const sectionRef = useRef(null);
   const [hintCorner, setHintCorner] = useState(false);
   // Font size and horizontal squash for this screen width (null until
   // measured, so the first paint is the wide-screen size).
@@ -416,13 +421,13 @@ export function HomeStreak({ streak, flame, onSignIn = null }) {
     if (!el || cycleDay === 0) return;
     const measure = () => {
       const vw = document.documentElement.clientWidth;
-      const px = streakFontForWidth(cycleDay, vw);
+      const px = compact ? COMPACT_STREAK_PX : streakFontForWidth(cycleDay, vw);
       const naturalEm = el.offsetWidth / parseFloat(getComputedStyle(el).fontSize);
-      const k = streakSqueeze(px, naturalEm, Math.min(vw - 24, 960));
+      const k = compact ? 1 : streakSqueeze(px, naturalEm, Math.min(vw - 24, 960));
       // Room for the nudge beside the stack: from its right edge to the page
       // margin, the stack being centred on the page.
       const label = labelRef.current;
-      const stackW = Math.max(px * naturalEm * k, label ? label.offsetWidth : 0);
+      const stackW = compact ? (sectionRef.current?.offsetWidth ?? 0) : Math.max(px * naturalEm * k, label ? label.offsetWidth : 0);
       setHintCorner((vw / 2 - 12) - stackW / 2 - HINT_GAP_PX < HINT_WIDTH_PX);
       setFit((f) => (f && Math.abs(f.px - px) < 0.05 && Math.abs(f.k - k) < 0.001 ? f : { px, k, w: px * naturalEm * k }));
     };
@@ -432,7 +437,7 @@ export function HomeStreak({ streak, flame, onSignIn = null }) {
     ro?.observe(el);
     ro?.observe(document.documentElement);
     return () => { window.removeEventListener("resize", measure); ro?.disconnect(); };
-  }, [cycleDay, streak]);
+  }, [cycleDay, streak, compact]);
   if (cycleDay === 0) return null;
   const total = totalStreakText(streak); // "237-day total streak", for the badge
   const medals = prestigeCount <= MAX_INDIVIDUAL_MEDALS ? "\u{1F3C5}".repeat(prestigeCount) : `\u{1F3C5} × ${prestigeCount}`;
@@ -440,11 +445,12 @@ export function HomeStreak({ streak, flame, onSignIn = null }) {
   const growth = streakGrowth(cycleDay);
   const shown = String(streakCycle(streak).actual);
   return (
-    <section className={onSignIn && hintCorner ? "hm-sk is-corner" : "hm-sk"} data-theme={prestigeTheme(prestigeCount)}
-      style={{ "--sk-t": growth.toFixed(4), "--sk-px": (fit ? fit.px : streakFontForWidth(cycleDay, 1280)).toFixed(1) }}
+    <section className={["hm-sk", compact && "is-compact", onSignIn && hintCorner && "is-corner"].filter(Boolean).join(" ")}
+      ref={sectionRef} data-theme={prestigeTheme(prestigeCount)}
+      style={{ "--sk-t": growth.toFixed(4), "--sk-px": (fit ? fit.px : compact ? COMPACT_STREAK_PX : streakFontForWidth(cycleDay, 1280)).toFixed(1) }}
       aria-label={`${shown}-day streak`}>
-      <span className="hm-sk-flame" aria-hidden="true">{flame}</span>
-      <div className="hm-sk-numbox" style={fit ? { width: fit.w } : undefined}>
+      <div className="hm-sk-numbox" style={fit && !compact ? { width: fit.w } : undefined}>
+        <span className="hm-sk-flame" aria-hidden="true">{flame}</span>
         <div className="hm-sk-num" ref={numRef} style={fit && fit.k < 1 ? { transform: `scaleX(${fit.k.toFixed(4)})` } : undefined}>{shown}</div>
       </div>
       <div className="hm-sk-label" ref={labelRef}>DAY STREAK</div>

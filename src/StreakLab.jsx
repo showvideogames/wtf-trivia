@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import App from "./App.jsx";
-import { LAB_QUICK_VALUES, SignedInOverrideContext, StreakOverrideContext, parseLabStreak } from "./streakOverride.js";
+import { CompletedOverrideContext, LAB_QUICK_VALUES, SignedInOverrideContext, StreakOverrideContext, parseLabStreak } from "./streakOverride.js";
 import { prestigeTheme, streakCycle } from "./streakPrestige.js";
 import "./streakLab.css";
 
@@ -15,12 +15,14 @@ import "./streakLab.css";
 
 const readParam = () => parseLabStreak(new URLSearchParams(window.location.search).get("streak"));
 const readSignedIn = () => new URLSearchParams(window.location.search).get("signedin") === "1";
+const readCompleted = () => new URLSearchParams(window.location.search).get("completed") === "1";
 
 // The address always names the value on screen, without reloading.
-function writeParam(n, signedIn = readSignedIn()) {
+function writeParam(n, signedIn = readSignedIn(), completed = readCompleted()) {
   const url = new URL(window.location.href);
   url.searchParams.set("streak", String(n));
   if (signedIn) url.searchParams.set("signedin", "1"); else url.searchParams.delete("signedin");
+  if (completed) url.searchParams.set("completed", "1"); else url.searchParams.delete("completed");
   window.history.replaceState(null, "", url);
 }
 
@@ -28,6 +30,7 @@ export default function StreakLab() {
   const [streak, setStreak] = useState(() => readParam() ?? 100);
   const [text, setText] = useState(String(streak));
   const [signedIn, setSignedIn] = useState(readSignedIn);
+  const [completed, setCompleted] = useState(readCompleted);
 
   useEffect(() => {
     const meta = document.createElement("meta");
@@ -52,7 +55,8 @@ export default function StreakLab() {
     writeParam(n);
   };
 
-  const toggleSignedIn = (on) => { setSignedIn(on); writeParam(streak, on); };
+  const toggleSignedIn = (on) => { setSignedIn(on); writeParam(streak, on, completed); };
+  const toggleCompleted = (on) => { setCompleted(on); writeParam(streak, signedIn, on); };
 
   const { cycleDay, prestigeCount } = streakCycle(streak);
   return (
@@ -68,6 +72,10 @@ export default function StreakLab() {
           <input type="checkbox" checked={signedIn} onChange={(e) => toggleSignedIn(e.target.checked)}/>
           <span>Pretend signed in (hides the sign-in nudge)</span>
         </label>
+        <label className="sl-check">
+          <input type="checkbox" checked={completed} onChange={(e) => toggleCompleted(e.target.checked)}/>
+          <span>Pretend today's puzzle is completed (compact streak)</span>
+        </label>
         <div className="sl-quick">
           {LAB_QUICK_VALUES.map((n) => (
             <button key={n} type="button" className={n === streak ? "is-on" : undefined} onClick={() => show(n)}>{n}</button>
@@ -80,9 +88,11 @@ export default function StreakLab() {
       </section>
       <StreakOverrideContext.Provider value={streak}>
         <SignedInOverrideContext.Provider value={signedIn}>
-          <div className="sl-app" inert>
-            <App/>
-          </div>
+          <CompletedOverrideContext.Provider value={completed}>
+            <div className="sl-app" inert>
+              <App/>
+            </div>
+          </CompletedOverrideContext.Provider>
         </SignedInOverrideContext.Provider>
       </StreakOverrideContext.Provider>
     </>
