@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import shareHandler from "../api/share.js";
 import { clearShellCache } from "../api/puzzle.js";
-import { parseResultCode, resultCode, resultCodeFromPath, resultUrl, resultUrlFor } from "./shareLink.js";
+import { parseResultCode, resultCode, resultCodeFromPath, resultShareFor, resultUrl, resultUrlFor } from "./shareLink.js";
 import { resultMeta } from "./shareResultMeta.js";
 import { shareResult } from "./homeShare.js";
 
@@ -104,17 +104,18 @@ describe("result page metadata (initial HTML)", () => {
 
 describe("native share payload", () => {
   const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 Version/18.5 Mobile/15E148 Safari/604.1";
-  it("shares the link only, with no text above the preview", async () => {
+  it("shares the link plus only the circles as text", async () => {
     const share = vi.fn().mockResolvedValue(undefined);
     const nav = { userAgent: IPHONE, maxTouchPoints: 5, share, clipboard: { writeText: vi.fn() } };
     const url = resultUrl(`g-cage.${A}`);
-    expect(await shareResult({ url }, nav)).toBe("shared");
-    expect(share).toHaveBeenCalledWith({ url });
+    expect(await shareResult(resultShareFor({ id: "g-cage" }, { answers: bits(A) }), nav)).toBe("shared");
+    expect(share).toHaveBeenCalledWith({ text: "🟢🟢🟢🟢🟢🔴🟢🟢🟢🟢🟢🟢", url });
   });
   it("copies the link on desktop or when the share sheet fails", async () => {
     const url = resultUrl(`g-cage.${A}`);
     const desktop = { userAgent: "Windows NT 10.0", clipboard: { writeText: vi.fn().mockResolvedValue() } };
-    expect(await shareResult({ url }, desktop)).toBe("copied");
-    expect(desktop.clipboard.writeText).toHaveBeenCalledWith(url);
+    expect(await shareResult(resultShareFor({ id: "g-cage" }, { answers: bits(A) }), desktop)).toBe("copied");
+    expect(desktop.clipboard.writeText).toHaveBeenCalledWith(`🟢🟢🟢🟢🟢🔴🟢🟢🟢🟢🟢🟢
+${url}`);
   });
 });

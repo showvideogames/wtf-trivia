@@ -60,4 +60,11 @@ export function resultUrlFor(game, record) {
   return code ? resultUrl(code) : null;
 }
 
+// What sharing a finished game sends: the result link plus the answer circles
+// as its only text (the score and dare are in the link's preview), or null.
+export function resultShareFor(game, record) {
+  const url = resultUrlFor(game, record);
+  return url ? { url, text: resultCircles(record.answers.map((a) => Boolean(a?.correct))) } : null;
+}
+
 export const resultCircles = (answers) => answers.map((ok) => (ok ? "🟢" : "🔴")).join("");
