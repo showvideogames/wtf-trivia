@@ -342,6 +342,7 @@
   --sk-fill: linear-gradient(180deg, #FFC47A 0%, #FF9A3C 55%, #F5841F 100%);
   --sk-label: #D2600B;
   --sk-badge: #FFD39A;
+  position: relative; /* the guest nudge is placed against the stack */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -390,11 +391,6 @@
 }
 /* Same fill, outline and drop shadow as the number, scaled down to a label. */
 /* The DAY STREAK label: flat and plain, in the number's theme colour. */
-.hm-sk-labelline {
-  position: relative;
-  display: flow-root;
-  align-self: center;
-}
 .hm-sk-label {
   margin-top: calc(1px + 5px * var(--sk-t));
   padding-left: 0.14em; /* balances the trailing letter-spacing: centred */
@@ -405,16 +401,17 @@
   line-height: 1;
   color: var(--sk-label);
 }
-/* The guest nudge hangs off the right of the label on its own (absolute), so
-   the centred streak and label never move for it. Two short lines; the line
-   reserves their height so the puzzle below stays clear. Where the room beside
-   the label is too small (is-below, set in Home.jsx) it drops to its own row. */
-.hm-sk-labelline.has-hint:not(.is-below) { min-height: calc(29px + 5px * var(--sk-t)); }
+/* The guest nudge sits to the right of the whole centred stack (flame, number,
+   DAY STREAK), vertically centred against it. It is absolute, so the stack
+   never moves for it. Where there is no room to the right (is-corner, set in
+   Home.jsx) it goes to the top-right of the content area instead, level with
+   the flame, never below the streak. */
 .hm-sk-hint {
   position: absolute;
   left: calc(100% + 10px);
-  top: calc(1px + 5px * var(--sk-t));
-  width: 94px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 104px;
   padding: 0;
   border: 0;
   background: none;
@@ -426,13 +423,11 @@
   color: var(--cs-ink-soft);
   cursor: pointer;
 }
-.hm-sk-labelline.is-below { display: contents; }
-.hm-sk-labelline.is-below .hm-sk-hint {
-  position: static;
-  align-self: flex-end;
-  width: auto;
-  max-width: 100%;
-  margin-top: 2px;
+.hm-sk.is-corner .hm-sk-hint {
+  left: auto;
+  right: calc(12px - (100vw - 100%) / 2);
+  top: 0;
+  transform: none;
   text-align: right;
 }
 .hm-sk-hint:focus-visible { outline: 2px solid var(--black); outline-offset: 2px; border-radius: 4px; }
