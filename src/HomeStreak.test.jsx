@@ -85,11 +85,18 @@ ${sel} {`);
     return css.slice(start, css.indexOf("}", start));
   };
 
-  it("hangs the guest nudge off the label on its own, so it never takes part in centring", () => {
-    expect(rule(".hm-sk-hint")).toContain("position: absolute");
-    expect(rule(".hm-sk-hint")).toContain("left: calc(100% + 10px)");
-    expect(rule(".hm-sk-labelline")).toContain("position: relative");
-    expect(rule(".hm-sk-labelline")).toContain("align-self: center");
+  it("hangs the guest nudge off the whole stack on its own, so it never takes part in centring", () => {
+    const hint = rule(".hm-sk-hint");
+    expect(hint).toContain("position: absolute");
+    expect(hint).toContain("left: calc(100% + 10px)");
+    // Vertically centred against the whole stack.
+    expect(hint).toContain("top: 50%");
+    expect(hint).toContain("translateY(-50%)");
+    expect(rule(".hm-sk")).toContain("position: relative");
+    // Top-right corner of the content area when there is no room to the right.
+    const corner = rule(".hm-sk.is-corner .hm-sk-hint");
+    expect(corner).toContain("top: 0");
+    expect(corner).toContain("right:");
   });
 
   it("centres the squashed number: a centred box, scaled about its own centre", () => {
@@ -102,12 +109,10 @@ ${sel} {`);
 describe("HomeStreak guest sign-in nudge", () => {
   const withHint = (n) => renderToStaticMarkup(<HomeStreak streak={n} flame={<i/>} onSignIn={() => {}}/>);
 
-  it("shows the existing copy beside DAY STREAK for a guest, as a button", () => {
+  it("shows the nudge copy for a guest, as a button, after the stack", () => {
     const html = withHint(50);
-    expect(html).toContain("Sign in to save your streak");
-    expect(html).toContain('<button type="button" class="hm-signin-hint hm-sk-hint">Sign in to save your streak</button>');
-    expect(html).toContain('class="hm-sk-labelline has-hint"');
-    // Right after the DAY STREAK label, in the same line, below the number.
+    expect(html).toContain('<button type="button" class="hm-signin-hint hm-sk-hint">Don’t lose your streak — sign in</button>');
+    expect(html).not.toContain("Sign in to save your streak");
     expect(html.indexOf("hm-sk-num")).toBeLessThan(html.indexOf("hm-sk-label"));
     expect(html.indexOf("hm-sk-label")).toBeLessThan(html.indexOf("hm-sk-hint"));
   });
