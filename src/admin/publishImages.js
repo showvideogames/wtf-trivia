@@ -25,6 +25,7 @@ export function listPuzzleImages(game) {
   };
   add({ key: "headerImage", kind: "header", field: "headerImage", url: game?.headerImage });
   add({ key: "wideImage", kind: "wide", field: "wideImage", url: game?.wideImage });
+  add({ key: "silhouetteImage", kind: "silhouette", field: "silhouetteImage", url: game?.silhouetteImage });
   add({ key: "categoryAImage", kind: "category", field: "categoryAImage", slot: "A", url: game?.categoryAImage });
   add({ key: "categoryBImage", kind: "category", field: "categoryBImage", slot: "B", url: game?.categoryBImage });
   (Array.isArray(game?.questions) ? game.questions : []).forEach((q, index) => {
@@ -106,6 +107,7 @@ export function isWarningResolved(game, failure) {
 export function imageName(failure, game) {
   if (failure.kind === "header") return "The square poster";
   if (failure.kind === "wide") return "The wide artwork";
+  if (failure.kind === "silhouette") return "The silhouette artwork";
   if (failure.kind === "category") {
     const cat = failure.slot === "A" ? game?.categoryA : game?.categoryB;
     return `The Category ${failure.slot} image${cat ? ` (${cat})` : ""}`;

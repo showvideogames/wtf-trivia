@@ -25,7 +25,7 @@ import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from 
 import { archivePuzzleImages, describeImageWarning, failureReason, imageName, isWarningResolved } from "./admin/publishImages.js";
 import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats } from "./crowdStats.js";
 import { gameToRow, rowToGame } from "./gameRow.js";
-import { copyText, puzzleArtworkUrl, shareResult, wideArtworkUrl } from "./homeShare.js";
+import { copyText, puzzleArtworkUrl, shareResult, teaserArtworkUrl, wideArtworkUrl } from "./homeShare.js";
 import { gameDayKey, isReleased, nextPuzzle, releaseTime, shiftDay } from "./schedule.js";
 import { sessionGameDay } from "./dailySession.js";
 import { statsAfterFinish } from "./playerStats.js";
@@ -1986,6 +1986,7 @@ async function dbLoadPublishedGames(){
 const IMAGE_SAVE_OPTIONS = {
   header:{folder:"headers", preset:"header"},
   wide:{folder:"wide", preset:"wide"},
+  silhouette:{folder:"wide", preset:"wide"},
   category:{folder:"categories", preset:"category"},
   question:{folder:"questions", preset:"question"}
 };
@@ -2022,7 +2023,8 @@ async function dbSaveGame(game){
     ...("category_a_subtitle" in row ? {subtitleColumns:true} : {}),
     ...("category_a_button_name" in row ? {buttonNameColumns:true} : {}),
     ...("tags" in row ? {tagsColumn:true} : {}),
-    ...("wide_image" in row ? {wideImageColumn:true} : {})
+    ...("wide_image" in row ? {wideImageColumn:true} : {}),
+    ...("silhouette_image" in row ? {silhouetteImageColumn:true} : {})
   };
   return { game: saved, imageFailures: failures };
 }
@@ -2040,6 +2042,7 @@ function describeSaveError(e){
   if(msg.includes("_share_name")) return "the database doesn't have the share-name columns yet (run supabase/category_display_names.sql). Clear both share names to save without them.";
   if(msg.includes("_subtitle")) return "the database doesn't have the category subtitle columns yet (run supabase/category_display_names.sql). Clear both subtitles to save without them.";
   if(msg.includes("_button_name")) return "the database doesn't have the answer button name columns yet (run supabase/category_display_names.sql). Clear both button names to save without them.";
+  if(msg.includes("silhouette_image")) return "the database doesn't have the silhouette artwork column yet (run supabase/silhouette_artwork.sql). Remove the silhouette artwork to save without it.";
   if(msg.includes("wide_image")) return "the database doesn't have the wide artwork column yet (run supabase/wide_artwork.sql). Remove the wide artwork to save without it.";
   if(msg.includes("'tags' column")) return "the database doesn't have the topic tags column yet (supabase/puzzle_tags.sql). Deselect every topic to save without it.";
   if(msg.includes("games_one_published_per_date")) return "another published puzzle already has that date. Pick another day.";
@@ -2831,7 +2834,7 @@ function HomeScreen({game,gameRecord,upNext,stats,player,onPlay,onNav,onHelp,onS
   tomorrow.setDate(tomorrow.getDate()+1);
   const nextTitle = upNext?.date===gameDayKey(tomorrow) ? "Tomorrow’s puzzle" : "Up next";
   const next = upNext&&opensAt&&(
-    <HomeUpNext game={upNext} colors={categoryColors(upNext)} wideUrl={wideArtworkUrl(upNext)} squareUrl={puzzleArtworkUrl(upNext)}
+    <HomeUpNext game={upNext} colors={categoryColors(upNext)} wideUrl={teaserArtworkUrl(upNext)} squareUrl={puzzleArtworkUrl(upNext)}
       opensAt={opensAt} title={nextTitle}/>
   );
   return(

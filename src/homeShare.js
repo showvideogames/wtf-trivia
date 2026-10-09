@@ -80,3 +80,10 @@ export function puzzleArtworkUrl(game) {
 export function wideArtworkUrl(game) {
   return usableMediaUrl(game?.wideImage);
 }
+
+// The image for Home's Up Next / Tomorrow teaser only: the silhouette
+// artwork when the puzzle has one, otherwise its wide artwork. Never used for
+// today's poster, gameplay, the archive or share previews.
+export function teaserArtworkUrl(game) {
+  return usableMediaUrl(game?.silhouetteImage) || wideArtworkUrl(game);
+}
