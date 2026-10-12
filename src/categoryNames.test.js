@@ -40,7 +40,7 @@ describe("category display names", () => {
   it("keeps an existing share override, and a blank one still falls back to the category name", () => {
     const game = rowToGame({ ...MIGRATED_ROW, category_a_share_name: "Led Zeppelin 🎸🤘" });
     // Share names now name the categories in the puzzle link's preview.
-    expect(puzzleMeta(game).description).toMatch(/^Led Zeppelin 🎸🤘 or My Little Pony\? /);
+    expect(puzzleMeta(game).description).toMatch(/^Led Zeppelin 🎸🤘 or My Little Pony\. /);
     expect(gameToRow(game).category_a_share_name).toBe("Led Zeppelin 🎸🤘");
   });
 
@@ -49,7 +49,7 @@ describe("category display names", () => {
     const edited = { ...base, categoryAButtonName: "Zeppelin" };
     expect(edited.categoryA).toBe("Led Zeppelin");
     expect(answerButtonName(edited, "A")).toBe("Zeppelin");
-    expect(puzzleMeta(edited).description).toMatch(/^Led Zeppelin or My Little Pony\? /);
+    expect(puzzleMeta(edited).description).toMatch(/^Led Zeppelin or My Little Pony\. /);
     // The share text itself names no category: the circles, score and link.
     expect(buildResultsShareText({ game: edited, record: RECORD })).toBe("🟢🔴\n1/2 ➜ Can you beat my score?!\nhttps://whatthefudge.gg/puzzle/g-1");
 

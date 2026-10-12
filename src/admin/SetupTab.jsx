@@ -110,10 +110,12 @@ function NamesPreview({game, colorA, colorB}){
       </div>
       <div className="ps-np-block">
         <div className="ps-np-label">Link preview</div>
+        {/* The names as the preview title shows them (puzzleMeta.js
+            matchupName): nothing added after them. */}
         <div className="ps-np-share">
           <div>{shareCategoryName(game.categoryAShareName, game.categoryA, "Category A")}</div>
           <div>or</div>
-          <div>{shareCategoryName(game.categoryBShareName, game.categoryB, "Category B")}?</div>
+          <div>{shareCategoryName(game.categoryBShareName, game.categoryB, "Category B")}</div>
         </div>
       </div>
     </div>

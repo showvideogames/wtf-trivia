@@ -72,6 +72,18 @@ export default function DatePicker({value,onChange,games,currentGameId}){
     return ()=>{ document.removeEventListener("pointerdown", onDown); document.removeEventListener("keydown", onKey); };
   },[open]);
 
+  // Opening it from the button brings the whole calendar into view, clear of
+  // the sticky header and (on phones) the fixed action bar: its
+  // scroll-margins in studio.css. A puzzle with no date starts open without
+  // moving the page.
+  const calRef=useRef(null);
+  const reveal=useRef(false);
+  useEffect(()=>{
+    if(!open||!reveal.current) return;
+    reveal.current=false;
+    calRef.current?.scrollIntoView?.({block:"nearest"});
+  },[open]);
+
   return(
     <div className="ps-date" ref={wrapRef}>
       <div className="ps-label" id="ps-date-label">Puzzle date</div>
@@ -80,7 +92,7 @@ export default function DatePicker({value,onChange,games,currentGameId}){
           <Icon name="calendar" size={20}/>
           <span>{value?formatLongDate(value):"No date picked yet"}</span>
         </div>
-        <button type="button" className="ps-btn" aria-expanded={open} aria-controls="ps-calendar" onClick={()=>setOpen(v=>!v)}>
+        <button type="button" className="ps-btn" aria-expanded={open} aria-controls="ps-calendar" onClick={()=>{ reveal.current=!open; setOpen(v=>!v); }}>
           {open?"Close calendar":value?"Change date":"Pick date"}
         </button>
       </div>
@@ -95,7 +107,7 @@ export default function DatePicker({value,onChange,games,currentGameId}){
         </div>
       )}
       {open&&(
-        <div className="ps-calendar" id="ps-calendar">
+        <div className="ps-calendar" id="ps-calendar" ref={calRef}>
           <div className="ps-cal-type">
             <label htmlFor="ps-date-typed">Type a date</label>
             <input
@@ -124,7 +136,12 @@ export default function DatePicker({value,onChange,games,currentGameId}){
               const isOwn = cellGame?.id===currentGameId;
               const isUsed = Boolean(cellGame && !isOwn);
               const selected = cell.iso===value;
+              const isDraft = isUsed && cellGame.status!=="published";
               const cls = `ps-cal-day${selected?" is-selected":""}${isUsed?" is-used":""}${isOwn?" is-own":""}`;
+              // The day's status is a small dot (see the legend); the words
+              // are in the label and tooltip, so the cells stay one size.
+              const status = isOwn ? "this puzzle's day"
+                : isUsed ? `${isDraft?"draft":"published"}: ${cellGame.themeTitle||"another puzzle"}` : "";
               return(
                 <button
                   type="button"
@@ -133,17 +150,19 @@ export default function DatePicker({value,onChange,games,currentGameId}){
                   onClick={()=>chooseDate(cell.iso)}
                   aria-pressed={selected}
                   aria-disabled={isUsed||undefined}
-                  title={cellGame?`${formatAdminDate(cell.iso)}: ${cellGame.themeTitle}`:formatAdminDate(cell.iso)}
+                  aria-label={`${formatLongDate(cell.iso)}${status?`, ${status}`:""}`}
+                  title={`${formatAdminDate(cell.iso)}${status?` · ${status}`:""}`}
                 >
-                  <span>{cell.day}</span>
-                  {cellGame&&<span className="ps-cal-status">{isOwn?"This":cellGame.status||"Used"}</span>}
+                  <span className="ps-cal-num">{cell.day}</span>
+                  {cellGame&&<span className={`ps-cal-dot ${isOwn?"is-own":isDraft?"is-draft":"is-used"}`} aria-hidden="true"/>}
                 </button>
               );
             })}
           </div>
           <div className="ps-cal-legend">
-            <span><span className="ps-cal-dot is-used"/>Day already has a puzzle</span>
-            <span><span className="ps-cal-dot is-own"/>This puzzle's day</span>
+            <span><span className="ps-cal-dot is-used" aria-hidden="true"/>Day has a published puzzle</span>
+            <span><span className="ps-cal-dot is-draft" aria-hidden="true"/>Day has a draft</span>
+            <span><span className="ps-cal-dot is-own" aria-hidden="true"/>This puzzle's day</span>
           </div>
         </div>
       )}

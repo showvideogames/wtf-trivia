@@ -665,6 +665,16 @@ export function devGetRecord(puzzleId) {
   return readJSON(RECORD_KEY, {})[puzzleId] || null;
 }
 
+// The offline stand-in for public.wtf_puzzle_has_plays (migration 0005):
+// whether this browser has a saved play of the puzzle. localStorage
+// wtf-dev-plays=fail rehearses a check that can't be made.
+export function devPuzzleHasPlays(puzzleId) {
+  let mode = null;
+  try { mode = localStorage.getItem("wtf-dev-plays"); } catch { /* ignore */ }
+  if (mode === "fail") throw new Error("Simulated play check failure (wtf-dev-plays=fail)");
+  return Boolean(devGetRecord(puzzleId));
+}
+
 export function devGetAllRecords() {
   return readJSON(RECORD_KEY, {});
 }
