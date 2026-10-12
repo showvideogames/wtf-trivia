@@ -32,3 +32,27 @@ export function puzzleActionCopy(kind, game){
       ],
   };
 }
+
+const side = v=>v==="B" ? "B" : "A";
+
+// Whether changing a question's correct answer must be confirmed first: the
+// puzzle may have plays (questionLock gave a reason) and the pick moves the
+// answer away from the saved one. Going back to the saved answer never asks.
+export function answerCorrectionNeedsConfirm({lock, question, saved, next}){
+  if(!lock || !saved) return false;
+  return side(next)!==side(question?.correctCategory) && side(next)!==side(saved.correctCategory);
+}
+
+// What that confirmation says: plays already saved keep the old answer.
+export function answerCorrectionCopy({itemText, number, name}){
+  const label = itemText?.trim() ? `“${itemText.trim()}”` : `question ${number}`;
+  return {
+    title: `Change the correct answer for ${label}?`,
+    confirmLabel: "Change answer",
+    lines: [
+      `The correct answer becomes ${name}.`,
+      "Results already saved won't be recalculated: past scores, right and wrong marks, shared result links and this puzzle's stats keep the old answer.",
+      "Only new plays use the corrected answer, once you save or publish the change.",
+    ],
+  };
+}

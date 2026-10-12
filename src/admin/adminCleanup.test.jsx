@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import ConfirmDialog from "./ConfirmDialog.jsx";
 import DatePicker from "./DatePicker.jsx";
-import { puzzleActionCopy } from "./puzzleActions.js";
+import { answerCorrectionCopy, answerCorrectionNeedsConfirm, puzzleActionCopy } from "./puzzleActions.js";
 import QuestionList from "./QuestionList.jsx";
 import { StudioContext } from "./StudioContext.js";
 import { QUESTION_LOCK_TEXT, applyOrder, questionLock, questionStructureChanged, restoreSavedQuestions, secureRandomInt, shuffleOrder, undoOrder } from "./questionStatus.js";
@@ -91,6 +91,28 @@ describe("Delete / Retire confirmation", () => {
     const draft = puzzleActionCopy("delete", { themeTitle: "", status: "draft", questions: [{}] });
     expect(draft.title).toBe("Delete draft “Untitled puzzle”?");
     expect(draft.lines[0]).toContain("1 question.");
+  });
+});
+
+describe("correcting an answer on a played puzzle", () => {
+  it("asks first, only when the puzzle may have plays and the answer moves away from the saved one", () => {
+    const saved = { id: "q1", itemText: "Espresso", correctCategory: "A" };
+    const ask = (lock, question, next) => answerCorrectionNeedsConfirm({ lock, question, saved, next });
+    expect(ask("played", saved, "B")).toBe(true);
+    expect(ask("live", saved, "B")).toBe(true);
+    expect(ask("unknown", saved, "B")).toBe(true);
+    expect(ask(null, saved, "B")).toBe(false); // confirmed unplayed (or never saved)
+    expect(ask("played", saved, "A")).toBe(false); // no change
+    expect(ask("played", { ...saved, correctCategory: "B" }, "A")).toBe(false); // back to the saved answer
+    expect(answerCorrectionNeedsConfirm({ lock: "played", question: { id: "q9" }, saved: undefined, next: "B" })).toBe(false); // a new question
+  });
+
+  it("says plainly that saved results and stats are not recalculated", () => {
+    const copy = answerCorrectionCopy({ itemText: "Espresso", number: 1, name: "Dinosaur 🦕" });
+    expect(copy.title).toBe("Change the correct answer for “Espresso”?");
+    expect(copy.confirmLabel).toBe("Change answer");
+    expect(copy.lines.join(" ")).toMatch(/becomes Dinosaur 🦕..*won't be recalculated: past scores, right and wrong marks, shared result links and this puzzle's stats keep the old answer/);
+    expect(answerCorrectionCopy({ itemText: " ", number: 3, name: "A" }).title).toBe("Change the correct answer for question 3?");
   });
 });
 

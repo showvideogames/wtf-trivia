@@ -72,7 +72,7 @@ import QuestionList from "./admin/QuestionList.jsx";
 import QuestionEditor from "./admin/QuestionEditor.jsx";
 import Icon from "./admin/Icon.jsx";
 import ConfirmDialog from "./admin/ConfirmDialog.jsx";
-import { puzzleActionCopy } from "./admin/puzzleActions.js";
+import { answerCorrectionCopy, answerCorrectionNeedsConfirm, puzzleActionCopy } from "./admin/puzzleActions.js";
 import {
   demoGames as devDemoGames,
   devPlayer,
@@ -4729,6 +4729,17 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
     return ()=>cancelAnimationFrame(id);
   },[focusItem]);
   const updQ=(i,patch)=>setGame(g=>({...g,questions:g.questions.map((q,j)=>j===i?{...q,...patch}:q)}));
+  // Correcting an answer stays available on a puzzle that may have plays,
+  // after a confirmation that saved results and stats keep the old answer.
+  const[answerFix,setAnswerFix]=useState(null); // {index, patch}
+  const editQuestion=(i,patch)=>{
+    if("correctCategory" in patch){
+      const q=qs[i];
+      const saved=q?.id!=null ? (ig.questions||[]).find(s=>s?.id===q.id) : (ig.questions||[])[i];
+      if(answerCorrectionNeedsConfirm({lock:qLock, question:q, saved, next:patch.correctCategory})){ setAnswerFix({index:i, patch}); return; }
+    }
+    updQ(i,patch);
+  };
   const delQ=i=>{
     const q=qs[i];
     if(!q) return;
@@ -4890,7 +4901,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
                 number={sel+1}
                 fresh={editingKey===freshKey}
                 catA={answerButtonName(game,"A")} catB={answerButtonName(game,"B")} colorA={colorA} colorB={colorB}
-                onChange={patch=>updQ(sel,patch)}
+                onChange={patch=>editQuestion(sel,patch)}
                 onBusyChange={trackImage("question")}
                 fieldId={`img-field-q-${editingKey}`}
                 onPrev={sel>0?()=>selectQuestion(sel-1):null}
@@ -4907,6 +4918,16 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
         </div>
       </main>
       <MobileActionBar actions={actions} notice={notice?noticeBar:null}/>
+      {answerFix&&(()=>{
+        const q=qs[answerFix.index];
+        const copy=answerCorrectionCopy({itemText:q?.itemText, number:answerFix.index+1, name:answerButtonName(game, answerFix.patch.correctCategory==="B"?"B":"A")});
+        return(
+          <ConfirmDialog title={copy.title} confirmLabel={copy.confirmLabel} tone="primary"
+                         onConfirm={()=>{ updQ(answerFix.index, answerFix.patch); setAnswerFix(null); }} onCancel={()=>setAnswerFix(null)}>
+            {copy.lines.map(line=><p key={line}>{line}</p>)}
+          </ConfirmDialog>
+        );
+      })()}
       {confirming&&(()=>{
         // Worded for the puzzle as stored (the one being deleted or retired).
         const copy=puzzleActionCopy(confirming, ig);
