@@ -67,8 +67,22 @@ describe("puzzleMeta", () => {
     const meta = puzzleMeta(GAME);
     expect(meta.title).toBe("Board Game or Nicolas Cage Movie?");
     expect(meta.pageTitle).toBe("Board Game or Nicolas Cage Movie? · What The Fudge Trivia");
-    expect(meta.description).toBe("Board Game 🎲 or Nicolas Cage Movie 🎬? Every clue belongs to one of them. Play the puzzle and compare scores.");
+    expect(meta.description).toBe("Board Game 🎲 or Nicolas Cage Movie 🎬. Every clue belongs to one of them. Play the puzzle and compare scores.");
     expect(meta.url).toBe("https://whatthefudge.gg/puzzle/g-cage");
+  });
+
+  it("adds no punctuation to the matchup title and keeps the punctuation that was entered", () => {
+    const names = { id: "g-coffee", categoryA: "Coffee", categoryB: "Dinosaur", categoryAShareName: "Coffee ☕", categoryBShareName: "Dinosaur 🦕🦖" };
+    const meta = puzzleMeta(names);
+    expect(meta.title).toBe("Coffee ☕ or Dinosaur 🦕🦖");
+    expect(meta.pageTitle).toBe("Coffee ☕ or Dinosaur 🦕🦖 · What The Fudge Trivia");
+    expect(meta.description).toBe("Coffee ☕ or Dinosaur 🦕🦖. Every clue belongs to one of them. Play the puzzle and compare scores.");
+    const asked = puzzleMeta({ ...names, categoryBShareName: "Real Dinosaur?" });
+    expect(asked.title).toBe("Coffee ☕ or Real Dinosaur?");
+    expect(asked.description).toMatch(/^Coffee ☕ or Real Dinosaur\? Every clue/);
+    // A typed title is used exactly as entered, "?" included.
+    expect(puzzleMeta({ ...names, themeTitle: "Coffee or Dinosaur?" }).title).toBe("Coffee or Dinosaur?");
+    expect(withPuzzleMeta(SHELL, meta)).toContain('<meta property="og:title" content="Coffee ☕ or Dinosaur 🦕🦖" />');
   });
 
   it("never carries a question or an answer", () => {
@@ -107,7 +121,7 @@ describe("withPuzzleMeta", () => {
     const tricky = { ...GAME, themeTitle: 'Cats & "Dogs" <b>$1</b>', categoryAShareName: "A's", wideImage: "https://cdn.test/w.png?a=1&b=2" };
     const out = withPuzzleMeta(SHELL, puzzleMeta(tricky));
     expect(out).toContain("<title>Cats &amp; &quot;Dogs&quot; &lt;b&gt;$1&lt;/b&gt; · What The Fudge Trivia</title>");
-    expect(out).toContain("A&#39;s or Nicolas Cage Movie 🎬?");
+    expect(out).toContain("A&#39;s or Nicolas Cage Movie 🎬. Every clue");
     expect(out).toContain('content="https://cdn.test/w.png?a=1&amp;b=2"');
     expect(out).not.toContain("<b>");
   });

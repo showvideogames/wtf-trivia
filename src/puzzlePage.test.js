@@ -63,7 +63,7 @@ describe("a released puzzle's link", () => {
     expect(res.headers["cache-control"]).toContain("s-maxage=300");
     expect(res.body).toContain("<title>Board Game or Nicolas Cage Movie? · What The Fudge Trivia</title>");
     expect(res.body).toContain('<meta property="og:title" content="Board Game or Nicolas Cage Movie?" />');
-    expect(res.body).toContain('<meta property="og:description" content="Board Game 🎲 or Nicolas Cage Movies? Every clue belongs to one of them. Play the puzzle and compare scores." />');
+    expect(res.body).toContain('<meta property="og:description" content="Board Game 🎲 or Nicolas Cage Movies. Every clue belongs to one of them. Play the puzzle and compare scores." />');
     expect(res.body).toContain('<meta property="og:image" content="https://cdn.test/wide.webp" />');
     // Its canonical address is the quiz's public link (quizSlug.js).
     expect(res.body).toContain('<meta property="og:url" content="https://whatthefudge.gg/quiz/board-game-or-nicolas-cage-movie" />');

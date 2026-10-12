@@ -101,6 +101,41 @@
 .ps-btn-publish.is-unready { filter: saturate(0.5); opacity: 0.78; }
 .ps-btn-danger { color: var(--ps-red-ink); border-color: #EDB7B0; }
 .ps-btn-danger:hover { background: var(--ps-red-wash); border-color: #E39A91; }
+/* A solid red confirm button, only inside the Delete/Retire dialog. */
+.ps-btn-danger-solid {
+  background: linear-gradient(180deg, #F06A5E 0%, #E0564A 55%, #C93A2F 100%);
+  border-color: #A82D24;
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.22);
+  box-shadow: 0 3px 0 #8A241D;
+}
+.ps-btn-danger-solid:hover { background: linear-gradient(180deg, #F27B70 0%, #E4645A 55%, #CE463B 100%); border-color: #8A241D; }
+.ps-btn-danger-solid:active { box-shadow: 0 1px 0 #8A241D; }
+
+/* ---------- confirm dialog (Delete / Retire) ---------- */
+.ps-dialog-backdrop {
+  position: fixed; inset: 0; z-index: 100;
+  display: grid; place-items: center;
+  padding: 16px;
+  background: rgba(40, 28, 8, 0.45);
+}
+.ps-dialog {
+  width: min(480px, 100%);
+  max-height: calc(100dvh - 32px); overflow-y: auto;
+  box-sizing: border-box;
+  padding: 22px 24px 20px;
+  border-radius: 20px;
+  border: 1px solid var(--ps-line-strong);
+  background: var(--ps-panel);
+  box-shadow: 0 24px 60px -20px rgba(60, 40, 5, 0.55);
+}
+.ps-dialog-title { font-family: "Fredoka One", cursive; font-size: 23px; line-height: 1.2; color: var(--ps-ink); overflow-wrap: anywhere; }
+.ps-dialog-body { margin-top: 10px; display: grid; gap: 8px; font-size: 15.5px; font-weight: 600; color: var(--ps-ink-2); }
+.ps-dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+@media (max-width: 480px) {
+  .ps-dialog { padding: 18px 16px 16px; }
+  .ps-dialog-actions .ps-btn { flex: 1; }
+}
 .ps-btn-quiet { background: transparent; border-color: transparent; box-shadow: none; }
 .ps-link-btn {
   display: inline-flex; align-items: center; gap: 4px;
@@ -328,15 +363,20 @@
   border: 1px solid var(--ps-line-strong);
   background: #fff;
   box-shadow: 0 18px 40px -18px rgba(90, 60, 10, 0.45);
+  /* Room kept around it when it scrolls into view: below the sticky header,
+     and above the phones' fixed action bar (--ps-bar-h, EditorChrome.jsx). */
+  scroll-margin-top: calc(var(--ps-head-h, 72px) + 8px);
+  scroll-margin-bottom: calc(var(--ps-bar-h, 0px) + 16px);
 }
 @media (min-width: 900px) {
-  .ps-calendar { position: absolute; z-index: 15; left: 0; top: 100%; width: 420px; }
+  .ps-calendar { position: absolute; z-index: 15; left: 0; top: 100%; width: min(400px, calc(100vw - 48px)); box-sizing: border-box; }
 }
 .ps-cal-type { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .ps-cal-type label { font-size: 14px; font-weight: 800; color: var(--ps-ink-2); white-space: nowrap; }
 .ps-cal-type .ps-input { min-height: 40px; padding: 6px 12px; }
-.ps-cal-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
-.ps-cal-title { font-family: 'Fredoka One', cursive; font-size: 18px; color: var(--ps-teal-ink); }
+.ps-cal-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+.ps-cal-nav { margin-left: auto; }
+.ps-cal-title { font-family: 'Fredoka One', cursive; font-size: 18px; color: var(--ps-teal-ink); white-space: nowrap; }
 .ps-cal-nav { display: flex; gap: 6px; }
 .ps-cal-nav button {
   display: grid; place-items: center;
@@ -348,11 +388,15 @@
   cursor: pointer;
 }
 .ps-cal-nav button:hover { background: #FFF8E6; }
-.ps-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+/* minmax(0, 1fr): the seven columns always share the popup's width, whatever
+   is inside a cell. */
+.ps-cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
 .ps-cal-dow { text-align: center; font-size: 12.5px; font-weight: 800; color: var(--ps-ink-3); padding: 2px 0; }
 .ps-cal-day {
-  min-height: 46px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
   border-radius: 10px;
   border: 1px solid #EFE5CD;
   background: #FFFDF7;
@@ -365,12 +409,17 @@
 .ps-cal-day.is-own { background: var(--ps-teal-wash); border-color: #7FD8CB; color: var(--ps-teal-ink); }
 .ps-cal-day.is-selected { background: linear-gradient(180deg, #FFF27A, #FFE347 60%, #F4CF18); border-color: #C9A400; color: var(--ps-ink); box-shadow: 0 2px 0 #B38F00; }
 .ps-cal-day.is-own.is-selected { background: linear-gradient(180deg, #7EEEDD, #2DD4BF 60%, #14B8A6); border-color: #0F9488; color: var(--ps-ink); box-shadow: 0 2px 0 #0B6B63; }
-.ps-cal-status { font-size: 10px; line-height: 1; font-weight: 900; text-transform: uppercase; letter-spacing: 0.3px; }
+.ps-cal-num { line-height: 1; }
 .ps-cal-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--ps-ink-3); }
 .ps-cal-legend > span { display: inline-flex; align-items: center; }
-.ps-cal-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.ps-cal-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; flex: none; }
 .ps-cal-dot.is-used { background: #E0564A; }
+.ps-cal-dot.is-draft { box-shadow: inset 0 0 0 2px #E0564A; }
 .ps-cal-dot.is-own { background: #14B8A6; }
+/* In a day cell: a small status dot under the number. */
+.ps-cal-day .ps-cal-dot { width: 7px; height: 7px; margin: 0; }
+.ps-cal-day .ps-cal-dot.is-draft { box-shadow: inset 0 0 0 1.5px #E0564A; }
+.ps-cal-day.is-own.is-selected .ps-cal-dot { background: #0B6B63; }
 
 .ps-cat-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .ps-cat-card {
@@ -776,10 +825,45 @@
 }
 .ps-qlist-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 0 4px; }
 .ps-qlist-head h2 { font-family: 'Fredoka One', cursive; font-size: 27px; line-height: 1.1; }
-.ps-qlist-add { margin-left: auto; }
+.ps-qlist-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
 .ps-count-rule { margin: 8px 4px 12px; font-size: 13.5px; font-weight: 700; color: var(--ps-ink-3); }
 .ps-count-rule.is-bad { color: var(--ps-red-ink); font-weight: 800; }
-.ps-qrows { list-style: none; display: grid; gap: 10px; align-content: start; overflow-y: auto; margin: 0 -8px; padding: 4px 8px 8px; overscroll-behavior: contain; }
+/* About five compact rows before the list scrolls (fewer on short screens),
+   so it never runs far down the page; "N more below" and a fade at the
+   bottom show when questions are out of sight. */
+.ps-qrows {
+  list-style: none; display: grid; gap: 8px; align-content: start;
+  max-height: clamp(220px, 55vh, 430px);
+  max-height: clamp(220px, 55dvh, 430px);
+  overflow-y: auto; margin: 0 -8px; padding: 4px 8px 8px; overscroll-behavior: contain;
+}
+.ps-qrows.has-more { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }
+.ps-qmore {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; min-height: 36px; margin-top: 2px;
+  border: 0; border-radius: 10px;
+  background: none;
+  font-size: 13.5px; font-weight: 800; color: var(--ps-teal-ink);
+  cursor: pointer;
+}
+.ps-qmore:hover { background: var(--ps-teal-wash); }
+.ps-shuffle-bar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px;
+  margin: -4px 4px 10px; padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--ps-amber-wash);
+  font-size: 13.5px; font-weight: 800; color: var(--ps-amber-ink);
+}
+.ps-order-lock {
+  display: flex; align-items: flex-start; flex-wrap: wrap; gap: 4px 8px;
+  margin: -4px 4px 10px; padding: 7px 12px;
+  border-radius: 12px;
+  background: #F4EFE3;
+  font-size: 13px; font-weight: 700; line-height: 1.35; color: var(--ps-ink-2);
+}
+.ps-order-lock .ps-icon { flex: none; margin-top: 1px; color: var(--ps-amber-ink); }
+.ps-order-lock span { flex: 1; min-width: 0; }
+.ps-order-lock .ps-link-btn { font-size: 13px; }
 .ps-qrow {
   display: flex; align-items: center; gap: 2px;
   padding: 4px 6px 4px 2px;
@@ -804,7 +888,7 @@
 .ps-qrow-main {
   flex: 1; min-width: 0;
   display: flex; align-items: center; gap: 12px;
-  padding: 8px 4px;
+  padding: 6px 4px;
   border: 0; border-radius: 12px;
   background: none;
   text-align: left;
@@ -813,15 +897,15 @@
 span.ps-qrow-main { cursor: default; }
 .ps-qnum {
   flex: none;
-  width: 40px; height: 40px;
+  width: 34px; height: 34px;
   display: grid; place-items: center;
   border-radius: 50%;
   background: linear-gradient(180deg, #7EEEDD, #2DD4BF 60%, #14B8A6);
   border: 2px solid #0F9488;
   font-family: 'Fredoka One', cursive; font-size: 18px; color: var(--ps-ink);
 }
-.ps-qrow-text { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.ps-qrow-title { font-family: 'Fredoka One', cursive; font-size: 18px; line-height: 1.2; overflow-wrap: anywhere; }
+.ps-qrow-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ps-qrow-title { font-family: 'Fredoka One', cursive; font-size: 17px; line-height: 1.2; overflow-wrap: anywhere; }
 .ps-qrow-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .ps-media-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 13.5px; font-weight: 800; color: var(--ps-ink-3); }
 .ps-cat-chip {
@@ -843,6 +927,7 @@ span.ps-qrow-main { cursor: default; }
 .ps-qrow-gaps .ps-icon { display: inline-block; vertical-align: -2px; margin-right: 4px; }
 
 .ps-menu-wrap { position: relative; flex: none; }
+.ps-menu.is-up { top: auto; bottom: calc(100% + 4px); }
 .ps-menu {
   position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
   min-width: 200px;
@@ -1033,7 +1118,7 @@ span.ps-qrow-main { cursor: default; }
 @media (max-width: 959px) {
   .ps-qlayout { grid-template-columns: 1fr; }
   .ps-qlist { position: static; max-height: none; }
-  .ps-qrows { overflow: visible; }
+  .ps-qrows { max-height: clamp(200px, 50vh, 420px); max-height: clamp(200px, 50dvh, 420px); }
   .ps-qlayout .ps-qeditor { display: none; }
   .ps-qlayout.is-editing .ps-qeditor { display: flex; }
   .ps-qlayout.is-editing .ps-qlist { display: none; }
@@ -1100,6 +1185,8 @@ span.ps-qrow-main { cursor: default; }
   .ps-date-value { flex-basis: 100%; }
   .ps-date-row .ps-btn { flex: 1; }
   .ps-cal-day { min-height: 42px; font-size: 14px; }
+  /* Clear of the fixed action bar even before it has measured itself. */
+  .ps-calendar { scroll-margin-bottom: calc(var(--ps-bar-h, calc(66px + env(safe-area-inset-bottom, 0px))) + 16px); }
   .ps-cat-card { padding: 12px; }
   .ps-cat-card-head { margin-bottom: 12px; }
   .ps-cat-cards { gap: 14px; }
@@ -1115,7 +1202,10 @@ span.ps-qrow-main { cursor: default; }
 
   .ps-qlist { padding: 12px 10px 10px; border-radius: 18px; }
   .ps-qlist-head h2 { font-size: 21px; }
-  .ps-qlist-add { margin-left: 0; width: 100%; min-height: 44px; font-size: 15px; }
+  .ps-qlist-actions { margin-left: 0; width: 100%; flex-wrap: nowrap; }
+  .ps-qlist-actions .ps-btn { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 0 10px; font-size: 15px; }
+  /* Room below the list for "N more below" above the fixed action bar. */
+  .ps-qrows { max-height: clamp(200px, 42vh, 380px); max-height: clamp(200px, 42dvh, 380px); }
   .ps-count-rule { margin: 6px 4px 10px; font-size: 13px; }
   .ps-qrows { gap: 8px; }
   .ps-qrow-main { gap: 10px; padding: 6px 2px; }

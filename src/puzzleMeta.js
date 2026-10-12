@@ -60,14 +60,21 @@ export function previewImage(game, origin = SITE_ORIGIN) {
   return { ...BRAND_IMAGE, wide: false };
 }
 
+// "Coffee ☕ or Dinosaur 🦕🦖": the two names exactly as entered. Nothing
+// is added, so a "?" or "!" only shows when a name itself ends with one.
+export const matchupName = (a, b) => `${a} or ${b}`;
+
 // Everything a puzzle's preview says. The categories use their share names
 // (emoji and all) when the puzzle has them.
 export function puzzleMeta(game, origin = SITE_ORIGIN) {
   const a = shareCategoryName(game?.categoryAShareName, game?.categoryA, "");
   const b = shareCategoryName(game?.categoryBShareName, game?.categoryB, "");
-  const title = game?.themeTitle?.trim() || (a && b ? `${a} or ${b}?` : SITE_NAME);
-  const description = a && b
-    ? `${a} or ${b}? Every clue belongs to one of them. Play the puzzle and compare scores.`
+  const matchup = a && b ? matchupName(a, b) : "";
+  const title = game?.themeTitle?.trim() || matchup || SITE_NAME;
+  // The matchup opens the description as its own sentence: a full stop is
+  // added only when the name doesn't already end in . ! ? or …
+  const description = matchup
+    ? `${matchup}${/[.!?…]$/u.test(matchup) ? "" : "."} Every clue belongs to one of them. Play the puzzle and compare scores.`
     : "Each clue belongs to one of two ridiculous categories. Play the puzzle and compare scores.";
   return {
     pageTitle: title === SITE_NAME ? SITE_NAME : `${title} · ${SITE_NAME}`,

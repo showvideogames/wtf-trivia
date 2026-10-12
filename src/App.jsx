@@ -63,7 +63,7 @@ import AdminAccessNotice from "./admin/AdminAccessNotice.jsx";
 import { clearAdminResume, prepareSignInFromEditor, saveEditorDraftVerified, takeAdminResume, writeAdminResume } from "./admin/signInResume.js";
 import { localDateFromISO } from "./admin/adminDates.js";
 import { findDateConflict } from "./admin/dashboardGroups.js";
-import { firstBlankItem, followMove, moveQuestion, questionCountOk, questionKey } from "./admin/questionStatus.js";
+import { REORDER_LOCK_TEXT, applyOrder, firstBlankItem, followMove, moveQuestion, questionCountOk, questionKey, questionOrderChanged, reorderLock, restoreOrder, shuffleOrder, undoOrder } from "./admin/questionStatus.js";
 import Dashboard from "./admin/Dashboard.jsx";
 import { EditorActions, EditorHeader, EditorTabs, MobileActionBar, NoticeBar } from "./admin/EditorChrome.jsx";
 import { buildPuzzleExport, downloadTextFile, exportFileName } from "./admin/puzzleExport.js";
@@ -71,6 +71,8 @@ import SetupTab from "./admin/SetupTab.jsx";
 import QuestionList from "./admin/QuestionList.jsx";
 import QuestionEditor from "./admin/QuestionEditor.jsx";
 import Icon from "./admin/Icon.jsx";
+import ConfirmDialog from "./admin/ConfirmDialog.jsx";
+import { puzzleActionCopy } from "./admin/puzzleActions.js";
 import {
   demoGames as devDemoGames,
   devPlayer,
@@ -86,6 +88,7 @@ import {
   devCommunityStats,
   devSaveGameRow,
   devDeleteGameRow,
+  devPuzzleHasPlays,
   devMergeSavedGames,
   devGetFavorites,
   devFavoriteCounts,
@@ -2035,6 +2038,15 @@ async function dbSaveGame(game){
   };
   return { game: saved, imageFailures: failures };
 }
+// Whether the puzzle has any saved play on the server (finished or not), for
+// the Studio's question order lock (reorderLock). Throws when it can't tell,
+// e.g. before migration 0005 adds public.wtf_puzzle_has_plays.
+async function dbPuzzleHasPlays(id){
+  if(OFFLINE_PREVIEW) return devPuzzleHasPlays(id);
+  const res = await sbFetch("/rest/v1/rpc/wtf_puzzle_has_plays", {method:"POST", body:JSON.stringify({target_puzzle_id:id})});
+  if(typeof res!=="boolean") throw new Error("The play check gave no answer.");
+  return res;
+}
 // A short, plain reason for a failed database write.
 // A database write refused for this account (not a connection problem).
 function isPermissionError(e){
@@ -2052,6 +2064,7 @@ function describeSaveError(e){
   if(msg.includes("silhouette_image")) return "the database doesn't have the silhouette artwork column yet (run supabase/silhouette_artwork.sql). Remove the silhouette artwork to save without it.";
   if(msg.includes("wide_image")) return "the database doesn't have the wide artwork column yet (run supabase/wide_artwork.sql). Remove the wide artwork to save without it.";
   if(msg.includes("'tags' column")) return "the database doesn't have the topic tags column yet (supabase/puzzle_tags.sql). Deselect every topic to save without it.";
+  if(msg.includes("games_question_order_locked")) return "people have played this puzzle, so its question order can't change. Restore the saved order to save your other edits.";
   if(msg.includes("games_slug_key")) return "another quiz already uses that quiz URL. Pick another name for it.";
   if(msg.includes("games_slug_locked")) return "this quiz is published, so its quiz URL can't change (links people already shared would break).";
   if(msg.includes("games_slug_format")) return "a quiz URL can only use lowercase letters, numbers and single hyphens.";
@@ -4472,6 +4485,16 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   const canWrite=access?.canWrite??true;
   const[game,setGame]=useState(()=>loadEditorDraft(ig));
   const[tab,setTab]=useState("setup");
+  // Switching to Setup starts at its top (the Admin scrolls the page itself),
+  // so it never opens partway down at the Questions tab's scroll position.
+  // Only a change of tab does this: typing and editing within Setup never
+  // move the page, and both tabs stay mounted, so no edit is lost.
+  const shownTab=useRef(tab);
+  useLayoutEffect(()=>{
+    if(shownTab.current===tab) return;
+    shownTab.current=tab;
+    if(tab==="setup") window.scrollTo({top:0, left:0, behavior:"instant"});
+  },[tab]);
   const[selected,setSelected]=useState(0); // question index, or null
   const[mobileEditing,setMobileEditing]=useState(false); // phones: editor in place of the list
   // The question Add question just appended, until another is selected: its
@@ -4555,6 +4578,37 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   // each successful save, so this compares against what is really stored.
   const dirty = useMemo(()=>editorSnapshot(game)!==editorSnapshot(ig),[game,ig]);
 
+  // Question order lock (reorderLock, questionStatus.js): one rule for
+  // Shuffle Order, drag, Move up/down and saving a new order. A saved puzzle
+  // is reorderable only once the server says it has no saved plays; its date
+  // alone never makes reordering safe. Asked when the editor opens (and again
+  // once a new puzzle is first saved), and again before a new order is saved.
+  const[playCheck,setPlayCheck]=useState(null); // {id, saved, value}
+  const playHistory = playCheck?.id===ig.id && playCheck.saved===inDb ? playCheck.value : "checking";
+  const checkPlays=async()=>{
+    let value;
+    try{ value = (await dbPuzzleHasPlays(ig.id)) ? "played" : "unplayed"; }
+    catch(e){ console.error(e); value = "unknown"; }
+    setPlayCheck({id:ig.id, saved:inDb, value});
+    return value;
+  };
+  useEffect(()=>{
+    if(!inDb) return;
+    let live = true;
+    dbPuzzleHasPlays(ig.id)
+      .then(p=>{ if(live) setPlayCheck({id:ig.id, saved:true, value:p?"played":"unplayed"}); })
+      .catch(e=>{ console.error(e); if(live) setPlayCheck({id:ig.id, saved:true, value:"unknown"}); });
+    return ()=>{ live = false; };
+  },[ig.id, inDb]);
+  const orderLock = reorderLock({saved:inDb, stored:ig, history:playHistory});
+  const orderLockText = orderLock ? REORDER_LOCK_TEXT[orderLock] : null;
+  // Every reorder control goes through this: false (and why) while locked.
+  const canReorder=()=>{
+    if(!orderLock) return true;
+    say(orderLock==="checking"?"info":"error", orderLockText);
+    return false;
+  };
+
   // One save path for Publish, Save draft and Retire. "Published"/"Saved"/
   // "Retired" is only ever shown after onSave resolves, i.e. after the
   // database confirmed it. Saving keeps a published or retired puzzle's status.
@@ -4568,6 +4622,17 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
     const action = retire ? "Retired" : publish ? "Published" : "Saved";
     setSaving(publish?"publish":"save");
     say("progress", retire ? "Retiring…" : publish ? "Publishing… copying images into permanent storage." : "Saving…");
+    // A new question order is saved only after the server confirms, now,
+    // that nobody has played the puzzle (the database refuses it too:
+    // games_question_order_locked, migration 0005).
+    if(inDb && questionOrderChanged(ig.questions, s.questions)){
+      const lock = reorderLock({saved:true, stored:ig, history:await checkPlays()});
+      if(lock){
+        setSaving(false);
+        say("error", `Not saved. ${REORDER_LOCK_TEXT[lock]} Use “Restore saved order” to save your other edits.`);
+        return;
+      }
+    }
     try{
       const {game:saved, imageFailures, listRefreshed} = await onSave(s);
       clearEditorDraft(saved.id);
@@ -4594,21 +4659,27 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   const pubSafe=async()=>{if(waitForImages()||!validateDate()||!validateItems())return;await pub();};
   // A retired puzzle holds no date, so saving it never needs a free one.
   const dftSafe=async()=>{if(waitForImages()||(!retired&&!validateDate())||!validateItems())return;await dft();};
-  const removeGame=async()=>{
-    const ask = published||retired
-      ? `Delete "${game.themeTitle||"this puzzle"}"? This only works if nobody has played it yet. The puzzle and all its questions will be removed. This can't be undone.`
-      : `Delete "${game.themeTitle||"this draft"}"? The puzzle and all its questions will be removed. This can't be undone.`;
+  // Delete and Retire each ask first (ConfirmDialog): the buttons only open
+  // the dialog, and only its confirm button acts.
+  const[confirming,setConfirming]=useState(null); // null | "delete" | "retire"
+  const removeGame=()=>{
     if(!canWrite){ say("error", WRITES_PAUSED); return; }
-    if(!window.confirm(ask)) return;
+    setConfirming("delete");
+  };
+  const confirmRemove=async()=>{
+    setConfirming(null);
     try{ await onDelete(game.id); }
     catch(e){ say("error", e?.message || "The puzzle wasn't deleted."); }
   };
   // Once anyone has played a puzzle it can't be deleted (the database
   // refuses): retiring hides it from players and frees its date instead.
-  const retireGame=async()=>{
+  const retireGame=()=>{
     if(!canWrite){ say("error", WRITES_PAUSED); return; }
     if(dirty){ say("error","Publish or undo your changes before retiring this puzzle."); return; }
-    if(!window.confirm(`Retire "${game.themeTitle||"this puzzle"}"? Players will stop seeing it and its date becomes free. Its plays and stats are kept, and you can publish it again later.`)) return;
+    setConfirming("retire");
+  };
+  const confirmRetire=async()=>{
+    setConfirming(null);
     await save(false, true);
   };
   // Leaving is only risky where no copy of the edits survives: a published
@@ -4642,8 +4713,10 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   // Add question appends a blank question to this editor's copy of the
   // puzzle (and so to the on-device draft) and opens it, like any other.
   // Nothing is saved to the database; the save-time checks still apply.
+  const[shuffled,setShuffled]=useState(null); // {order} of the last Shuffle Order, while it can be undone
   const startNew=()=>{
     if(holdForUpload()) return;
+    setShuffled(null);
     const id=`q-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
     setGame(g=>({...g,questions:[...(g.questions??[]),{...BLANK_QUESTION,id,orderIndex:(g.questions?.length??0)+1}]}));
     setSelected(qc);setFreshKey(id);setMobileEditing(true);setFocusItem(n=>n+1);
@@ -4659,14 +4732,48 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
     if(!q) return;
     if(i===sel&&holdForUpload()) return;
     if(!window.confirm(`Delete "${q.itemText||"this question"}"?`)) return;
+    setShuffled(null);
     setGame(g=>({...g,questions:g.questions.filter((_,j)=>j!==i).map((item,j)=>({...item,orderIndex:j+1}))}));
     if(i===sel) setMobileEditing(false);
     setSelected(s=>typeof s!=="number"?s:s>i?s-1:s===i?(qc>1?Math.min(i,qc-2):null):s);
   };
   const moveQ=(from,to)=>{
-    if(holdForUpload()) return;
+    if(holdForUpload()||!canReorder()) return;
+    setShuffled(null);
     setGame(g=>({...g,questions:moveQuestion(g.questions,from,to)}));
     setSelected(s=>followMove(s,from,to));
+  };
+  // Shuffle Order: one new random order for the whole puzzle, here in the
+  // editor only (players all get this saved order; nothing shuffles per
+  // player). It is an ordinary unsaved edit until Save draft / Publish
+  // changes. Undo stays offered until the next move, add or delete.
+  const shuffleQ=()=>{
+    if(qc<2||holdForUpload()||!canReorder()) return;
+    const order=shuffleOrder(qc);
+    setGame(g=>({...g,questions:applyOrder(g.questions,order)}));
+    setSelected(s=>typeof s==="number"?order.indexOf(s):s);
+    setShuffled({order, before:qs});
+    if(order.every((from,i)=>from===i)) say("info","Shuffled, and the order came out the same by chance. Shuffle again for a new one.");
+    else say("success","Order shuffled. Save or publish to keep it.");
+  };
+  const undoShuffle=()=>{
+    if(!shuffled||shuffled.order.length!==qc||holdForUpload()) return;
+    const {order,before}=shuffled;
+    setGame(g=>({...g,questions:undoOrder(g.questions,order,before)}));
+    setSelected(s=>typeof s==="number"?order[s]:s);
+    setShuffled(null);
+    say("success","Shuffle undone.");
+  };
+  // Puts the questions back in their saved order (edits kept): the way out
+  // when a new order can no longer be saved.
+  const restoreSavedOrder=()=>{
+    if(holdForUpload()) return;
+    const selId = sel!=null ? questionKey(qs[sel],sel) : null;
+    const back = restoreOrder(qs, ig.questions);
+    setGame(g=>({...g,questions:restoreOrder(g.questions, ig.questions)}));
+    if(selId!=null) setSelected(Math.max(0, back.findIndex((q,i)=>questionKey(q,i)===selId)));
+    setShuffled(null);
+    say("success","Saved question order restored.");
   };
 
   // "Upload replacement": open the field that failed and bring it into view.
@@ -4768,7 +4875,10 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
         <div id="ps-panel-questions" role="tabpanel" aria-labelledby="ps-tab-questions" hidden={tab!=="questions"}>
           <div className={`ps-qlayout${mobileEditing&&editing?" is-editing":""}`}>
             <QuestionList questions={qs} catA={answerButtonName(game,"A")} catB={answerButtonName(game,"B")} colorA={colorA} colorB={colorB}
-                          selected={sel} onSelect={selectQuestion} onAdd={startNew} onMove={moveQ} onDelete={delQ}/>
+                          selected={sel} onSelect={selectQuestion} onAdd={startNew} onMove={moveQ} onDelete={delQ}
+                          onShuffle={shuffleQ} onUndoShuffle={shuffled?undoShuffle:null}
+                          orderLock={orderLockText}
+                          onRestoreOrder={orderLock&&inDb&&questionOrderChanged(ig.questions, qs)?restoreSavedOrder:null}/>
             {editing?(
               <QuestionEditor
                 key={editingKey}
@@ -4793,6 +4903,16 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
         </div>
       </main>
       <MobileActionBar actions={actions} notice={notice?noticeBar:null}/>
+      {confirming&&(()=>{
+        // Worded for the puzzle as stored (the one being deleted or retired).
+        const copy=puzzleActionCopy(confirming, ig);
+        return(
+          <ConfirmDialog title={copy.title} confirmLabel={copy.confirmLabel}
+                         onConfirm={confirming==="retire"?confirmRetire:confirmRemove} onCancel={()=>setConfirming(null)}>
+            {copy.lines.map(line=><p key={line}>{line}</p>)}
+          </ConfirmDialog>
+        );
+      })()}
     </div>
   );
 }
