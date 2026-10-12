@@ -63,7 +63,7 @@ import AdminAccessNotice from "./admin/AdminAccessNotice.jsx";
 import { clearAdminResume, prepareSignInFromEditor, saveEditorDraftVerified, takeAdminResume, writeAdminResume } from "./admin/signInResume.js";
 import { localDateFromISO } from "./admin/adminDates.js";
 import { findDateConflict } from "./admin/dashboardGroups.js";
-import { REORDER_LOCK_TEXT, applyOrder, firstBlankItem, followMove, moveQuestion, questionCountOk, questionKey, questionOrderChanged, reorderLock, restoreOrder, shuffleOrder, undoOrder } from "./admin/questionStatus.js";
+import { QUESTION_LOCK_TEXT, applyOrder, firstBlankItem, followMove, moveQuestion, questionCountOk, questionKey, questionLock, questionStructureChanged, restoreSavedQuestions, shuffleOrder, undoOrder } from "./admin/questionStatus.js";
 import Dashboard from "./admin/Dashboard.jsx";
 import { EditorActions, EditorHeader, EditorTabs, MobileActionBar, NoticeBar } from "./admin/EditorChrome.jsx";
 import { buildPuzzleExport, downloadTextFile, exportFileName } from "./admin/puzzleExport.js";
@@ -2039,7 +2039,7 @@ async function dbSaveGame(game){
   return { game: saved, imageFailures: failures };
 }
 // Whether the puzzle has any saved play on the server (finished or not), for
-// the Studio's question order lock (reorderLock). Throws when it can't tell,
+// the Studio's played question lock (questionLock). Throws when it can't tell,
 // e.g. before migration 0005 adds public.wtf_puzzle_has_plays.
 async function dbPuzzleHasPlays(id){
   if(OFFLINE_PREVIEW) return devPuzzleHasPlays(id);
@@ -2064,7 +2064,7 @@ function describeSaveError(e){
   if(msg.includes("silhouette_image")) return "the database doesn't have the silhouette artwork column yet (run supabase/silhouette_artwork.sql). Remove the silhouette artwork to save without it.";
   if(msg.includes("wide_image")) return "the database doesn't have the wide artwork column yet (run supabase/wide_artwork.sql). Remove the wide artwork to save without it.";
   if(msg.includes("'tags' column")) return "the database doesn't have the topic tags column yet (supabase/puzzle_tags.sql). Deselect every topic to save without it.";
-  if(msg.includes("games_question_order_locked")) return "people have played this puzzle, so its question order can't change. Restore the saved order to save your other edits.";
+  if(msg.includes("games_questions_locked")) return "people have played this puzzle, so its questions can't be added, deleted or reordered. Use “Restore saved questions” to save your other edits.";
   if(msg.includes("games_slug_key")) return "another quiz already uses that quiz URL. Pick another name for it.";
   if(msg.includes("games_slug_locked")) return "this quiz is published, so its quiz URL can't change (links people already shared would break).";
   if(msg.includes("games_slug_format")) return "a quiz URL can only use lowercase letters, numbers and single hyphens.";
@@ -4578,11 +4578,13 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   // each successful save, so this compares against what is really stored.
   const dirty = useMemo(()=>editorSnapshot(game)!==editorSnapshot(ig),[game,ig]);
 
-  // Question order lock (reorderLock, questionStatus.js): one rule for
-  // Shuffle Order, drag, Move up/down and saving a new order. A saved puzzle
-  // is reorderable only once the server says it has no saved plays; its date
-  // alone never makes reordering safe. Asked when the editor opens (and again
-  // once a new puzzle is first saved), and again before a new order is saved.
+  // Played question lock (questionLock, questionStatus.js): one rule for
+  // Add question, Delete question, Shuffle Order, drag, Move up/down and for
+  // saving any of them. A saved puzzle's question structure is changeable
+  // only once the server says it has no saved plays; its date alone never
+  // makes it safe. Wording and media edits are never locked. Asked when the
+  // editor opens (and again once a new puzzle is first saved), and again
+  // before a structural change is saved.
   const[playCheck,setPlayCheck]=useState(null); // {id, saved, value}
   const playHistory = playCheck?.id===ig.id && playCheck.saved===inDb ? playCheck.value : "checking";
   const checkPlays=async()=>{
@@ -4600,12 +4602,12 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
       .catch(e=>{ console.error(e); if(live) setPlayCheck({id:ig.id, saved:true, value:"unknown"}); });
     return ()=>{ live = false; };
   },[ig.id, inDb]);
-  const orderLock = reorderLock({saved:inDb, stored:ig, history:playHistory});
-  const orderLockText = orderLock ? REORDER_LOCK_TEXT[orderLock] : null;
-  // Every reorder control goes through this: false (and why) while locked.
-  const canReorder=()=>{
-    if(!orderLock) return true;
-    say(orderLock==="checking"?"info":"error", orderLockText);
+  const qLock = questionLock({saved:inDb, stored:ig, history:playHistory});
+  const qLockText = qLock ? QUESTION_LOCK_TEXT[qLock] : null;
+  // Every structural control goes through this: false (and why) while locked.
+  const canChangeQuestions=()=>{
+    if(!qLock) return true;
+    say(qLock==="checking"?"info":"error", qLockText);
     return false;
   };
 
@@ -4622,14 +4624,14 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
     const action = retire ? "Retired" : publish ? "Published" : "Saved";
     setSaving(publish?"publish":"save");
     say("progress", retire ? "Retiring…" : publish ? "Publishing… copying images into permanent storage." : "Saving…");
-    // A new question order is saved only after the server confirms, now,
-    // that nobody has played the puzzle (the database refuses it too:
-    // games_question_order_locked, migration 0005).
-    if(inDb && questionOrderChanged(ig.questions, s.questions)){
-      const lock = reorderLock({saved:true, stored:ig, history:await checkPlays()});
+    // Added, deleted or reordered questions are saved only after the server
+    // confirms, now, that nobody has played the puzzle (the database refuses
+    // them too: games_questions_locked, migration 0005).
+    if(inDb && questionStructureChanged(ig.questions, s.questions)){
+      const lock = questionLock({saved:true, stored:ig, history:await checkPlays()});
       if(lock){
         setSaving(false);
-        say("error", `Not saved. ${REORDER_LOCK_TEXT[lock]} Use “Restore saved order” to save your other edits.`);
+        say("error", `Not saved. ${QUESTION_LOCK_TEXT[lock]} Use “Restore saved questions” to save your other edits.`);
         return;
       }
     }
@@ -4715,7 +4717,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   // Nothing is saved to the database; the save-time checks still apply.
   const[shuffled,setShuffled]=useState(null); // {order} of the last Shuffle Order, while it can be undone
   const startNew=()=>{
-    if(holdForUpload()) return;
+    if(holdForUpload()||!canChangeQuestions()) return;
     setShuffled(null);
     const id=`q-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
     setGame(g=>({...g,questions:[...(g.questions??[]),{...BLANK_QUESTION,id,orderIndex:(g.questions?.length??0)+1}]}));
@@ -4731,6 +4733,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
     const q=qs[i];
     if(!q) return;
     if(i===sel&&holdForUpload()) return;
+    if(!canChangeQuestions()) return;
     if(!window.confirm(`Delete "${q.itemText||"this question"}"?`)) return;
     setShuffled(null);
     setGame(g=>({...g,questions:g.questions.filter((_,j)=>j!==i).map((item,j)=>({...item,orderIndex:j+1}))}));
@@ -4738,7 +4741,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
     setSelected(s=>typeof s!=="number"?s:s>i?s-1:s===i?(qc>1?Math.min(i,qc-2):null):s);
   };
   const moveQ=(from,to)=>{
-    if(holdForUpload()||!canReorder()) return;
+    if(holdForUpload()||!canChangeQuestions()) return;
     setShuffled(null);
     setGame(g=>({...g,questions:moveQuestion(g.questions,from,to)}));
     setSelected(s=>followMove(s,from,to));
@@ -4748,7 +4751,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   // player). It is an ordinary unsaved edit until Save draft / Publish
   // changes. Undo stays offered until the next move, add or delete.
   const shuffleQ=()=>{
-    if(qc<2||holdForUpload()||!canReorder()) return;
+    if(qc<2||holdForUpload()||!canChangeQuestions()) return;
     const order=shuffleOrder(qc);
     setGame(g=>({...g,questions:applyOrder(g.questions,order)}));
     setSelected(s=>typeof s==="number"?order.indexOf(s):s);
@@ -4764,16 +4767,17 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
     setShuffled(null);
     say("success","Shuffle undone.");
   };
-  // Puts the questions back in their saved order (edits kept): the way out
-  // when a new order can no longer be saved.
-  const restoreSavedOrder=()=>{
+  // Puts back the saved question list (count, order, positions), wording
+  // edits kept: the way out when a structural change can no longer be saved.
+  const restoreSaved=()=>{
     if(holdForUpload()) return;
     const selId = sel!=null ? questionKey(qs[sel],sel) : null;
-    const back = restoreOrder(qs, ig.questions);
-    setGame(g=>({...g,questions:restoreOrder(g.questions, ig.questions)}));
-    if(selId!=null) setSelected(Math.max(0, back.findIndex((q,i)=>questionKey(q,i)===selId)));
+    const back = restoreSavedQuestions(qs, ig.questions);
+    setGame(g=>({...g,questions:restoreSavedQuestions(g.questions, ig.questions)}));
+    setSelected(selId!=null ? Math.max(0, back.findIndex((q,i)=>questionKey(q,i)===selId)) : 0);
+    setFreshKey(null);
     setShuffled(null);
-    say("success","Saved question order restored.");
+    say("success","Saved questions restored.");
   };
 
   // "Upload replacement": open the field that failed and bring it into view.
@@ -4877,8 +4881,8 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
             <QuestionList questions={qs} catA={answerButtonName(game,"A")} catB={answerButtonName(game,"B")} colorA={colorA} colorB={colorB}
                           selected={sel} onSelect={selectQuestion} onAdd={startNew} onMove={moveQ} onDelete={delQ}
                           onShuffle={shuffleQ} onUndoShuffle={shuffled?undoShuffle:null}
-                          orderLock={orderLockText}
-                          onRestoreOrder={orderLock&&inDb&&questionOrderChanged(ig.questions, qs)?restoreSavedOrder:null}/>
+                          lock={qLockText}
+                          onRestore={qLock&&inDb&&questionStructureChanged(ig.questions, qs)?restoreSaved:null}/>
             {editing?(
               <QuestionEditor
                 key={editingKey}
@@ -4896,7 +4900,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
             ):(
               <div className="ps-panel ps-qeditor is-empty">
                 <p>Add a question to start writing.</p>
-                <button type="button" className="ps-btn ps-btn-primary" onClick={startNew}>Add question</button>
+                <button type="button" className="ps-btn ps-btn-primary" onClick={startNew} disabled={Boolean(qLock)}>Add question</button>
               </div>
             )}
           </div>

@@ -7,7 +7,8 @@ import DatePicker from "./DatePicker.jsx";
 import { puzzleActionCopy } from "./puzzleActions.js";
 import QuestionList from "./QuestionList.jsx";
 import { StudioContext } from "./StudioContext.js";
-import { REORDER_LOCK_TEXT, applyOrder, questionOrderChanged, reorderLock, restoreOrder, secureRandomInt, shuffleOrder, undoOrder } from "./questionStatus.js";
+import { QUESTION_LOCK_TEXT, applyOrder, questionLock, questionStructureChanged, restoreSavedQuestions, secureRandomInt, shuffleOrder, undoOrder } from "./questionStatus.js";
+import { answersFit, parseResultCode } from "../shareLink.js";
 
 // The admin cleanup: Delete/Retire confirmation, the compact calendar and
 // Shuffle Order (a whole-question, unbiased, undoable reorder that is
@@ -168,9 +169,9 @@ describe("Shuffle Order", () => {
     spy.mockRestore();
   });
 
-  it("follows the shared order lock", () => {
+  it("follows the shared played-question lock", () => {
     const now = new Date("2026-10-12T12:00:00Z");
-    const lock = (stored, history, saved = true) => reorderLock({ saved, stored, history }, now);
+    const lock = (stored, history, saved = true) => questionLock({ saved, stored, history }, now);
     // Never saved: nothing can have been played.
     expect(lock({ status: "draft" }, "checking", false)).toBeNull();
     // Saved: only the server's "no plays" unlocks it, never the date alone.
@@ -186,26 +187,39 @@ describe("Shuffle Order", () => {
     expect(lock({ status: "published", date: "2026-10-12" }, "unplayed")).toBe("live");
     expect(lock({ status: "published", date: "2026-10-13" }, "unplayed")).toBe("live"); // already the 13th in UTC+14
     expect(lock({ status: "retired", date: "2026-11-01" }, "unplayed")).toBe("retired");
-    for (const why of ["played", "live", "retired", "checking", "unknown"]) expect(REORDER_LOCK_TEXT[why]).toBeTruthy();
+    for (const why of ["played", "live", "retired", "checking", "unknown"]) expect(QUESTION_LOCK_TEXT[why]).toBeTruthy();
   });
 
-  it("tells a reorder from ordinary editing, and restores the saved order keeping edits", () => {
+  it("adding or deleting a question breaks a played puzzle's shared results, so both count as structural", () => {
+    // Why: a shared result link carries one digit per question, and its
+    // result is only shown while the puzzle has exactly that many questions.
+    const link = parseResultCode("g-1759600000000.1011");
+    expect(answersFit({ questionCount: 4 }, link)).toBe(true);
+    expect(answersFit({ questionCount: 5 }, link)).toBe(false); // a question added
+    expect(answersFit({ questionCount: 3 }, link)).toBe(false); // a question deleted
+    // And positions: deleting Q2 moves Q3 and Q4 up, under the answers saved for Q2 and Q3.
     const moved = [Q[1], Q[0], Q[2], Q[3]];
-    expect(questionOrderChanged(Q, moved)).toBe(true);
-    expect(questionOrderChanged(Q, Q.map((q) => ({ ...q, itemText: q.itemText + "!" , imageUrl: "" })))).toBe(false); // edits (ids stay)
-    expect(questionOrderChanged(Q, [...Q, { id: "q5", itemText: "Mocha" }])).toBe(false); // added
-    expect(questionOrderChanged(Q, [Q[0], Q[2], Q[3]])).toBe(false); // removed
-    expect(questionOrderChanged(Q, [Q[0], { id: "q9" }, Q[1], Q[2], Q[3]])).toBe(false); // inserted
+    expect(questionStructureChanged(Q, moved)).toBe(true); // reordered
+    expect(questionStructureChanged(Q, [...Q, { id: "q5", itemText: "Mocha" }])).toBe(true); // added at the end
+    expect(questionStructureChanged(Q, [Q[0], Q[2], Q[3]])).toBe(true); // deleted
+    expect(questionStructureChanged(Q, [Q[0], Q[2], Q[3], { id: "q5" }])).toBe(true); // deleted + added, same count
     const noIds = Q.map(({ id, ...q }) => q);
-    expect(questionOrderChanged(noIds, [noIds[1], noIds[0], noIds[2], noIds[3]])).toBe(true);
-    const edited = [{ ...moved[0], itemText: "Rex" }, ...moved.slice(1), { id: "q5", itemText: "Mocha" }];
-    const back = restoreOrder(edited, Q);
-    expect(back.map((q) => q.id)).toEqual(["q1", "q2", "q3", "q4", "q5"]);
-    expect(back[1].itemText).toBe("Rex");
-    expect(questionOrderChanged(Q, back)).toBe(false);
+    expect(questionStructureChanged(noIds, [noIds[1], noIds[0], noIds[2], noIds[3]])).toBe(true);
+    // Wording, commentary and media edits keep every position: not structural.
+    expect(questionStructureChanged(Q, Q.map((q) => ({ ...q, itemText: q.itemText + "!", flavorCopy: "new", explanationCopy: "new", imageUrl: "" })))).toBe(false);
+    expect(questionStructureChanged(noIds, noIds.map((q, i) => (i === 1 ? { ...q, itemText: "Rex", flavorCopy: "new" } : q)))).toBe(false);
   });
 
-  it("locks every reorder control in the list, and keeps ordinary editing", () => {
+  it("restores the saved questions, keeping wording edits", () => {
+    const edited = [{ ...Q[1], itemText: "Rex" }, Q[0], Q[3], { id: "q5", itemText: "Mocha" }]; // reordered, q3 deleted, q5 added
+    const back = restoreSavedQuestions(edited, Q);
+    expect(back.map((q) => q.id)).toEqual(["q1", "q2", "q3", "q4"]);
+    expect(back[1].itemText).toBe("Rex");
+    expect(back[2]).toEqual(Q[2]);
+    expect(questionStructureChanged(Q, back)).toBe(false);
+  });
+
+  it("locks every structural control in the list, and keeps editing a question", () => {
     const color = { mid: "#2DD4BF", dark: "#0F9488" };
     const props = { questions: Q, catA: "Coffee", catB: "Dinosaur", colorA: color, colorB: color, selected: 0,
       onSelect: vi.fn(), onAdd: vi.fn(), onMove: vi.fn(), onDelete: vi.fn(), onShuffle: vi.fn(), onUndoShuffle: null };
@@ -218,27 +232,29 @@ describe("Shuffle Order", () => {
       return Object.fromEntries(items);
     };
 
-    let el = render({ orderLock: null });
+    let el = render({ lock: null });
     expect([...el.querySelectorAll(".ps-qrow")].every((li) => li.draggable)).toBe(true);
     expect(el.querySelector(".ps-qlist-shuffle").disabled).toBe(false);
+    expect(el.querySelector(".ps-qlist-add").disabled).toBe(false);
     expect(menuItems(el)).toEqual({ "Move up": false, "Move down": false, "Delete question": false });
     act(() => root.unmount()); host.remove();
 
-    el = render({ orderLock: REORDER_LOCK_TEXT.played, onRestoreOrder: vi.fn() });
-    expect(el.querySelector(".ps-order-lock").textContent).toContain(REORDER_LOCK_TEXT.played);
+    el = render({ lock: QUESTION_LOCK_TEXT.played, onRestore: vi.fn() });
+    expect(el.querySelector(".ps-order-lock").textContent).toContain(QUESTION_LOCK_TEXT.played);
     expect([...el.querySelectorAll(".ps-qrow")].some((li) => li.draggable)).toBe(false);
     expect(el.querySelector(".ps-qlist-shuffle").disabled).toBe(true);
-    expect(menuItems(el)).toEqual({ "Move up": true, "Move down": true, "Delete question": false });
+    expect(el.querySelector(".ps-qlist-add").disabled).toBe(true);
+    expect(menuItems(el)).toEqual({ "Move up": true, "Move down": true, "Delete question": true });
     // A drop still arriving (e.g. from another window) moves nothing.
     const drop = new Event("drop", { bubbles: true, cancelable: true });
     drop.dataTransfer = { getData: () => "0" };
     act(() => el.querySelectorAll(".ps-qrow")[2].dispatchEvent(drop));
     expect(props.onMove).not.toHaveBeenCalled();
-    // Selecting, adding and deleting stay available.
+    // Opening a question to edit its wording stays available; Add does nothing.
     act(() => el.querySelector(".ps-qrow-main").click());
     act(() => el.querySelector(".ps-qlist-add").click());
     expect(props.onSelect).toHaveBeenCalled();
-    expect(props.onAdd).toHaveBeenCalled();
-    expect(el.querySelector(".ps-order-lock button").textContent).toBe("Restore saved order");
+    expect(props.onAdd).not.toHaveBeenCalled();
+    expect(el.querySelector(".ps-order-lock button").textContent).toBe("Restore saved questions");
   });
 });

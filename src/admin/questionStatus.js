@@ -124,17 +124,30 @@ export function questionOrderChanged(before, after){
   return x.length!==y.length || x.some((k, i)=>k!==y[i]);
 }
 
-// The one rule for every way of reordering questions (Shuffle Order, drag,
-// Move up/down) and for saving a new order. A play stores its answers by
-// position (saved games, Nerd Mode, puzzle stats, shared /s/ result links),
-// so a played puzzle's order must never change. A puzzle's date can't prove
-// that (a played puzzle can be moved to a future day), so a saved puzzle is
-// only reorderable once the server says it has no saved plays.
+// Whether the question list's structure changed: how many questions there
+// are, which question (by id) sits at each position, or their order. Wording,
+// commentary, explanation, answer or media edits are not structural. Same
+// rule as public.wtf_question_structure_changed (migration 0005).
+export function questionStructureChanged(before, after){
+  const a = before||[], b = after||[];
+  if(a.length!==b.length) return true;
+  if(a.some((q, i)=>(q?.id ?? null)!==(b[i]?.id ?? null))) return true;
+  return questionOrderChanged(a, b);
+}
+
+// The one rule for every structural change to the questions (Add question,
+// Delete question, Shuffle Order, drag, Move up/down) and for saving one. A
+// play stores its answers by position (saved games, Nerd Mode, puzzle
+// stats) and every shared /s/ result link only shows its result while the
+// puzzle has exactly that many questions, so a played puzzle's question
+// count, order and positions must never change. Its date can't prove it was
+// never played (a played puzzle can be moved to a future day), so a saved
+// puzzle is only changeable once the server says it has no saved plays.
 //   saved:   the puzzle exists in the database
 //   stored:  the puzzle as saved (status, date)
 //   history: the server's answer: "unplayed" | "played" | "checking" | "unknown"
-// Returns why the order is locked, or null when reordering is safe.
-export function reorderLock({saved, stored, history}, now = new Date()){
+// Returns why the structure is locked, or null when changing it is safe.
+export function questionLock({saved, stored, history}, now = new Date()){
   if(!saved) return null;
   if(stored?.status==="retired") return "retired";
   if(previewReleased(stored, now)) return "live";
@@ -143,21 +156,19 @@ export function reorderLock({saved, stored, history}, now = new Date()){
   return "unknown";
 }
 
-// The current questions put back in the saved order (and saved orderIndex),
-// edits kept. Questions
-// added since keep their places relative to each other, after the saved
-// ones (so questionOrderChanged(saved, result) is false).
-export function restoreOrder(current, saved){
-  const at = new Map((saved||[]).map((q, i)=>[orderKey(q), i]));
-  const rank = q=>at.has(orderKey(q)) ? at.get(orderKey(q)) : Infinity;
-  return (current||[]).map((q, i)=>({q, i})).sort((x, y)=>rank(x.q)-rank(y.q) || x.i-y.i)
-    .map(({q})=>at.has(orderKey(q)) ? {...q, orderIndex:saved[at.get(orderKey(q))].orderIndex} : q);
+// The saved question list again (count, order, positions), with this
+// editor's wording and media edits kept for every saved question still
+// here. Questions added since are dropped; deleted ones come back as saved.
+export function restoreSavedQuestions(current, saved){
+  const now = new Map((current||[]).map(q=>[orderKey(q), q]));
+  return (saved||[]).map(q=>now.has(orderKey(q)) ? {...now.get(orderKey(q)), orderIndex:q.orderIndex} : q);
 }
 
-export const REORDER_LOCK_TEXT = {
-  played: "Question order is locked: people have played this puzzle, and their answers are matched to questions by position.",
-  live: "Question order is locked: this puzzle is live, and players' answers are matched to questions by position.",
-  retired: "Question order is locked: this puzzle has been played, and players' answers are matched to questions by position.",
-  checking: "Checking whether anyone has played this puzzle before allowing reordering…",
-  unknown: "Question order is locked: couldn't confirm that nobody has played this puzzle.",
+const KEPT = "Wording and commentary can still be edited.";
+export const QUESTION_LOCK_TEXT = {
+  played: `Adding, deleting and reordering questions is locked: people have played this puzzle, and their answers and shared results are matched to questions by position. ${KEPT}`,
+  live: `Adding, deleting and reordering questions is locked: this puzzle is live, and players' answers and shared results are matched to questions by position. ${KEPT}`,
+  retired: `Adding, deleting and reordering questions is locked: this puzzle has been played, and players' answers and shared results are matched to questions by position. ${KEPT}`,
+  checking: "Checking whether anyone has played this puzzle before allowing questions to be added, deleted or reordered…",
+  unknown: `Adding, deleting and reordering questions is locked: couldn't confirm that nobody has played this puzzle. ${KEPT}`,
 };

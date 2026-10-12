@@ -77,16 +77,17 @@ function rowsBelow(list){
   return [...list.children].filter(li=>li.offsetTop-list.offsetTop+li.offsetHeight>bottom+2).length;
 }
 
-export default function QuestionList({questions, catA, catB, colorA, colorB, selected, onSelect, onAdd, onMove, onDelete, onShuffle, onUndoShuffle, orderLock, onRestoreOrder}){
+export default function QuestionList({questions, catA, catB, colorA, colorB, selected, onSelect, onAdd, onMove, onDelete, onShuffle, onUndoShuffle, lock, onRestore}){
   const {youtubeEmbedUrl} = useStudio();
   const isYouTube = url=>Boolean(youtubeEmbedUrl(url));
   const[dragFrom,setDragFrom]=useState(null);
   const[dragOver,setDragOver]=useState(null);
   const count = questions.length;
-  // orderLock: why the order can't change (AdminEditor's reorderLock), or
-  // null. Every reorder control here follows it: no drag, no Move up/down,
-  // no Shuffle.
-  const locked = Boolean(orderLock);
+  // lock: why questions can't be added, deleted or reordered (AdminEditor's
+  // questionLock), or null. Every structural control here follows it: no
+  // Add, Delete, drag, Move up/down or Shuffle. Opening a question to edit
+  // its wording stays available.
+  const locked = Boolean(lock);
   const countOk = count>=MIN_QUESTIONS && count<=MAX_QUESTIONS;
 
   // The list scrolls inside a viewport-sized box (studio.css), so "N more
@@ -138,7 +139,7 @@ export default function QuestionList({questions, catA, catB, colorA, colorB, sel
                   title="Put every question in a new random order. Each question moves whole, with its answer, commentary and media.">
             <span aria-hidden="true">🎲</span>Shuffle Order
           </button>
-          <button type="button" className="ps-btn ps-btn-primary ps-qlist-add" onClick={onAdd}><Icon name="plus" size={18}/>Add question</button>
+          <button type="button" className="ps-btn ps-btn-primary ps-qlist-add" onClick={onAdd} disabled={locked}><Icon name="plus" size={18}/>Add question</button>
         </div>
       </div>
       <div className={`ps-count-rule${countOk?"":" is-bad"}`}>
@@ -149,8 +150,8 @@ export default function QuestionList({questions, catA, catB, colorA, colorB, sel
       {locked&&(
         <div className="ps-order-lock" role="status">
           <Icon name="warn" size={15}/>
-          <span>{orderLock}</span>
-          {onRestoreOrder&&<button type="button" className="ps-link-btn" onClick={onRestoreOrder}>Restore saved order</button>}
+          <span>{lock}</span>
+          {onRestore&&<button type="button" className="ps-link-btn" onClick={onRestore}>Restore saved questions</button>}
         </div>
       )}
       {onUndoShuffle&&(
@@ -196,7 +197,7 @@ export default function QuestionList({questions, catA, catB, colorA, colorB, sel
               <RowMenu label={`More actions for question ${i+1}`} items={[
                 {label:"Move up", icon:"up", disabled:locked||i===0, onSelect:()=>onMove(i,i-1)},
                 {label:"Move down", icon:"down", disabled:locked||i===count-1, onSelect:()=>onMove(i,i+1)},
-                {label:"Delete question", icon:"trash", danger:true, onSelect:()=>onDelete(i)},
+                {label:"Delete question", icon:"trash", danger:true, disabled:locked, onSelect:()=>onDelete(i)},
               ]}/>
             </li>
           );
@@ -210,7 +211,7 @@ export default function QuestionList({questions, catA, catB, colorA, colorB, sel
       {count===0&&(
         <div className="ps-empty">
           <span>No questions yet.</span>
-          <button type="button" className="ps-link-btn" onClick={onAdd}>Add the first one</button>
+          <button type="button" className="ps-link-btn" onClick={onAdd} disabled={locked}>Add the first one</button>
         </div>
       )}
     </section>
