@@ -146,8 +146,12 @@ export function questionStructureChanged(before, after){
 //   saved:   the puzzle exists in the database
 //   stored:  the puzzle as saved (status, date)
 //   history: the server's answer: "unplayed" | "played" | "checking" | "unknown"
-// Returns why the structure is locked, or null when changing it is safe.
-export function questionLock({saved, stored, history}, now = new Date()){
+//   beta:    the temporary beta editing override is on (the server's
+//            wtf_beta_editing, migration 0006): nothing is locked, matching
+//            the database trigger, which stands aside while it is on.
+// Returns why the structure is locked, or null when changing it is allowed.
+export function questionLock({saved, stored, history, beta = false}, now = new Date()){
+  if(beta) return null;
   if(!saved) return null;
   if(stored?.status==="retired") return "retired";
   if(previewReleased(stored, now)) return "live";

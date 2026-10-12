@@ -89,6 +89,7 @@ import {
   devSaveGameRow,
   devDeleteGameRow,
   devPuzzleHasPlays,
+  devBetaEditing,
   devMergeSavedGames,
   devGetFavorites,
   devFavoriteCounts,
@@ -2046,6 +2047,18 @@ async function dbPuzzleHasPlays(id){
   const res = await sbFetch("/rest/v1/rpc/wtf_puzzle_has_plays", {method:"POST", body:JSON.stringify({target_puzzle_id:id})});
   if(typeof res!=="boolean") throw new Error("The play check gave no answer.");
   return res;
+}
+// The temporary beta editing override (migration 0006), for Studio admins:
+// {enabled, expiresAt}. Anything but a clear "on" from the server (an error,
+// a database without 0006) reads as off, so the protection stays.
+async function dbBetaEditing(){
+  try{
+    const res = OFFLINE_PREVIEW ? devBetaEditing() : await sbFetch("/rest/v1/rpc/wtf_beta_editing", {method:"POST", body:"{}"});
+    return res?.enabled===true ? {enabled:true, expiresAt:res.expires_at||null} : {enabled:false, expiresAt:null};
+  }catch(e){
+    console.error(e);
+    return {enabled:false, expiresAt:null};
+  }
 }
 // A short, plain reason for a failed database write.
 // A database write refused for this account (not a connection problem).
@@ -4602,7 +4615,17 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
       .catch(e=>{ console.error(e); if(live) setPlayCheck({id:ig.id, saved:true, value:"unknown"}); });
     return ()=>{ live = false; };
   },[ig.id, inDb]);
-  const qLock = questionLock({saved:inDb, stored:ig, history:playHistory});
+  // The temporary beta editing override (migration 0006): read when the
+  // editor opens and again before a structural change is saved. While it is
+  // on, nothing is locked here or in the database.
+  const[beta,setBeta]=useState({enabled:false, expiresAt:null});
+  useEffect(()=>{
+    let live = true;
+    dbBetaEditing().then(b=>{ if(live) setBeta(b); });
+    return ()=>{ live = false; };
+  },[ig.id]);
+  const checkBeta=async()=>{ const b = await dbBetaEditing(); setBeta(b); return b; };
+  const qLock = questionLock({saved:inDb, stored:ig, history:playHistory, beta:beta.enabled});
   const qLockText = qLock ? QUESTION_LOCK_TEXT[qLock] : null;
   // Every structural control goes through this: false (and why) while locked.
   const canChangeQuestions=()=>{
@@ -4625,10 +4648,11 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
     setSaving(publish?"publish":"save");
     say("progress", retire ? "Retiring…" : publish ? "Publishing… copying images into permanent storage." : "Saving…");
     // Added, deleted or reordered questions are saved only after the server
-    // confirms, now, that nobody has played the puzzle (the database refuses
-    // them too: games_questions_locked, migration 0005).
+    // confirms, now, that nobody has played the puzzle or that the beta
+    // override is on (the database decides the same way: migrations 0005/0006).
     if(inDb && questionStructureChanged(ig.questions, s.questions)){
-      const lock = questionLock({saved:true, stored:ig, history:await checkPlays()});
+      const [history, now] = await Promise.all([checkPlays(), checkBeta()]);
+      const lock = questionLock({saved:true, stored:ig, history, beta:now.enabled});
       if(lock){
         setSaving(false);
         say("error", `Not saved. ${QUESTION_LOCK_TEXT[lock]} Use “Restore saved questions” to save your other edits.`);
@@ -4870,6 +4894,12 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
             <Icon name="download" size={16}/>Export text
           </button>
         </div>
+        {beta.enabled&&(
+          <div className="ps-beta-note" role="status">
+            <strong>Beta editing enabled</strong>
+            <span>Questions on live, retired and played puzzles can be added, deleted and reordered; old scores and shared links may stop matching.{beta.expiresAt?` Ends ${new Date(beta.expiresAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}.`:""}</span>
+          </div>
+        )}
         {!canWrite&&access&&(
           <AdminAccessNotice variant="banner" status={access.status} email={access.email} busy={access.busy} error={access.error}
                              onSignIn={signInKeepingEdits} onSignOut={access.onSignOut} onRetry={access.onRetry}/>
