@@ -675,6 +675,14 @@ export function devPuzzleHasPlays(puzzleId) {
   return Boolean(devGetRecord(puzzleId));
 }
 
+// The offline stand-in for public.wtf_beta_editing (migration 0006):
+// localStorage wtf-dev-beta-editing=on turns the override on for 30 days.
+export function devBetaEditing() {
+  let on = false;
+  try { on = localStorage.getItem("wtf-dev-beta-editing") === "on"; } catch { /* ignore */ }
+  return { enabled: on, expires_at: on ? new Date(Date.now() + 30 * 86400000).toISOString() : null };
+}
+
 export function devGetAllRecords() {
   return readJSON(RECORD_KEY, {});
 }

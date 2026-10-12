@@ -854,6 +854,16 @@
   background: var(--ps-amber-wash);
   font-size: 13.5px; font-weight: 800; color: var(--ps-amber-ink);
 }
+/* The temporary beta editing override (migration 0006) is on. */
+.ps-beta-note {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px;
+  margin: -8px 0 14px; padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px dashed #C9A400;
+  background: #FFF6CC;
+  font-size: 13px; font-weight: 700; line-height: 1.35; color: var(--ps-amber-ink);
+}
+.ps-beta-note strong { font-weight: 900; }
 .ps-order-lock {
   display: flex; align-items: flex-start; flex-wrap: wrap; gap: 4px 8px;
   margin: -4px 4px 10px; padding: 7px 12px;

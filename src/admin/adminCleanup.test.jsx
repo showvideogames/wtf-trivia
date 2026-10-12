@@ -212,6 +212,21 @@ describe("Shuffle Order", () => {
     for (const why of ["played", "live", "retired", "checking", "unknown"]) expect(QUESTION_LOCK_TEXT[why]).toBeTruthy();
   });
 
+  it("stands aside while the temporary beta editing override is on, and comes back when it is off", () => {
+    const now = new Date("2026-10-12T12:00:00Z");
+    const cases = [
+      [{ status: "published", date: "2026-10-12" }, "unplayed"], // live today
+      [{ status: "published", date: "2027-01-01" }, "played"],   // played, moved to the future
+      [{ status: "retired", date: "2026-11-01" }, "played"],
+      [{ status: "draft", date: "2026-10-20" }, "unknown"],      // play check failed
+    ];
+    for (const [stored, history] of cases) {
+      expect(questionLock({ saved: true, stored, history, beta: true }, now)).toBeNull();
+      expect(questionLock({ saved: true, stored, history, beta: false }, now)).not.toBeNull();
+      expect(questionLock({ saved: true, stored, history }, now)).not.toBeNull(); // missing = off
+    }
+  });
+
   it("adding or deleting a question breaks a played puzzle's shared results, so both count as structural", () => {
     // Why: a shared result link carries one digit per question, and its
     // result is only shown while the puzzle has exactly that many questions.
