@@ -39,6 +39,8 @@ import { answerButtonName } from "./categoryNames.js";
 import PlayerHeader from "./PlayerHeader.jsx";
 import GameProgress from "./GameProgress.jsx";
 import PaperPrompt from "./PaperPrompt.jsx";
+import PictureClue from "./PictureClue.jsx";
+import { firstMissingPicture, gameplayImageUrls, isPictureQuiz, questionPicture } from "./pictureQuiz.js";
 import { PAPER_LOOK } from "./gameplayLook.js";
 import { PlayerChromeContext } from "./playerChrome.js";
 import { SECTION_PATHS, addressForView, entryView, sectionFromPath } from "./siteRoutes.js";
@@ -1994,7 +1996,8 @@ const IMAGE_SAVE_OPTIONS = {
   wide:{folder:"wide", preset:"wide"},
   silhouette:{folder:"wide", preset:"wide"},
   category:{folder:"categories", preset:"category"},
-  question:{folder:"questions", preset:"question"}
+  question:{folder:"questions", preset:"question"},
+  picture:{folder:"questions", preset:"question"}
 };
 // Saves a puzzle. Copying its images into storage is best effort and never
 // blocks the save: each image is tried on its own (inline data: images are
@@ -2035,6 +2038,7 @@ async function dbSaveGame(game){
     ...("tags" in row ? {tagsColumn:true} : {}),
     ...("wide_image" in row ? {wideImageColumn:true} : {}),
     ...("silhouette_image" in row ? {silhouetteImageColumn:true} : {}),
+    ...("picture_quiz" in row ? {pictureQuizColumn:true} : {}),
     ...(storedSlug!==null ? {slug:storedSlug, slugColumn:true} : {})
   };
   return { game: saved, imageFailures: failures };
@@ -2076,6 +2080,7 @@ function describeSaveError(e){
   if(msg.includes("_button_name")) return "the database doesn't have the answer button name columns yet (run supabase/category_display_names.sql). Clear both button names to save without them.";
   if(msg.includes("silhouette_image")) return "the database doesn't have the silhouette artwork column yet (run supabase/silhouette_artwork.sql). Remove the silhouette artwork to save without it.";
   if(msg.includes("wide_image")) return "the database doesn't have the wide artwork column yet (run supabase/wide_artwork.sql). Remove the wide artwork to save without it.";
+  if(msg.includes("picture_quiz")) return "the database doesn't have the picture quiz column yet (run supabase/migrations/0007_picture_quiz.sql). Turn off Picture quiz to save without it; the pictures stay with the questions.";
   if(msg.includes("'tags' column")) return "the database doesn't have the topic tags column yet (supabase/puzzle_tags.sql). Deselect every topic to save without it.";
   if(msg.includes("games_questions_locked")) return "people have played this puzzle, so its questions can't be added, deleted or reordered. Use “Restore saved questions” to save your other edits.";
   if(msg.includes("games_slug_key")) return "another quiz already uses that quiz URL. Pick another name for it.";
@@ -2371,14 +2376,13 @@ function getYouTubeEmbedUrl(value){
 }
 function isYouTubeUrl(value){return Boolean(getYouTubeEmbedUrl(value));}
 
-// The reveal-media preloader only ever handles plain images: index-aligned
-// with the puzzle's questions, null wherever a question has no media or its
-// media is a YouTube link (video is intentionally never preloaded).
+// The gameplay preloader only ever handles plain images: index-aligned with
+// the puzzle's questions, null wherever a question has no media or its media
+// is a YouTube link (video is intentionally never preloaded). A picture
+// quiz warms each question's picture, which players need first; GameScreen
+// warms the current question's reveal still alongside it.
 function getPuzzleImageUrls(game){
-  return (game?.questions||[]).map(q=>{
-    const url = usableMediaUrl(q?.imageUrl);
-    return url && !isYouTubeUrl(url) ? url : null;
-  });
+  return gameplayImageUrls(game, isYouTubeUrl);
 }
 function formatAccountLabel(email){
   if(!email) return "Account";
@@ -3370,6 +3374,20 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
   useEffect(()=>{
     primeActiveWindow(getPuzzleImageUrls(game), idx, game.id);
   },[game, idx]);
+  // A picture quiz's window holds its pictures, so the current question's
+  // own reveal still (if it has one) is warmed while its picture is up.
+  const pictureQuiz=isPictureQuiz(game);
+  // A picture quiz's question can be answered only once its picture is
+  // showing (PictureClue reports it): until then the buttons wait, so a
+  // failed or slow picture is never scored and never moves the game on.
+  const[pictureUp,setPictureUp]=useState({idx:-1, up:false});
+  const onPictureReady=useCallback(up=>setPictureUp(p=>p.idx===idx&&p.up===up?p:{idx, up}),[idx]);
+  const answerable=!pictureQuiz||(pictureUp.idx===idx&&pictureUp.up);
+  useEffect(()=>{
+    if(!pictureQuiz) return;
+    const reveal=usableMediaUrl(game.questions[idx]?.imageUrl);
+    if(reveal&&!isYouTubeUrl(reveal)) preloadImage(reveal);
+  },[game, idx, pictureQuiz]);
 
   // Every question starts at the top: when a game opens (new or resumed) and
   // after each Next, so an old scroll position never carries into a question
@@ -3543,6 +3561,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
   },[idx]);
 
   const handleAnswerClick=cat=>{
+    if(!answerable) return;
     const correct=cat===cq.correctCategory;
     setAnimBtn({cat,correct});
     setChosen(cat);
@@ -3585,9 +3604,21 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
   // a review tab): the question on a PaperPrompt, no mystery stage, and the
   // quieter treatment in paperLook.css.
   const paper = PAPER_LOOK;
+  // A picture quiz (pictureQuiz.js) asks with the question's picture
+  // (PictureClue) in place of its name, and names it only on the reveal: as
+  // the heading, with the picture beside it, or as the reveal's media when
+  // the question has no reveal media of its own.
+  const asking = pictureQuiz && phase!=="reveal";
+  const picture = pictureQuiz ? questionPicture(cq) : null;
+  const revealMedia = pictureQuiz && !usableMediaUrl(cq.imageUrl) && picture
+    ? {imageUrl:picture, imageAlt:cq.questionImageAlt||cq.itemText, itemText:cq.itemText}
+    : cq;
+  const namedPicture = pictureQuiz && picture && revealMedia===cq
+    ? <img src={picture} alt="" draggable="false"/>
+    : null;
 
   return(
-    <div ref={wrapRef} className={`gp-wrap${phase==="question"?" gp-q":phase==="reveal"?" gp-r":""}${paper?" gp-paper":""}`}>
+    <div ref={wrapRef} className={`gp-wrap${phase==="question"?" gp-q":phase==="reveal"?" gp-r":""}${paper?" gp-paper":""}${pictureQuiz?" gp-picture":""}`}>
       <canvas ref={canvasRef} id="confetti-canvas" style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:9999}}/>
       {reaction&&<ReactionOverlay emoji={reaction}/>}
 
@@ -3596,20 +3627,29 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
       {/* One connected stack above the choices or the reveal: the matchup,
           the progress, then the question itself, set straight on the page.
           It is identical in both phases, so nothing moves or shrinks when the
-          player answers. The question is the screen's heading. */}
+          player answers. The question is the screen's heading. A picture
+          quiz's question is its picture (in the choices' module below), with
+          a heading only assistive tech reads, until the reveal names it. */}
       <GameMatchup game={game} paper={paper} label={isReplay?<>The matchup</>:<>Today&rsquo;s matchup</>}/>
       <GameProgress total={qs.length} currentIndex={idx}/>
-      {paper
-        ? <PaperPrompt as="h1" className={`gp-prompt ${clueSizeClass(cq.itemText)}`}>{cq.itemText}</PaperPrompt>
+      {asking
+        ? <h1 className="gp-sr">Which category is this picture?</h1>
+        : paper
+        ? <PaperPrompt as="h1" className={`gp-prompt ${clueSizeClass(cq.itemText)}`} aside={namedPicture}>{cq.itemText}</PaperPrompt>
+        : namedPicture
+        ? <div className="gp-named"><span className="gp-named-pic" aria-hidden="true">{namedPicture}</span><h1 className={`gp-clue-text ${clueSizeClass(cq.itemText)}`}>{cq.itemText}</h1></div>
         : <h1 className={`gp-clue-text ${clueSizeClass(cq.itemText)}`}>{cq.itemText}</h1>}
 
       {phase==="question"&&(
         <div className="gp-qmod">
+          {/* A picture quiz's picture, in a frame sized by the screen alone,
+              so the choices below never move. */}
+          {pictureQuiz&&<PictureClue key={idx} question={cq} onReady={onPictureReady}/>}
           {/* The mystery stage holds the place the reveal media will take once
               the player answers. Its artwork is decoration; the stage itself
               is labelled for assistive tech. The paper look has none: the
               choices follow the question directly. */}
-          {!paper&&<div className="gp-mystery">
+          {!paper&&!pictureQuiz&&<div className="gp-mystery">
             <div className="gp-mystery-frame" role="img" aria-label="Mystery image — answer to reveal">
               <span className="gp-mystery-rays" aria-hidden="true"/>
               <span className="gp-mystery-dash gp-mystery-dash-l" aria-hidden="true"/>
@@ -3627,9 +3667,10 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
               let boxCls="ans-box";
               if(animBtn?.cat===cat) boxCls+=animBtn.correct?" correct":" wrong";
               else if(animBtn) boxCls+=" dis";
+              else if(!answerable) boxCls+=" dis is-waiting";
               const isDark=color.isDark;
               return(
-                <button key={cat} className={boxCls}
+                <button key={cat} className={boxCls} disabled={!answerable}
                   style={{
                     // The paper look keeps the category colour but drops the
                     // deep three-stop candy gradient for a gentle top light.
@@ -3684,7 +3725,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
             <span className={`gp-verdict-tail ${catSizeClass(correctLabel)}`}>{correctLabel}</span>
           </div>
 
-          <GameRevealMedia question={cq}/>
+          <GameRevealMedia question={revealMedia}/>
 
           {/* The actual info first, then the needless commentary. */}
           {cq.explanationCopy&&(
@@ -4529,7 +4570,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   const[busyImages,setBusyImages]=useState({});
   const trackImage=key=>busy=>setBusyImages(m=>Boolean(m[key])===busy?m:{...m,[key]:busy});
   const imagesBusy=Object.values(busyImages).some(Boolean);
-  const questionBusy=Boolean(busyImages.question);
+  const questionBusy=Boolean(busyImages.question||busyImages.picture);
   // Success notes clear after ~4 s and information after ~8 s; errors and
   // warnings stay until dismissed or resolved.
   const say=(kind,text)=>setNotice({kind,text,at:Date.now()});
@@ -4568,7 +4609,16 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
     const i = firstBlankItem(qs);
     if(i<0) return true;
     setTab("questions");setSelected(i);setFreshKey(null);setMobileEditing(true);
-    say("error",`Question ${i+1} has no item text. Add it, or delete the question, before saving.`);
+    say("error",`Question ${i+1} has no ${isPictureQuiz(game)?"answer name":"item text"}. Add it, or delete the question, before saving.`);
+    return false;
+  };
+  // A picture quiz is published only with a picture on every question
+  // (pictureQuiz.js); drafts may be saved without them.
+  const validatePictures = questions => {
+    const i = firstMissingPicture(questions);
+    if(i<0) return true;
+    setTab("questions");setSelected(i);setFreshKey(null);setMobileEditing(true);
+    say("error",`Question ${i+1} needs a picture before this picture quiz can be published. ${published?"Upload one, then publish your changes.":"Upload one, or save it as a draft for now."}`);
     return false;
   };
 
@@ -4645,6 +4695,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
     if(!s.id)s.id=`g-${Date.now()}`;
     if(!s.questions)s.questions=[];
     const action = retire ? "Retired" : publish ? "Published" : "Saved";
+    if(status==="published" && isPictureQuiz(s) && !validatePictures(s.questions)) return;
     setSaving(publish?"publish":"save");
     say("progress", retire ? "Retiring…" : publish ? "Publishing… copying images into permanent storage." : "Saving…");
     // Added, deleted or reordered questions are saved only after the server
@@ -4817,11 +4868,11 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
 
   // "Upload replacement": open the field that failed and bring it into view.
   const goToImage=f=>{
-    if(f.kind==="question"){
+    if(f.kind==="question"||f.kind==="picture"){
       const idx=f.questionId!=null?qs.findIndex(x=>x.id===f.questionId):f.questionIndex;
       if(idx==null||idx<0||!qs[idx]) return;
       setTab("questions");setSelected(idx);setFreshKey(null);setMobileEditing(true);
-      setFocusImage(`img-field-q-${questionKey(qs[idx],idx)}`);
+      setFocusImage(`img-field-${f.kind==="picture"?"qp":"q"}-${questionKey(qs[idx],idx)}`);
     }else{
       setTab("setup");
       setFocusImage(`img-field-${f.field}`);
@@ -4919,7 +4970,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
         </div>
         <div id="ps-panel-questions" role="tabpanel" aria-labelledby="ps-tab-questions" hidden={tab!=="questions"}>
           <div className={`ps-qlayout${mobileEditing&&editing?" is-editing":""}`}>
-            <QuestionList questions={qs} catA={answerButtonName(game,"A")} catB={answerButtonName(game,"B")} colorA={colorA} colorB={colorB}
+            <QuestionList questions={qs} picture={isPictureQuiz(game)} catA={answerButtonName(game,"A")} catB={answerButtonName(game,"B")} colorA={colorA} colorB={colorB}
                           selected={sel} onSelect={selectQuestion} onAdd={startNew} onMove={moveQ} onDelete={delQ}
                           onShuffle={shuffleQ} onUndoShuffle={shuffled?undoShuffle:null}
                           lock={qLockText}
@@ -4930,6 +4981,9 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
                 question={editing}
                 number={sel+1}
                 fresh={editingKey===freshKey}
+                picture={isPictureQuiz(game)}
+                pictureFieldId={`img-field-qp-${editingKey}`}
+                onPictureBusyChange={trackImage("picture")}
                 catA={answerButtonName(game,"A")} catB={answerButtonName(game,"B")} colorA={colorA} colorB={colorB}
                 onChange={patch=>editQuestion(sel,patch)}
                 onBusyChange={trackImage("question")}

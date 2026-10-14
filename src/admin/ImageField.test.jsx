@@ -89,3 +89,17 @@ describe("ImageField upload failures", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 });
+
+describe("ImageField upload only (picture-quiz pictures)", () => {
+  it("offers no link tab, so every picture is stored under a generated name", () => {
+    mount({ canWrite: true }, { value: "", allowLink: false, preset: "question" });
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    expect(host.querySelector('input[aria-label="Image link"]')).toBeNull();
+    expect(button("Choose image")).toBeTruthy();
+  });
+
+  it("keeps the link tab everywhere else", () => {
+    mount({ canWrite: true }, { value: "" });
+    expect(host.querySelector('[role="tablist"]')).not.toBeNull();
+  });
+});

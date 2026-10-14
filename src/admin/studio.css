@@ -1293,3 +1293,83 @@ span.ps-qrow-main { cursor: default; }
   overflow-wrap: anywhere;
   user-select: all;
 }
+
+/* Picture quiz (pictureQuiz.js): the Setup option, the question's picture
+   fields and the question list's small pictures. */
+.ps-pq-option {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--ps-line);
+}
+.ps-check {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.ps-check input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.ps-check-box {
+  flex: none;
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border-radius: 8px;
+  border: 2px solid #C7B488;
+  background: var(--ps-field);
+  color: #fff;
+  transition: background-color .12s, border-color .12s, box-shadow .12s;
+}
+.ps-check input:checked + .ps-check-box { background: #0F9488; border-color: #0B6B63; }
+.ps-check input:checked + .ps-check-box .ps-icon { stroke-width: 3.2; }
+.ps-check input:focus-visible + .ps-check-box { box-shadow: var(--ps-ring); }
+.ps-check-label { font-size: 17px; font-weight: 800; color: var(--ps-ink); }
+.ps-pq-option .ps-hint { margin-top: 2px; }
+.ps-pq-status { color: var(--ps-green-ink); font-weight: 700; }
+.ps-pq-status.is-missing { color: var(--ps-amber-ink); }
+
+.ps-pq-need { color: var(--ps-amber-ink); font-weight: 700; }
+/* The picture's thumbnail, framed like gameplay's picture frame. */
+.ps-media-picture .ps-media-card { align-items: center; }
+.ps-media-picture .ps-media-thumb {
+  width: 190px;
+  aspect-ratio: 10 / 11;
+  border: 2.5px solid #241B15;
+  border-radius: 16px;
+  background: #FFFDF7;
+}
+.ps-media-picture .ps-media-thumb img { padding: 6px; box-sizing: border-box; }
+.ps-field-warn {
+  display: flex; gap: 6px; align-items: flex-start;
+  margin-top: 6px;
+  font-size: 13.5px; font-weight: 800; line-height: 1.35;
+  color: var(--ps-amber-ink);
+}
+.ps-field-warn .ps-icon { flex: none; margin-top: 1px; }
+
+.ps-qrow-pic {
+  flex: none;
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  border-radius: 10px;
+  border: 1.5px solid var(--ps-line-strong);
+  background: #FFFDF7;
+  overflow: hidden;
+  color: var(--ps-ink-3);
+}
+.ps-qrow-pic img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ps-qrow-pic.is-empty { border-style: dashed; border-color: #D9A441; color: var(--ps-amber-ink); background: var(--ps-amber-wash); }
+
+@media (max-width: 759px) {
+  .ps-media-picture .ps-media-thumb { width: 136px; }
+  .ps-media-picture .ps-media-card { gap: 12px; }
+  .ps-qrow-pic { width: 38px; height: 38px; }
+}

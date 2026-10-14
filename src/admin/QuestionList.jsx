@@ -2,12 +2,30 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Icon from "./Icon.jsx";
 import { useStudio } from "./StudioContext.js";
 import { MAX_QUESTIONS, MIN_QUESTIONS, hasText, mediaKind, missingSummary, questionGaps, questionKey } from "./questionStatus.js";
+import { questionPicture } from "../pictureQuiz.js";
 
 const MEDIA = {
   image: {icon:"image", label:"Image"},
   video: {icon:"video", label:"Video"},
   none: {icon:"noMedia", label:"No media"},
 };
+// A picture quiz's rows name the reveal media as such, beside the picture.
+const REVEAL_MEDIA = {
+  image: {icon:"image", label:"Reveal image"},
+  video: {icon:"video", label:"Reveal video"},
+  none: {icon:"noMedia", label:"No reveal media"},
+};
+
+// A picture quiz row's small picture: the whole picture, or an empty frame
+// while it has none.
+function RowPicture({src}){
+  const[broken,setBroken]=useState(null);
+  return(
+    <span className={`ps-qrow-pic${src&&broken!==src?"":" is-empty"}`} aria-hidden="true">
+      {src&&broken!==src?<img src={src} alt="" onError={()=>setBroken(src)}/>:<Icon name="image" size={18}/>}
+    </span>
+  );
+}
 
 // A quiet "…" menu for the less common row actions. Delete keeps its
 // confirmation (in AdminEditor); Move up/down reorder without dragging.
@@ -77,7 +95,7 @@ function rowsBelow(list){
   return [...list.children].filter(li=>li.offsetTop-list.offsetTop+li.offsetHeight>bottom+2).length;
 }
 
-export default function QuestionList({questions, catA, catB, colorA, colorB, selected, onSelect, onAdd, onMove, onDelete, onShuffle, onUndoShuffle, lock, onRestore}){
+export default function QuestionList({questions, picture=false, catA, catB, colorA, colorB, selected, onSelect, onAdd, onMove, onDelete, onShuffle, onUndoShuffle, lock, onRestore}){
   const {youtubeEmbedUrl} = useStudio();
   const isYouTube = url=>Boolean(youtubeEmbedUrl(url));
   const[dragFrom,setDragFrom]=useState(null);
@@ -162,8 +180,8 @@ export default function QuestionList({questions, catA, catB, colorA, colorB, sel
       )}
       <ol className={`ps-qrows${below>0?" has-more":""}`} ref={listRef}>
         {questions.map((q,i)=>{
-          const media = MEDIA[mediaKind(q.imageUrl, isYouTube)];
-          const gaps = questionGaps(q, isYouTube);
+          const media = (picture?REVEAL_MEDIA:MEDIA)[mediaKind(q.imageUrl, isYouTube)];
+          const gaps = questionGaps(q, isYouTube, {picture});
           const isA = q.correctCategory!=="B";
           const on = selected===i;
           // Unfinished rows get a coloured edge: amber while anything is
@@ -183,8 +201,9 @@ export default function QuestionList({questions, catA, catB, colorA, colorB, sel
               <span className={`ps-grip${locked?" is-off":""}`} title={locked?"Question order is locked":"Drag to reorder"} aria-hidden="true"><Icon name="grip" size={18}/></span>
               <button type="button" className="ps-qrow-main" aria-current={on?"true":undefined} onClick={()=>onSelect(i)}>
                 <span className="ps-qnum" aria-hidden="true">{i+1}</span>
+                {picture&&<RowPicture src={questionPicture(q)}/>}
                 <span className="ps-qrow-text">
-                  <span className="ps-qrow-title"><span className="ps-sr">Question {i+1}: </span>{hasText(q.itemText)?q.itemText:<span className="ps-muted">No item text</span>}</span>
+                  <span className="ps-qrow-title"><span className="ps-sr">Question {i+1}: </span>{hasText(q.itemText)?q.itemText:<span className="ps-muted">{picture?"No answer name":"No item text"}</span>}</span>
                   <span className="ps-qrow-meta">
                     <span className="ps-media-tag"><Icon name={media.icon} size={16}/>{media.label}</span>
                     <CategoryChip letter={isA?"A":"B"} name={isA?catA:catB} color={isA?colorA:colorB}/>

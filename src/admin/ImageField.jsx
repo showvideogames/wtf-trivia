@@ -23,11 +23,14 @@ const UPLOAD_STAGE_COPY = {checking:"Checking image…", optimizing:"Optimizing 
 const UPLOAD_ACCEPT = "image/jpeg,image/png,image/webp";
 function roughBytes(n){return n<1024*1024?`${Math.max(1,Math.round(n/1024))} KB`:`${(n/1024/1024).toFixed(1)} MB`;}
 
-export default function ImageField({value:rawValue, onChange, label, labelNote, preset="question", allowYouTube=false, onBusyChange, fieldId, layout="row"}){
+// allowLink false: upload only, no "Image link" tab. Used for picture-quiz
+// pictures, so every one is stored under a neutral generated name (an
+// outside link's own filename could name the answer).
+export default function ImageField({value:rawValue, onChange, label, labelNote, preset="question", allowYouTube=false, allowLink=true, onBusyChange, fieldId, layout="row"}){
   const {uploadBytes, isStoredImage, youtubeEmbedUrl, loadOptimizer, canWrite=true, onAccessProblem} = useStudio();
   const value = typeof rawValue==="string" ? rawValue : "";
   const isUploadedValue = v=>Boolean(v) && (v.startsWith("data:") || v.startsWith("blob:") || isStoredImage(v));
-  const[tab,setTab]=useState(value&&!isUploadedValue(value)?"url":"upload");
+  const[tab,setTab]=useState(allowLink&&value&&!isUploadedValue(value)?"url":"upload");
   const[urlDraft,setUrlDraft]=useState(value&&!isUploadedValue(value)?value:"");
   const[replacing,setReplacing]=useState(false);
   const[dragOver,setDragOver]=useState(false);
@@ -212,10 +215,12 @@ export default function ImageField({value:rawValue, onChange, label, labelNote, 
 
       {showUploader&&(
         <div className="ps-uploader">
-          <div className="ps-seg" role="tablist" aria-label="Image source">
-            <button type="button" role="tab" aria-selected={tab==="upload"} className={`ps-seg-btn${tab==="upload"?" on":""}`} data-tab-upload onClick={()=>setTab("upload")}><Icon name="upload" size={16}/>Upload</button>
-            <button type="button" role="tab" aria-selected={tab==="url"} className={`ps-seg-btn${tab==="url"?" on":""}`} onClick={()=>setTab("url")}><Icon name={allowYouTube?"video":"link"} size={16}/>{linkLabel}</button>
-          </div>
+          {allowLink&&(
+            <div className="ps-seg" role="tablist" aria-label="Image source">
+              <button type="button" role="tab" aria-selected={tab==="upload"} className={`ps-seg-btn${tab==="upload"?" on":""}`} data-tab-upload onClick={()=>setTab("upload")}><Icon name="upload" size={16}/>Upload</button>
+              <button type="button" role="tab" aria-selected={tab==="url"} className={`ps-seg-btn${tab==="url"?" on":""}`} onClick={()=>setTab("url")}><Icon name={allowYouTube?"video":"link"} size={16}/>{linkLabel}</button>
+            </div>
+          )}
 
           {tab==="upload"&&(
             <div className={`ps-drop${dragOver&&canWrite?" is-over":""}${canWrite?"":" is-locked"}`}
@@ -229,7 +234,7 @@ export default function ImageField({value:rawValue, onChange, label, labelNote, 
             </div>
           )}
 
-          {tab==="url"&&(
+          {allowLink&&tab==="url"&&(
             <div className="ps-url">
               <input
                 className="ps-input"
