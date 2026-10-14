@@ -9,7 +9,7 @@ import { topicById } from "../topics.js";
 const BLANK = "(blank)";
 // Question fields the export already lays out by name. Anything else a
 // question carries (older editorial fields) is listed under "Other fields".
-const KNOWN_QUESTION_FIELDS = new Set(["id", "orderIndex", "itemText", "correctCategory", "flavorCopy", "explanationCopy", "imageUrl", "imageAlt", "imageSource"]);
+const KNOWN_QUESTION_FIELDS = new Set(["id", "orderIndex", "itemText", "correctCategory", "flavorCopy", "explanationCopy", "imageUrl", "imageAlt", "imageSource", "questionImage", "questionImageAlt"]);
 
 const text = (value) => (typeof value === "string" ? value : value == null ? "" : String(value));
 const filled = (value) => text(value).trim().length > 0;
@@ -74,14 +74,26 @@ function mediaLines(q, isYouTube) {
   return lines;
 }
 
+// A picture quiz's picture and its description. A picture kept from when
+// the option was on is still listed, since it is still stored.
+function pictureLines(q, picture) {
+  if (!picture && !filled(q?.questionImage) && !filled(q?.questionImageAlt)) return [];
+  return [
+    field(picture ? "Question picture (shown instead of the name)" : "Question picture (kept; not shown while Picture quiz is off)", mediaUrl(q?.questionImage)),
+    field("Picture description", q?.questionImageAlt),
+  ];
+}
+
 function questionBlock(q, i, game, isYouTube) {
   const side = q?.correctCategory === "B" ? "B" : "A";
   const name = text(game?.[`category${side}`]).trim() || `Category ${side}`;
   const button = answerButtonName(game, side);
   const correct = `${side}, ${name}${button && button !== name ? ` (answer button: "${button}")` : ""}`;
+  const picture = game?.pictureQuiz === true;
   const lines = [
     `Question ${i + 1}`,
-    field("Item text", q?.itemText),
+    field(picture ? "Answer name (shown after the answer)" : "Item text", q?.itemText),
+    ...pictureLines(q, picture),
     `  Correct category: ${correct}`,
     field("Needless Commentary", q?.flavorCopy),
     field("Actual Info", q?.explanationCopy),
@@ -127,6 +139,7 @@ export function buildPuzzleExport(game, { palette = [], isYouTube = () => false,
       field("Title", game?.themeTitle),
       field("Scheduled date", game?.date),
       `  Status: ${status}`,
+      `  Picture quiz: ${game?.pictureQuiz === true ? "yes, each question shows its picture instead of its name" : "no"}`,
       `  Topics: ${tags.length ? tags.join(", ") : BLANK}`,
       field("Square poster (Home)", mediaUrl(game?.headerImage)),
       field("Wide artwork (shares, Up Next, short screens)", mediaUrl(game?.wideImage)),

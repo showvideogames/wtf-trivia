@@ -1,8 +1,10 @@
 // Readiness of a puzzle's questions, as the Puzzle Studio shows it. This is
 // guidance only: the publish rules are unchanged (4–15 questions, a free
-// date), and nothing here blocks a save except a question with no item text.
+// date, and for a picture quiz a picture on every question), and nothing
+// here blocks a save except a question with no item text.
 
 import { previewReleased } from "../puzzleMeta.js";
+import { questionPicture } from "../pictureQuiz.js";
 
 export const MIN_QUESTIONS = 4;
 export const MAX_QUESTIONS = 15;
@@ -23,9 +25,15 @@ export function mediaKind(url, isYouTube){
 }
 
 // What a question still lacks, in the order the editor shows the fields.
-export function questionGaps(q, isYouTube){
+// A picture quiz's question (picture: true) also needs its picture and a
+// neutral description of it, and its item text is called the answer name.
+export function questionGaps(q, isYouTube, {picture = false} = {}){
   const gaps = [];
-  if(!hasText(q?.itemText)) gaps.push("Item text");
+  if(picture){
+    if(!questionPicture(q)) gaps.push("Picture");
+    else if(!hasText(q?.questionImageAlt)) gaps.push("Picture description");
+  }
+  if(!hasText(q?.itemText)) gaps.push(picture ? "Answer name" : "Item text");
   if(!hasText(q?.flavorCopy)) gaps.push("Needless Commentary");
   if(!hasText(q?.explanationCopy)) gaps.push("Actual Info");
   if(mediaKind(q?.imageUrl, isYouTube)==="image" && !hasText(q?.imageAlt)) gaps.push("Alt text");
@@ -34,7 +42,8 @@ export function questionGaps(q, isYouTube){
 
 // One short status per question: "Complete", or only what's missing, e.g.
 // "Missing commentary and explanation". Guidance only; nothing is blocked.
-const GAP_WORDS = {"Item text":"item text", "Actual Info":"explanation", "Needless Commentary":"commentary", "Alt text":"alt text"};
+const GAP_WORDS = {"Item text":"item text", "Answer name":"answer name", "Picture":"picture", "Picture description":"picture description",
+  "Actual Info":"explanation", "Needless Commentary":"commentary", "Alt text":"alt text"};
 export function missingSummary(gaps){
   if(!gaps.length) return "Complete";
   const words = gaps.map(g=>GAP_WORDS[g]||g.toLowerCase());
@@ -42,8 +51,8 @@ export function missingSummary(gaps){
   return `Missing ${list}`;
 }
 
-export function countReady(questions, isYouTube){
-  return (questions||[]).filter(q=>questionGaps(q, isYouTube).length===0).length;
+export function countReady(questions, isYouTube, options){
+  return (questions||[]).filter(q=>questionGaps(q, isYouTube, options).length===0).length;
 }
 
 export function questionCountOk(count){

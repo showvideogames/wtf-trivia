@@ -14,9 +14,10 @@ export const ARCHIVE_CONCURRENCY = 4;
 
 /**
  * Every image a puzzle references: the square poster (header), the wide
- * artwork, category A, category B, then each question. Blank, missing and
- * non-string values are skipped (a question without an image is not an
- * image to archive).
+ * artwork, category A, category B, then each question: its picture (a
+ * picture quiz's questionImage, kept even while the option is off) and its
+ * reveal media. Blank, missing and non-string values are skipped (a
+ * question without an image is not an image to archive).
  */
 export function listPuzzleImages(game) {
   const out = [];
@@ -29,7 +30,9 @@ export function listPuzzleImages(game) {
   add({ key: "categoryAImage", kind: "category", field: "categoryAImage", slot: "A", url: game?.categoryAImage });
   add({ key: "categoryBImage", kind: "category", field: "categoryBImage", slot: "B", url: game?.categoryBImage });
   (Array.isArray(game?.questions) ? game.questions : []).forEach((q, index) => {
-    add({ key: `question:${q?.id ?? `#${index}`}`, kind: "question", field: "imageUrl", questionId: q?.id, questionIndex: index, itemText: q?.itemText, url: q?.imageUrl });
+    const at = { questionId: q?.id, questionIndex: index, itemText: q?.itemText };
+    add({ key: `picture:${q?.id ?? `#${index}`}`, kind: "picture", field: "questionImage", ...at, url: q?.questionImage });
+    add({ key: `question:${q?.id ?? `#${index}`}`, kind: "question", field: "imageUrl", ...at, url: q?.imageUrl });
   });
   return out;
 }
@@ -83,6 +86,10 @@ export async function archivePuzzleImages(game, { archive, isExternal = () => fa
       updated.questions[t.questionIndex] = isExternal(t.url)
         ? { ...q, imageUrl: next, originalImageUrl: q.originalImageUrl || t.url }
         : { ...q, imageUrl: next };
+    } else if (t.kind === "picture") {
+      // Never keeps the old address: an outside link's filename could name
+      // the answer, and the stored copy's name is neutral.
+      updated.questions[t.questionIndex] = { ...updated.questions[t.questionIndex], questionImage: next };
     } else {
       updated[t.field] = next;
     }
@@ -92,10 +99,10 @@ export async function archivePuzzleImages(game, { archive, isExternal = () => fa
 
 /** The value a failed image's field holds now, to tell whether it was replaced. */
 export function currentImageUrl(game, failure) {
-  if (failure.kind !== "question") return game?.[failure.field];
+  if (failure.kind !== "question" && failure.kind !== "picture") return game?.[failure.field];
   const qs = Array.isArray(game?.questions) ? game.questions : [];
   const q = failure.questionId != null ? qs.find((x) => x?.id === failure.questionId) : qs[failure.questionIndex];
-  return q ? q.imageUrl : undefined;
+  return q ? q[failure.field] : undefined;
 }
 
 /** A warning stays open until its field no longer holds the URL that failed. */
@@ -113,7 +120,8 @@ export function imageName(failure, game) {
     return `The Category ${failure.slot} image${cat ? ` (${cat})` : ""}`;
   }
   const text = (failure.itemText || "").trim();
-  return `“${text || `Question ${failure.questionIndex + 1}`}”`;
+  const name = `“${text || `Question ${failure.questionIndex + 1}`}”`;
+  return failure.kind === "picture" ? `The picture for ${name}` : name;
 }
 
 export function isBrokenLink(failure) {

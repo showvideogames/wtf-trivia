@@ -9,6 +9,7 @@ import { TOPICS, normalizeTags, toggleTag } from "../topics.js";
 import { answerButtonName } from "../categoryNames.js";
 import { buildResultsShareText, normalizeShareLabel, shareCategoryName } from "../share.js";
 import { BRAND_IMAGE, puzzleMeta } from "../puzzleMeta.js";
+import { countPictures, isPictureQuiz } from "../pictureQuiz.js";
 
 function CardHead({icon, title, sub}){
   return(
@@ -32,15 +33,44 @@ function TextField({id, label, value, placeholder, onChange, hint}){
   );
 }
 
+// Picture quiz (pictureQuiz.js): off by default. Switching it either way
+// only changes what the question editor shows and how gameplay presents a
+// question; every name, picture and description already entered is kept.
+function PictureQuizOption({game, set}){
+  const on = isPictureQuiz(game);
+  const qs = game.questions||[];
+  const pictures = countPictures(qs);
+  const status = on
+    ? qs.length===0 ? "Add questions on the Questions tab, each with its picture."
+      : pictures===qs.length ? `All ${qs.length} questions have a picture.`
+      : `${pictures} of ${qs.length} questions have a picture. Every question needs one before publishing; drafts can be saved without.`
+    : pictures>0 ? `${pictures} question${pictures===1?"":"s"} still ${pictures===1?"has a picture":"have pictures"} saved from before. ${pictures===1?"It's":"They're"} kept, just not shown while this is off.`
+    : null;
+  return(
+    <div className="ps-pq-option">
+      <label className="ps-check">
+        <input type="checkbox" checked={on} aria-describedby="ps-pq-help ps-pq-status" onChange={e=>set("pictureQuiz", e.target.checked)}/>
+        <span className="ps-check-box" aria-hidden="true">{on&&<Icon name="check" size={15}/>}</span>
+        <span className="ps-check-label">Picture quiz</span>
+      </label>
+      <div className="ps-hint" id="ps-pq-help">
+        Players see an uploaded picture instead of each question&rsquo;s name, and pick its category. The name appears after they answer.
+      </div>
+      {status&&<div className={`ps-hint ps-pq-status${on&&pictures<qs.length?" is-missing":""}`} id="ps-pq-status" aria-live="polite">{status}</div>}
+    </div>
+  );
+}
+
 function PuzzleBasics({game, set, games}){
   return(
     <section className="ps-panel ps-card" aria-labelledby="ps-basics-title">
-      <CardHead icon="doc" title={<span id="ps-basics-title">Puzzle basics</span>} sub="The date and the puzzle's overall title."/>
+      <CardHead icon="doc" title={<span id="ps-basics-title">Puzzle basics</span>} sub="The date, the puzzle's overall title and its type."/>
       <div className="ps-grid-2">
         <DatePicker value={game.date||""} onChange={v=>set("date",v)} games={games} currentGameId={game.id}/>
         <TextField id="ps-theme" label="Puzzle title" value={game.themeTitle} placeholder="Board Game or Nicolas Cage Movie?" onChange={v=>set("themeTitle",v)}
                    hint="The puzzle's overall name, shown on Home, Archive and Results."/>
       </div>
+      <PictureQuizOption game={game} set={set}/>
     </section>
   );
 }

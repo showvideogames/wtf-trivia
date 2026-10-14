@@ -18,10 +18,10 @@ export function normalizeEditorDraft(game){
 }
 
 // The puzzle the editor opens with: the stored draft copy over the loaded
-// puzzle. shareNameColumns, subtitleColumns, buttonNameColumns, tagsColumn and wideImageColumn describe the database, not the
+// puzzle. shareNameColumns, subtitleColumns, buttonNameColumns, tagsColumn, wideImageColumn and pictureQuizColumn describe the database, not the
 // draft, so the loaded puzzle's values always win over whatever an older
 // draft recorded. A draft from before topics existed keeps the puzzle's tags,
 // and one from before wide artwork existed keeps the puzzle's wide artwork.
 export function restoreEditorDraft(game, saved){
-  return saved?.game ? {...game, ...saved.game, id: game.id, shareNameColumns: game.shareNameColumns, subtitleColumns: game.subtitleColumns, buttonNameColumns: game.buttonNameColumns, tagsColumn: game.tagsColumn, wideImageColumn: game.wideImageColumn, silhouetteImageColumn: game.silhouetteImageColumn} : game;
+  return saved?.game ? {...game, ...saved.game, id: game.id, shareNameColumns: game.shareNameColumns, subtitleColumns: game.subtitleColumns, buttonNameColumns: game.buttonNameColumns, tagsColumn: game.tagsColumn, wideImageColumn: game.wideImageColumn, silhouetteImageColumn: game.silhouetteImageColumn, pictureQuizColumn: game.pictureQuizColumn} : game;
 }

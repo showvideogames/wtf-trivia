@@ -818,10 +818,13 @@
 }
 
 /* The frame already has the still's own ratio, so contain is only a guard
-   for the instant before the ratio is read: never cropped, never stretched. */
+   for the instant before the ratio is read: never cropped, never stretched.
+   Stills sit on cream, so a transparent PNG shows cream behind it rather
+   than black; the video player (below) keeps its black. */
 .gp-media-img {
   display: block;
   object-fit: contain;
+  background: #FFFDF7;
 }
 
 /* The player keeps its existing embed; only its box is sized here, at a true
@@ -857,10 +860,10 @@
    presses play, well before they answer). If a still is unexpectedly not
    ready yet, this holds a standard 4:3 frame instead of a blank collapse or
    a mid-load pop-in. No spinner -- a slow, quiet pulse on the still's own
-   dark frame is enough to read as "still working". */
+   cream frame is enough to read as "still working". */
 .gp-media-loading {
   display: block;
-  background: linear-gradient(160deg, #1c1f24 0%, #14161A 100%);
+  background: linear-gradient(160deg, #FFF6DE 0%, #F6E9C6 100%);
   animation: gpMediaPulse 1.6s ease-in-out infinite;
 }
 @keyframes gpMediaPulse {
@@ -879,8 +882,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(160deg, #1c1f24 0%, #14161A 100%);
-  color: rgba(255, 255, 255, 0.4);
+  background: #FFF8E6;
+  color: rgba(36, 27, 21, 0.55);
   font-family: 'Fredoka One', cursive;
   font-size: 13px;
   letter-spacing: .2px;

@@ -50,15 +50,18 @@ function usePaperLayout(boxRef, textRef, force) {
   return layout;
 }
 
-export default function PaperPrompt({ children, as = "h1", className = "", paper = PAPER_ASSET }) {
+// aside: something small set on the paper beside the text (a picture quiz's
+// picture on the reveal, pictureQuiz.css); the text keeps the rest.
+export default function PaperPrompt({ children, as = "h1", className = "", paper = PAPER_ASSET, aside = null }) {
   const Tag = as;
   const boxRef = useRef(null);
   const textRef = useRef(null);
   const layout = usePaperLayout(boxRef, textRef, paper);
   return (
-    <div ref={boxRef} className={`pp ${className}`.trim()}
+    <div ref={boxRef} className={`pp ${className}${aside ? " has-aside" : ""}`.trim()}
          data-paper={layout?.id} style={layout ? { minHeight: `calc(${layout.height}px * var(--pp-fit, 1))` } : undefined}>
       {layout && <img className="pp-sheet" src={layout.src} alt="" aria-hidden="true" draggable="false"/>}
+      {aside && <span className="pp-aside">{aside}</span>}
       <Tag ref={textRef} className="pp-text">{children}</Tag>
     </div>
   );

@@ -35,6 +35,11 @@ import { isQuizSlug } from "./quizSlug.js";
 // quizSlug.js) is sent only once the row came back with a slug column. A
 // draft without one sends null, and the database names it when it is
 // published; a published quiz's slug can't change (the database keeps it).
+//
+// Picture quiz (supabase/migrations/0007_picture_quiz.sql, pictureQuiz.js)
+// follows the share-name rule: sent when the quiz is a picture quiz, or when
+// its row came back with the column (so turning it off saves false). Every
+// other quiz saves exactly as before on a database without the column.
 function trimmedShareName(value){
   return typeof value==="string" && value.trim() ? value.trim() : null;
 }
@@ -67,7 +72,8 @@ export function gameToRow(g){
     ...(tags.length||g.tagsColumn ? {tags} : {}),
     ...(wide||g.wideImageColumn ? {wide_image:wide} : {}),
     ...(silhouette||g.silhouetteImageColumn ? {silhouette_image:silhouette} : {}),
-    ...(g.slugColumn ? {slug:isQuizSlug(g.slug) ? g.slug : null} : {})
+    ...(g.slugColumn ? {slug:isQuizSlug(g.slug) ? g.slug : null} : {}),
+    ...(g.pictureQuiz===true||g.pictureQuizColumn ? {picture_quiz:g.pictureQuiz===true} : {})
   };
 }
 export function rowToGame(r){
@@ -99,6 +105,8 @@ export function rowToGame(r){
     tagsColumn: "tags" in r,
     slug: r.slug||"",
     slugColumn: "slug" in r,
+    pictureQuiz: r.picture_quiz===true,
+    pictureQuizColumn: "picture_quiz" in r,
     status: r.status,
     questions: r.questions||[]
   };
