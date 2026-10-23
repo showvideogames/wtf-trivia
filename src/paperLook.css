@@ -627,9 +627,10 @@
   .app.gp-fullscreen .gp-wrap.gp-paper .gp-next.btn { margin-top: 6px; margin-bottom: 4px; }
 }
 
-/* Short windows: the copy column gives up a little padding and leading
-   (never type size). */
-@media (min-width: 600px) and (max-height: 760px) {
+/* Windows 800px tall and under (a 1366x768 laptop): the copy column gives
+   up a little padding and leading, never type size, so ordinary copy
+   (up to about 330 characters) keeps Next on screen with room below. */
+@media (min-width: 600px) and (max-height: 800px) {
   .app.gp-fullscreen .gp-paper .gp-verdict { min-height: 50px; padding: 6px 16px; }
   .app.gp-fullscreen .gp-paper .gp-panel { padding: 10px 14px 10px; margin-bottom: 8px; }
   .app.gp-fullscreen .gp-paper .gp-panel-body { line-height: 1.38; }
@@ -640,9 +641,10 @@
   .app.gp-fullscreen .gp-wrap.gp-paper .gp-reveal:has(> .gp-media) {
     --gp-row-w: min(1040px, calc(100vw - 48px));
     display: grid;
-    /* The copy column's rows take their own heights; the media spans them
-       all, and whatever height it has beyond them goes to the last row. */
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    /* The copy column is a little wider, so the cards wrap to fewer lines.
+       Its rows take their own heights; the media spans them all, and
+       whatever height it has beyond them goes to the last row. */
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
     grid-template-rows: auto auto auto auto 1fr;
     column-gap: clamp(20px, 2.2vw, 30px);
     align-items: start;
@@ -651,8 +653,9 @@
   }
   .app.gp-fullscreen .gp-wrap.gp-paper .gp-reveal:has(> .gp-media) > :not(.gp-media) { grid-column: 2; }
   .app.gp-fullscreen .gp-wrap.gp-paper .gp-reveal > .gp-media {
-    /* As tall as the window leaves under the stack above. */
-    --gp-media-cap: clamp(240px, calc(100dvh - 400px), 440px);
+    /* As tall as the window leaves under the stack above, with a little
+       room below. */
+    --gp-media-cap: clamp(240px, calc(100dvh - 420px), 440px);
     grid-column: 1;
     grid-row: 1 / -1;
     justify-self: center;
