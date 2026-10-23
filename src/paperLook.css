@@ -346,12 +346,14 @@
   .gp-paper .gp-mu-bar { height: 74px; border-radius: 22px; }
   .gp-paper .gp-mu-or-art { width: 52px; height: 52px; }
   .gp-paper .gp-qshort { font-size: 13.5px; }
-  .gp-paper .gp-prompt { width: min(100%, 620px); }
-  .pp { padding: 8px 34px; }
-  .gp-prompt.lg .pp-text { font-size: 50px; }
-  .gp-prompt.md .pp-text { font-size: 44px; }
-  .gp-prompt.sm .pp-text { font-size: 37px; }
-  .gp-prompt.xs .pp-text { font-size: 31px; }
+  /* --pp-k is 1 here unless a short window scales the prompt (Desktop and
+     tablet: one screen, below). */
+  .gp-paper .gp-prompt { width: calc(min(100%, 620px) * var(--pp-k)); }
+  .pp { padding: 8px calc(34px * var(--pp-k, 1)); }
+  .gp-prompt.lg .pp-text { font-size: calc(50px * var(--pp-k, 1)); }
+  .gp-prompt.md .pp-text { font-size: calc(44px * var(--pp-k, 1)); }
+  .gp-prompt.sm .pp-text { font-size: calc(37px * var(--pp-k, 1)); }
+  .gp-prompt.xs .pp-text { font-size: calc(31px * var(--pp-k, 1)); }
   .gp-paper .gp-media,
   .gp-paper .gp-reveal > .gp-media { width: calc(min(100%, 620px) - 4px); --gp-media-cap: min(440px, 46vh); }
   .gp-paper .gp-verdict,
@@ -568,4 +570,124 @@
 @media (max-width: 599px) and (max-height: 600px) {
   .gp-paper .gp-dot { display: none; }
   .gp-wrap.gp-paper .gp-progress { gap: 0; }
+}
+
+/* ================= DESKTOP AND TABLET: ONE SCREEN =================
+   From 600px wide, in the game itself (.app.gp-fullscreen: never Admin
+   Preview's phone-width stage), the question and an ordinary reveal fit
+   the window, by its height as well as its width. The header, the matchup
+   bar, the type in the cards and the buttons' size keep their places;
+   what gives way, in order:
+     1. the gaps, and the room at the foot of the page, which follow the
+        window height (dvh);
+     2. on windows 820px tall and under, the paper prompt: the sheet, its
+        text and its padding together (--pp-scale), so the title wraps
+        exactly as at full size and the paper keeps its own proportions --
+        88%, then 82% at 720px and under, 76% at 620px and under;
+     3. the answer buttons, which already step down with the height (above);
+     4. on the reveal, the media's height cap, which follows the window
+        (and the paper's depth) so Next's row still fits below it.
+   From 900px wide the reveal sets the media beside its copy rather than
+   above it, in one row reaching past the page column like the answer
+   buttons (1040px at most, 1160px from 1500px wide): the picture or video
+   on the left; the result, Actual Info and Needless Commentary on the
+   right; and Next on its own row, centred below whichever column is
+   taller. A reveal without media keeps the one centred column, as does
+   everything under 900px wide (tablets, high browser zoom).
+   Nothing is hidden or clipped and nothing scrolls inside the page: a
+   window too short for the content (a very small window, high browser
+   zoom, unusually long copy) simply lets the page scroll, from its top. */
+@media (min-width: 600px) {
+  /* The question shell is exactly the window's height so the stack can
+     fill it; the game itself never shrinks below its content, so anything
+     that can't fit runs below the fold, padding included, and the page
+     scrolls. */
+  .app.gp-fullscreen .gp-wrap.gp-paper.gp-q { flex-shrink: 0; }
+  @supports (height: 100dvh) {
+    .app.gp-fullscreen .gp-wrap.gp-paper { padding-bottom: clamp(14px, 2.6dvh, 28px); }
+    .app.gp-fullscreen .gp-wrap.gp-paper.gp-q:not(.gp-picture) > .gp-qmod { margin-top: clamp(12px, 2.4dvh, 22px); }
+    .app.gp-fullscreen .gp-paper .gp-reveal { margin-top: clamp(10px, 1.8dvh, 16px); }
+  }
+}
+@media (min-width: 600px) and (max-height: 820px) {
+  .app.gp-fullscreen .gp-wrap.gp-paper { --pp-scale: 0.88; }
+}
+@media (min-width: 600px) and (max-height: 720px) {
+  .app.gp-fullscreen .gp-wrap.gp-paper { --pp-scale: 0.82; }
+  .app.gp-fullscreen .gp-wrap.gp-paper .gp-progress { margin-top: 6px; }
+  .app.gp-fullscreen .gp-paper .gp-prompt { margin-top: 6px; }
+}
+@media (min-width: 600px) and (max-height: 620px) {
+  .app.gp-fullscreen .gp-wrap.gp-paper { --pp-scale: 0.76; }
+}
+
+/* The reveal's copy column: the same cards and type, a little less air. */
+@media (min-width: 600px) {
+  .app.gp-fullscreen .gp-paper .gp-verdict { min-height: 54px; padding: 8px 18px; margin-bottom: 10px; }
+  .app.gp-fullscreen .gp-paper .gp-panel { padding: 12px 16px 12px; margin-bottom: 10px; }
+  .app.gp-fullscreen .gp-paper .gp-panel-lbl { margin: 1px 0 3px; }
+  .app.gp-fullscreen .gp-wrap.gp-paper .gp-next.btn { margin-top: 6px; margin-bottom: 4px; }
+}
+
+/* Windows 800px tall and under (a 1366x768 laptop): the copy column gives
+   up a little padding and leading, never type size, so ordinary copy
+   (up to about 330 characters) keeps Next on screen with room below. */
+@media (min-width: 600px) and (max-height: 800px) {
+  .app.gp-fullscreen .gp-paper .gp-verdict { min-height: 50px; padding: 6px 16px; }
+  .app.gp-fullscreen .gp-paper .gp-panel { padding: 10px 14px 10px; margin-bottom: 8px; }
+  .app.gp-fullscreen .gp-paper .gp-panel-body { line-height: 1.38; }
+}
+
+/* Media beside the copy, and Next on its own row below both. */
+@media (min-width: 900px) {
+  .app.gp-fullscreen .gp-wrap.gp-paper .gp-reveal:has(> .gp-media) {
+    --gp-row-w: min(1040px, calc(100vw - 48px));
+    display: grid;
+    /* The copy column is a little wider, so the cards wrap to fewer lines.
+       Its rows take their own heights; the media spans them all, and
+       whatever height it has beyond them goes to the fourth row. Next has
+       the last row to itself, so it always starts below the taller
+       column. */
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    grid-template-rows: auto auto auto 1fr auto;
+    column-gap: clamp(20px, 2.2vw, 30px);
+    align-items: start;
+    width: var(--gp-row-w);
+    margin-left: calc((100% - var(--gp-row-w)) / 2);
+  }
+  .app.gp-fullscreen .gp-wrap.gp-paper .gp-reveal:has(> .gp-media) > :not(.gp-media, .gp-next) { grid-column: 2; }
+  /* The copy column's last card ends flush, so the gap above Next is the
+     same whichever column is taller. */
+  .app.gp-fullscreen .gp-wrap.gp-paper .gp-reveal:has(> .gp-media) > :has(+ .gp-next) { margin-bottom: 0; }
+  .app.gp-fullscreen .gp-wrap.gp-paper .gp-reveal > .gp-media {
+    /* As tall as the window leaves once the stack above (whose paper
+       prompt is one of three depths at --pp-scale) and Next's row, with a
+       little room below it, are taken out. */
+    --gp-paper-aspect: 3.883;
+    --gp-media-cap: clamp(220px, calc(100dvh - 310px - 620px * var(--pp-scale, 1) / var(--gp-paper-aspect)), 440px);
+    grid-column: 1;
+    grid-row: 1 / 5;
+    justify-self: center;
+    align-self: start;
+    width: calc(100% - 4px);
+    margin: 0;
+  }
+  .app.gp-fullscreen .gp-wrap.gp-paper:has(.pp[data-paper="medium"]) .gp-reveal > .gp-media { --gp-paper-aspect: 3; }
+  .app.gp-fullscreen .gp-wrap.gp-paper:has(.pp[data-paper="parchment"]) .gp-reveal > .gp-media { --gp-paper-aspect: 2.268; }
+  /* A still narrower than its column (a portrait cover, a short window)
+     sits against the copy, so the two read as one pair; its source credit
+     follows it. */
+  .app.gp-fullscreen .gp-wrap.gp-paper .gp-reveal > .gp-media { justify-content: flex-end; }
+  .app.gp-fullscreen .gp-wrap.gp-paper .gp-reveal > .gp-media .gp-media-src { left: auto; right: 2px; transform: none; }
+  /* Next: centred under the whole row, about a column wide. */
+  .app.gp-fullscreen .gp-wrap.gp-paper .gp-reveal:has(> .gp-media) > .gp-next.btn {
+    grid-column: 1 / -1;
+    grid-row: 5;
+    justify-self: center;
+    width: min(560px, 100%);
+    margin: 14px 0 4px;
+  }
+}
+@media (min-width: 1500px) {
+  .app.gp-fullscreen .gp-wrap.gp-paper .gp-reveal:has(> .gp-media) { --gp-row-w: min(1160px, calc(100vw - 48px)); }
 }
