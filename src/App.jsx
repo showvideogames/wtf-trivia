@@ -9,7 +9,8 @@ import { checkAdminStatus, deleteMyAccount, ensureAccount, signInWithPlatform, s
 import { StorageUploadError, canWriteAs, classifyStorageFailure, copyFailureCode } from "./admin/adminAccess.js";
 import { declinePendingHandoff, importPendingHandoff, resolvePendingHandoff } from "./account/guestHandoff.js";
 import { createGuestSessionGuard } from "./account/guestSession.js";
-import { ensurePlayerRow, isAnonymousUser } from "./account/playerRow.js";
+import { createAccountDataLoader } from "./account/accountData.js";
+import { bindPlayerRequest, ensurePlayerRow, isAnonymousUser } from "./account/playerRow.js";
 import ImportPrompt from "./account/ImportPrompt.jsx";
 import "./home.css";
 import "./game.css";
@@ -23,12 +24,12 @@ import "./paperLook.css";
 import "./admin/studio.css";
 import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from "./mediaPreloader.js";
 import { archivePuzzleImages, describeImageWarning, failureReason, imageName, isWarningResolved } from "./admin/publishImages.js";
-import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats } from "./crowdStats.js";
+import { crowdBeatPercent, createCrowdRequestTracker, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats } from "./crowdStats.js";
 import { gameToRow, rowToGame } from "./gameRow.js";
 import { copyText, puzzleArtworkUrl, shareResult, teaserArtworkUrl, wideArtworkUrl } from "./homeShare.js";
 import { gameDayKey, isReleased, nextPuzzle, releaseTime, shiftDay } from "./schedule.js";
 import { sessionGameDay } from "./dailySession.js";
-import { statsAfterFinish } from "./playerStats.js";
+import { statsAfterFinish, syncFinishedPlayerStats } from "./playerStats.js";
 import { buildResultsShareText, normalizeShareLabel } from "./share.js";
 import { puzzleIdFromPath, puzzlePath } from "./puzzleLink.js";
 import { quizPath, quizSlugFromPath, resolveQuizSlugs, slugifyTitle } from "./quizSlug.js";
@@ -2188,9 +2189,9 @@ async function dbRecordAnswer(playerId, puzzleId, answers, score){
 // updated row as completed; throws otherwise. The puzzle_stats trigger on
 // game_records runs inside this same UPDATE's transaction, so crowd stats
 // read after this resolves already count the game (see crowdStats.js).
-async function dbCompleteGame(playerId, puzzleId, answers, score, totalQuestions){
+async function dbCompleteGame(playerId, puzzleId, answers, score, totalQuestions, request=sbFetch){
   if(OFFLINE_PREVIEW) return devCompleteGame(puzzleId, answers, score, totalQuestions);
-  const rows = await sbFetch(`/rest/v1/game_records?${puzzleFilter(playerId, puzzleId)}`, {
+  const rows = await request(`/rest/v1/game_records?${puzzleFilter(playerId, puzzleId)}`, {
     method:"PATCH",
     body: JSON.stringify({answers, score, completed:true, completed_at:new Date().toISOString()})
   });
@@ -2198,9 +2199,9 @@ async function dbCompleteGame(playerId, puzzleId, answers, score, totalQuestions
   if(!confirmed) throw new Error("The database didn't confirm the finished game.");
 }
 // The player's own streak/totals, updated after the finished game is saved.
-async function dbUpdatePlayerStatsForFinish(playerId, date, score, totalQuestions, answers){
+async function dbUpdatePlayerStatsForFinish(playerId, date, score, totalQuestions, answers, request=sbFetch){
   if(OFFLINE_PREVIEW) return; // devCompleteGame already updated them
-  await dbUpdateStats(playerId, date, score, totalQuestions, answers);
+  await dbUpdateStats(playerId, date, score, totalQuestions, answers, request);
 }
 async function dbGetPuzzleCommunityStats(puzzleId, userScore){
   if(OFFLINE_PREVIEW) return devCommunityStats(puzzleId, userScore);
@@ -2301,19 +2302,19 @@ async function dbGetArchiveStats(){
 }
 
 // ===== DB FUNCTIONS — STATS =====
-async function dbGetStats(playerId){
+async function dbGetStats(playerId, request=sbFetch, strict=false){
   if(OFFLINE_PREVIEW) return devGetStats();
   try {
-    const rows = await sbFetch(`/rest/v1/player_stats?player_id=eq.${playerId}&select=*`);
+    const rows = await request(`/rest/v1/player_stats?player_id=eq.${playerId}&select=*`);
     if(!rows||!rows.length) return {currentStreak:0,longestStreak:0,lastPlayedDate:null,totalPlayed:0,totalCorrect:0,totalQuestions:0,bestCombo:0};
     const r = rows[0];
     return {currentStreak:r.current_streak,longestStreak:r.longest_streak,lastPlayedDate:r.last_played_date,totalPlayed:r.total_played,totalCorrect:r.total_correct,totalQuestions:r.total_questions,bestCombo:r.best_combo};
-  } catch(e){ return {currentStreak:0,longestStreak:0,lastPlayedDate:null,totalPlayed:0,totalCorrect:0,totalQuestions:0,bestCombo:0}; }
+  } catch(e){ if(strict) throw e; return {currentStreak:0,longestStreak:0,lastPlayedDate:null,totalPlayed:0,totalCorrect:0,totalQuestions:0,bestCombo:0}; }
 }
-async function dbUpdateStats(playerId, date, score, totalQuestions, answers){
+async function dbUpdateStats(playerId, date, score, totalQuestions, answers, request=sbFetch){
   // Streaks go by the puzzle's date (playerStats.js), not the clock.
-  const s = statsAfterFinish(await dbGetStats(playerId), {date, score, totalQuestions, bestCombo:calcBestCombo(answers)});
-  await sbFetch("/rest/v1/player_stats", {
+  const s = statsAfterFinish(await dbGetStats(playerId, request, true), {date, score, totalQuestions, bestCombo:calcBestCombo(answers)});
+  await request("/rest/v1/player_stats", {
     method:"POST",
     headers:{"Prefer":"resolution=merge-duplicates"},
     body: JSON.stringify({
@@ -3333,7 +3334,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
   const{play}=sound;
   const{canvasRef,shoot}=useConfetti();
   const beatOpts=["🤔","🤔","🤔","😬"];
-  const e_ref=useRef(beatOpts[Math.floor(Math.random()*beatOpts.length)]);
+  const [beatEmoji,setBeatEmoji]=useState(()=>beatOpts[Math.floor(Math.random()*beatOpts.length)]);
 
   const idx=rec.currentIndex;
   const qs=game.questions.map(q=>({...q,_catA:game.categoryA,_catB:game.categoryB}));
@@ -3552,13 +3553,8 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
     };
   },[]);
 
-  // Guard: once we've advanced past the last question, stop rendering question/reveal UI.
+  // Keep hooks unconditional even if a completion callback waits before navigation.
   if(!cq) return null;
-
-  // Pick a fresh suspense emoji each time a new question starts
-  useEffect(()=>{
-    e_ref.current=beatOpts[Math.floor(Math.random()*beatOpts.length)];
-  },[idx]);
 
   const handleAnswerClick=cat=>{
     if(!answerable) return;
@@ -3594,6 +3590,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
       if(final.score===final.totalQuestions){play("perfect");shoot("perfect");}
       onComplete(final);
     } else {
+      setBeatEmoji(beatOpts[Math.floor(Math.random()*beatOpts.length)]);
       setPhase("question");
     }
   };
@@ -3700,7 +3697,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
 
       {phase==="beat"&&(
         <div className="beat-overlay">
-          <span className="beat-emoji-pop">{e_ref.current}</span>
+          <span className="beat-emoji-pop">{beatEmoji}</span>
         </div>
       )}
 
@@ -5226,6 +5223,14 @@ export default function WhatTheFudgeTrivia(){
   const[adminAuthBusy,setAdminAuthBusy]=useState(false);
   const[adminAuthError,setAdminAuthError]=useState(null);
   const authUserIdRef = useRef(null);
+  const identityVersionRef = useRef(0);
+  const [crowdRequests] = useState(createCrowdRequestTracker);
+  const [accountLoader] = useState(() => createAccountDataLoader({
+    ensureSession: authEnsureSession, resolveAccount: authResolveAccount,
+    getPlayer: dbGetOrCreatePlayer, resolveAdminStatus,
+    resolveHandoff: resolvePendingHandoff, loadGames: dbLoadGames,
+    getStats: dbGetStats, getRecord: dbGetGameRecord,
+  }));
 
   const sound=useSoundEngine();
   // Two days (dailySession.js):
@@ -5245,48 +5250,27 @@ export default function WhatTheFudgeTrivia(){
   const sessionDayRef = useRef(sessionDay);
   useEffect(()=>{ sessionDayRef.current = sessionDay; },[sessionDay]);
 
-  const loadAppData = useCallback(async(sessionOverride=null,{recoverAuth=false}={})=>{
-    const today = sessionDayRef.current;
-    const session = sessionOverride || await authEnsureSession({recover:recoverAuth});
-    // [accounts] a non-guest session must be a WTF account; see authResolveAccount.
-    const resolved = await authResolveAccount(session);
-    if(resolved.notice) setAccountNotice(resolved.notice);
-    const p = await dbGetOrCreatePlayer(resolved.session?.user);
-    if(!p?.id) throw new Error("Player session could not be created.");
-    if(resolved.account){
-      // The account's email is identity-first (account_email on the server); never auth.users.email.
-      p.isGuest = false;
-      p.email = resolved.account.email || p.email;
-      p.globalUserId = resolved.account.global_user_id;
-    }
-    authUserIdRef.current = p?.id || null;
-    setPlayer(p);
-    setAdminStatus(await resolveAdminStatus(resolved));
-    // [accounts] first sign-in from a browser whose guest had history: ask once.
-    setHandoff(resolved.account ? await resolvePendingHandoff().catch(()=>null) : null);
-    const [allGames, playerStats] = await Promise.all([
-      dbLoadGames(),
-      dbGetStats(p.id)
-    ]);
-    setGames(allGames);
-    setStats(playerStats);
-    // Which puzzle is today's is a scheduling question (by date); the
-    // player's record for it is looked up by the puzzle's id.
-    const todayG = allGames.find(g=>g.date===today&&g.status==="published");
-    if(todayG){
-      const rec = await dbGetGameRecord(p.id, todayG.id);
-      setGameRecord(rec);
-    } else {
-      setGameRecord(null);
-    }
-    loadedDayRef.current = today;
-  },[]);
+  const loadAppData = useCallback((sessionOverride=null,{recoverAuth=false}={})=>{
+    return accountLoader.load(sessionOverride, {recoverAuth, today:sessionDayRef.current}, snapshot=>{
+      authUserIdRef.current = snapshot.player.id;
+      setAccountNotice(snapshot.notice || null);
+      setPlayer(snapshot.player);
+      setAdminStatus(snapshot.adminStatus);
+      setHandoff(snapshot.handoff);
+      setGames(snapshot.games);
+      setStats(snapshot.stats);
+      setGameRecord(snapshot.record);
+      loadedDayRef.current = snapshot.today;
+    });
+  },[accountLoader]);
 
   // Boot and listen for auth session changes
   useEffect(()=>{
     let active = true;
     let authReloadTimer = null;
+    let authVersion = 0;
     const boot = async()=>{
+      const bootVersion = authVersion;
       try {
         setLoading(true);
         setError(null);
@@ -5296,6 +5280,7 @@ export default function WhatTheFudgeTrivia(){
           "App boot timed out."
         );
       } catch(e){
+        if(!active || bootVersion!==authVersion) return;
         console.error("[boot] first attempt failed", e);
         try{
           clearSupabaseAuthCache();
@@ -5305,12 +5290,14 @@ export default function WhatTheFudgeTrivia(){
             "App boot retry timed out."
           );
         }catch(retryError){
+          if(!active || bootVersion!==authVersion) return;
           setError("Couldn't connect to server. Check your connection.");
+          accountLoader.invalidate();
           setAdminStatus(s=>s==="checking"?"unavailable":s);
           console.error("[boot] retry failed", retryError);
         }
       } finally {
-        if(active) setLoading(false);
+        if(active && bootVersion===authVersion) setLoading(false);
       }
     };
     boot();
@@ -5318,15 +5305,29 @@ export default function WhatTheFudgeTrivia(){
       if(!active) return;
       if(event==="TOKEN_REFRESHED"||event==="INITIAL_SESSION") return;
       if(event==="SIGNED_IN" && session?.user?.id===authUserIdRef.current) return;
+      const eventVersion = ++authVersion;
+      identityVersionRef.current += 1;
+      accountLoader.invalidate();
+      authUserIdRef.current = null;
+      setLoading(true);
+      setPlayer(null);
+      setGameRecord(null);
+      setHandoff(null);
+      setLinkRecord(null);
+      setReplayRecord(null);
+      crowdRequests.reset();
+      setCrowd(null);
+      setView(v=>["game", "score", "replay", "replay-score"].includes(v)?"home":v);
       // The account changed (here or in another tab): no Studio write goes
       // out until the new one is confirmed as an admin.
       if(!OFFLINE_PREVIEW) setAdminStatus("checking");
       clearTimeout(authReloadTimer);
       authReloadTimer = setTimeout(async()=>{
-        if(!active) return;
+        if(!active || eventVersion!==authVersion) return;
         try{
           setError(null);
           const ensured = session?.user ? session : await authEnsureSession({recover:true});
+          if(!active || eventVersion!==authVersion) return;
           await withTimeout(
             loadAppData(ensured,{recoverAuth:true}),
             APP_BOOT_TIMEOUT_MS,
@@ -5336,28 +5337,36 @@ export default function WhatTheFudgeTrivia(){
           // [accounts] A sign-out in another tab can land here while the
           // browser's tabs are still agreeing on the new guest. Ask once more
           // for the (now shared) guest before giving up on the page.
+          if(!active || eventVersion!==authVersion) return;
           console.error("[auth change] reload failed, retrying once", e);
           try{
-            if(!active) return;
+            if(!active || eventVersion!==authVersion) return;
             await withTimeout(
               loadAppData(null,{recoverAuth:true}),
               APP_BOOT_TIMEOUT_MS,
               "Auth reload retry timed out."
             );
           }catch(retryError){
+            if(!active || eventVersion!==authVersion) return;
             setError("Couldn't connect to server. Check your connection.");
+            accountLoader.invalidate();
             setAdminStatus("unavailable");
             console.error("[auth change] retry failed", retryError);
           }
+        }finally{
+          if(active && eventVersion===authVersion) setLoading(false);
         }
       },0);
     });
     return ()=>{
       active = false;
+      identityVersionRef.current += 1;
+      accountLoader.invalidate();
+      crowdRequests.reset();
       clearTimeout(authReloadTimer);
       subscription.unsubscribe();
     };
-  },[loadAppData]);
+  },[loadAppData, accountLoader, crowdRequests]);
 
   // The session's daily puzzle ("today's" on Home, in the game and Results).
   const todayGame = games.find(g=>g.date===sessionDay&&g.status==="published") || null;
@@ -5451,16 +5460,17 @@ export default function WhatTheFudgeTrivia(){
   // loads them in handleComplete, after its save. A game already finished
   // before this page load (it's in the database) loads them here, once.
   const[crowd,setCrowd]=useState(null);
-  const crowdRequestRef=useRef(null);
   useEffect(()=>{
     if(!gameRecord?.completed || !gameRecord.puzzleId) return;
     const {puzzleId, score} = gameRecord;
     const key = `${puzzleId}:${score}`;
-    if(crowdRequestRef.current===key) return;
-    crowdRequestRef.current = key;
+    const ticket = crowdRequests.claim(key);
+    if(!ticket) return;
     loadCrowdStats({fetchStats:()=>dbGetPuzzleCommunityStats(puzzleId, score), score})
-      .then(result=>setCrowd({puzzleId, score, ...result}));
-  },[gameRecord]);
+      .then(result=>{
+        if(crowdRequests.owns(ticket)) setCrowd({puzzleId, score, ...result});
+      });
+  },[gameRecord, crowdRequests]);
 
   const showToast = m => { setToast(m); setTimeout(()=>setToast(null),2100); };
 
@@ -5634,12 +5644,22 @@ export default function WhatTheFudgeTrivia(){
     setEditGame(null);
   };
 
+  // A late save may finish after sign-out or after the same account signs in
+  // again. Never publish its old result into the replacement session's UI.
+  const capturePlayer = () => {
+    const version = identityVersionRef.current;
+    const id = player?.id;
+    return () => version === identityVersionRef.current && (!id || authUserIdRef.current === id);
+  };
+
   // Start game: the session's daily puzzle, or `game` when the Archive's
   // Today card starts the clock's day while the session still holds an
   // earlier one -- that moves the session on to the new day. `path`: the
   // address the game plays at, when it starts from somewhere else (the
   // Archive's card: the quiz's own link, as a new history entry).
   const handlePlay = async(game=todayGame, {path=null}={}) => {
+    const isCurrent = capturePlayer();
+    if(!isCurrent()) return;
     const daily = game===todayGame || (game?.date===liveDay && isReleased(game, liveDay)) ? game : null;
     if(!daily) return;
     const record = daily===todayGame ? todayRecord : null;
@@ -5655,7 +5675,9 @@ export default function WhatTheFudgeTrivia(){
       let activePlayer = player;
       if(!activePlayer){
         const session = await authEnsureSession();
+        if(!isCurrent()) return;
         activePlayer = await dbGetOrCreatePlayer(session?.user);
+        if(!isCurrent()) return;
         setPlayer(activePlayer);
       }
       if(!activePlayer){
@@ -5663,6 +5685,7 @@ export default function WhatTheFudgeTrivia(){
         return;
       }
       const rec = await dbInitGameRecord(activePlayer.id, daily);
+      if(!isCurrent()) return;
       if(daily.date!==sessionDay){
         // The record is in hand, so the new day needs no reload.
         loadedDayRef.current = daily.date;
@@ -5672,6 +5695,7 @@ export default function WhatTheFudgeTrivia(){
       if(path) setPath(path);
       setView("game");
     } catch(e){
+      if(!isCurrent()) return;
       console.error("Start game error:", e);
       showToast("Couldn't start game 😬");
     }
@@ -5687,7 +5711,7 @@ export default function WhatTheFudgeTrivia(){
     // touch the game in progress.
     await saveAnswerThenSync({
       save: ()=>dbRecordAnswer(player.id, puzzleId, answers, score),
-      setRecord: setGameRecord, puzzleId, answers, score,
+      setRecord: setGameRecord, puzzleId, answers, score, isCurrent: capturePlayer(),
     });
   };
 
@@ -5696,23 +5720,39 @@ export default function WhatTheFudgeTrivia(){
   // the share text wait for the save (see crowdStats.js). Claiming the crowd
   // request first stops the revisit loader from reading ahead of the save.
   const handleComplete = async(finalRec) => {
-    if(!player) return;
+    const isCurrent = capturePlayer();
+    if(!player || !isCurrent()) return;
     const {puzzleId} = finalRec;
-    crowdRequestRef.current = `${puzzleId}:${finalRec.score}`;
+    const crowdTicket = crowdRequests.start(`${puzzleId}:${finalRec.score}`);
+    // Leave GameScreen synchronously: its question index has already advanced
+    // past the final question. Session reads/refreshes may wait on a lock.
     setGameRecord(finalRec);
     setView("score");
+    let request;
+    try {
+      request = OFFLINE_PREVIEW ? sbFetch : await bindPlayerRequest({
+        playerId: player.id, getSession: getAuthSession, fetchWithToken: sbFetchWithToken,
+      });
+    } catch(e) {
+      console.error("Complete game error:", e);
+      if(isCurrent() && crowdRequests.owns(crowdTicket)) {
+        setCrowd({puzzleId, score:finalRec.score, status:"unavailable", reason:"save-failed"});
+      }
+      return;
+    }
+    if(!isCurrent()) return;
     const result = await saveThenLoadCrowdStats({
-      save: ()=>dbCompleteGame(player.id, puzzleId, finalRec.answers, finalRec.score, finalRec.totalQuestions),
+      save: ()=>dbCompleteGame(player.id, puzzleId, finalRec.answers, finalRec.score, finalRec.totalQuestions, request),
       fetchStats: ()=>dbGetPuzzleCommunityStats(puzzleId, finalRec.score),
       score: finalRec.score,
-      onSaved: async()=>{
-        try{
-          // Streaks count calendar days, so they use the day the puzzle ran.
-          await dbUpdatePlayerStatsForFinish(player.id, finalRec.date, finalRec.score, finalRec.totalQuestions, finalRec.answers);
-          setStats(await dbGetStats(player.id));
-        }catch(e){ console.error("Complete game error:", e); }
-      }
+      onSaved: ()=>syncFinishedPlayerStats({
+        update: ()=>dbUpdatePlayerStatsForFinish(player.id, finalRec.date, finalRec.score, finalRec.totalQuestions, finalRec.answers, request),
+        read: ()=>dbGetStats(player.id, request),
+        publish: setStats,
+        isCurrent,
+      }).catch(e=>console.error("Complete game stats error:", e)),
     });
+    if(!isCurrent() || !crowdRequests.owns(crowdTicket)) return;
     if(result.reason==="save-failed") console.error("Complete game error:", result.error);
     setCrowd({puzzleId, score:finalRec.score, ...result});
   };

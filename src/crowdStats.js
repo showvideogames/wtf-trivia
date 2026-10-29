@@ -107,3 +107,16 @@ export function crowdBeatPercent(stats, score, { saved = true } = {}) {
     ? strictlyBetterPercent(stats.scoreHistogram, score, { includesPlayer: saved })
     : null;
 }
+
+// One in-flight crowd result belongs to one session. Resetting allows the
+// next player to request the same puzzle/score without accepting an old reply.
+export function createCrowdRequestTracker() {
+  let current = null;
+  const start = key => (current = { key });
+  return {
+    start,
+    claim: key => current?.key === key ? null : start(key),
+    owns: ticket => current === ticket,
+    reset: () => { current = null; },
+  };
+}

@@ -368,3 +368,27 @@ describe("11. Replay / Admin Preview: strictly lower than all historical finishe
     expect(unsaved({ finishedPlayers: 22, scoreHistogram: { 2: 5, 4: 6, 7: 9, 13: 1 } }, 6)).toBeNull();
   });
 });
+
+
+describe("crowd requests across account transitions", () => {
+  it("allows the next session's identical puzzle/score and rejects the old reply", async () => {
+    const { createCrowdRequestTracker } = await import("./crowdStats.js");
+    const requests = createCrowdRequestTracker();
+    const old = requests.start("puzzle:3");
+    expect(requests.claim("puzzle:3")).toBeNull();
+    requests.reset();
+    const replacement = requests.claim("puzzle:3");
+    expect(replacement).not.toBeNull();
+    expect(requests.owns(old)).toBe(false);
+    expect(requests.owns(replacement)).toBe(true);
+  });
+  it("keeps a same-session pending read valid when a repeated record arrives", async () => {
+    const { createCrowdRequestTracker } = await import("./crowdStats.js");
+    const requests = createCrowdRequestTracker();
+    const pending = requests.claim("puzzle:3");
+    expect(requests.claim("puzzle:3")).toBeNull();
+    expect(requests.owns(pending)).toBe(true);
+    requests.claim("other-puzzle:3");
+    expect(requests.owns(pending)).toBe(false);
+  });
+});

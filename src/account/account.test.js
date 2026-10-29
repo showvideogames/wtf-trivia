@@ -30,7 +30,11 @@ vi.mock("./supabaseClient.js", () => ({
       signOut: (...a) => fake.signOut(...a),
       getSession: (...a) => fake.getSession(...a),
     },
-    rpc: (...a) => fake.rpc(...a),
+    rpc: (...a) => {
+      const request = fake.rpc(...a);
+      request.setHeader = () => request;
+      return request;
+    },
   },
 }));
 
@@ -242,6 +246,20 @@ describe("U4 forgetHubTokens", () => {
 
 // ── U5 ensureAccount ──
 describe("U5 ensureAccount", () => {
+  beforeEach(() => {
+    fake.getSession.mockResolvedValue({ data: { session: { user: { id: "u1" }, access_token: "token-u1" } } });
+  });
+  it("does not sign out a new session when an old account rejection arrives", async () => {
+    const { ensureAccount } = await import("./platformSignIn.js");
+    let release;
+    fake.rpc.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    const pending = ensureAccount();
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    fake.getSession.mockResolvedValue({ data: { session: { user: { id: "new-user" }, access_token: "new-token" } } });
+    release({ data: [{ outcome: "not_platform_linked" }], error: null });
+    expect((await pending).reason).toBe("session_changed");
+    expect(fake.signOut).not.toHaveBeenCalled();
+  });
   it("ok publishes the account as the server reports it (email from the server, never the auth user)", async () => {
     fake.rpc.mockImplementation(async () => ({ data: [{ outcome: "ok", user_id: "u1", global_user_id: "user_01ABCDEFGHIJKLMNOP", email: "current@example.com", created_at: "2026-10-06" }], error: null }));
     const m = await import("./platformSignIn.js");

@@ -17,3 +17,13 @@ export function statsAfterFinish(stats, { date, score, totalQuestions, bestCombo
   if (bestCombo > s.bestCombo) s.bestCombo = bestCombo;
   return s;
 }
+
+// A confirmed game still needs its durable stats update after the UI changes
+// session. The caller binds update/read to the original owner's request token;
+// only publishing into the current screen is conditional on UI identity.
+export async function syncFinishedPlayerStats({ update, read, publish, isCurrent }) {
+  await update();
+  if (!isCurrent()) return;
+  const stats = await read();
+  if (isCurrent()) publish(stats);
+}

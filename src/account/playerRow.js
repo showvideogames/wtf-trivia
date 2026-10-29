@@ -62,3 +62,12 @@ export async function ensurePlayerRow({ getSession, fetchWithToken, now = () => 
     createdAt: row?.created_at ?? user.created_at ?? now().toISOString(),
   };
 }
+
+/** Capture the original owner's token once for a multi-request save. */
+export async function bindPlayerRequest({ playerId, getSession, fetchWithToken }) {
+  const session = await getSession();
+  if (session?.user?.id !== playerId || !session?.access_token) {
+    throw new Error("Account changed before saving the finished game.");
+  }
+  return (path, init) => fetchWithToken(session.access_token, path, init);
+}
