@@ -1,0 +1,26 @@
+name: Atomic completion database tests
+on:
+  pull_request:
+    paths:
+      - 'supabase/**'
+      - 'tests/db/**'
+      - 'package*.json'
+      - '.github/workflows/atomic-completion.yml'
+permissions:
+  contents: read
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:start
+      - run: npm run db:reset
+      - run: npm run test:db:completion
+      - if: always()
+        run: npm run db:stop
