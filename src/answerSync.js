@@ -41,7 +41,8 @@ export function syncedRecord(record, puzzleId, answers, score) {
 // database already had as much or more (or throws when it failed). Only a
 // save that landed updates Home's record, via setRecord (a React state
 // setter). Failures are swallowed, as before. Resolves to whether it landed.
-export async function saveAnswerThenSync({ save, setRecord, puzzleId, answers, score }) {
+export async function saveAnswerThenSync({ save, setRecord, puzzleId, answers, score, isCurrent = () => true }) {
+  if (!isCurrent()) return false;
   let landed;
   try {
     landed = await save();
@@ -49,6 +50,7 @@ export async function saveAnswerThenSync({ save, setRecord, puzzleId, answers, s
     return false;
   }
   if (!landed) return false;
-  setRecord((record) => syncedRecord(record, puzzleId, answers, score));
+  if (!isCurrent()) return true;
+  setRecord((record) => isCurrent() ? syncedRecord(record, puzzleId, answers, score) : record);
   return true;
 }

@@ -128,3 +128,32 @@ describe("syncedRecord", () => {
     expect(syncedRecord(null, "p1", ans(2), 1)).toBe(null);
   });
 });
+
+
+describe("answer saves across account changes", () => {
+  it("does not apply a late save to the next player's record for the same puzzle", async () => {
+    const db = fakeRecordsTable(rec());
+    const home = stateOf(rec());
+    let current = true;
+    const pending = saveAnswerThenSync({
+      save: db.save(ans(3), 2), setRecord: home.set, puzzleId: "p1", answers: ans(3), score: 2,
+      isCurrent: () => current,
+    });
+    current = false;
+    const replacement = rec({ answers: [], score: 0, currentIndex: 0 });
+    home.set(replacement);
+    await db.deliver(0);
+    expect(await pending).toBe(true); // persisted for the original player
+    expect(home.get()).toBe(replacement);
+  });
+  it("does not start a save from an already stale callback", async () => {
+    let called = false;
+    const result = await saveAnswerThenSync({
+      save: async () => { called = true; return true; },
+      setRecord: () => { throw new Error("Unexpected update"); },
+      puzzleId: "p1", answers: ans(1), score: 1, isCurrent: () => false,
+    });
+    expect(result).toBe(false);
+    expect(called).toBe(false);
+  });
+});

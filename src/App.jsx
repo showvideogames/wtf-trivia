@@ -5227,6 +5227,7 @@ export default function WhatTheFudgeTrivia(){
   const[adminAuthBusy,setAdminAuthBusy]=useState(false);
   const[adminAuthError,setAdminAuthError]=useState(null);
   const authUserIdRef = useRef(null);
+  const identityVersionRef = useRef(0);
   const [accountLoader] = useState(() => createAccountDataLoader({
     ensureSession: authEnsureSession, resolveAccount: authResolveAccount,
     getPlayer: dbGetOrCreatePlayer, resolveAdminStatus,
@@ -5308,6 +5309,7 @@ export default function WhatTheFudgeTrivia(){
       if(event==="TOKEN_REFRESHED"||event==="INITIAL_SESSION") return;
       if(event==="SIGNED_IN" && session?.user?.id===authUserIdRef.current) return;
       const eventVersion = ++authVersion;
+      identityVersionRef.current += 1;
       accountLoader.invalidate();
       authUserIdRef.current = null;
       setLoading(true);
@@ -5359,6 +5361,7 @@ export default function WhatTheFudgeTrivia(){
     });
     return ()=>{
       active = false;
+      identityVersionRef.current += 1;
       accountLoader.invalidate();
       clearTimeout(authReloadTimer);
       subscription.unsubscribe();
@@ -5640,12 +5643,22 @@ export default function WhatTheFudgeTrivia(){
     setEditGame(null);
   };
 
+  // A late save may finish after sign-out or after the same account signs in
+  // again. Never publish its old result into the replacement session's UI.
+  const capturePlayer = () => {
+    const version = identityVersionRef.current;
+    const id = player?.id;
+    return () => version === identityVersionRef.current && (!id || authUserIdRef.current === id);
+  };
+
   // Start game: the session's daily puzzle, or `game` when the Archive's
   // Today card starts the clock's day while the session still holds an
   // earlier one -- that moves the session on to the new day. `path`: the
   // address the game plays at, when it starts from somewhere else (the
   // Archive's card: the quiz's own link, as a new history entry).
   const handlePlay = async(game=todayGame, {path=null}={}) => {
+    const isCurrent = capturePlayer();
+    if(!isCurrent()) return;
     const daily = game===todayGame || (game?.date===liveDay && isReleased(game, liveDay)) ? game : null;
     if(!daily) return;
     const record = daily===todayGame ? todayRecord : null;
@@ -5661,7 +5674,9 @@ export default function WhatTheFudgeTrivia(){
       let activePlayer = player;
       if(!activePlayer){
         const session = await authEnsureSession();
+        if(!isCurrent()) return;
         activePlayer = await dbGetOrCreatePlayer(session?.user);
+        if(!isCurrent()) return;
         setPlayer(activePlayer);
       }
       if(!activePlayer){
@@ -5669,6 +5684,7 @@ export default function WhatTheFudgeTrivia(){
         return;
       }
       const rec = await dbInitGameRecord(activePlayer.id, daily);
+      if(!isCurrent()) return;
       if(daily.date!==sessionDay){
         // The record is in hand, so the new day needs no reload.
         loadedDayRef.current = daily.date;
@@ -5678,6 +5694,7 @@ export default function WhatTheFudgeTrivia(){
       if(path) setPath(path);
       setView("game");
     } catch(e){
+      if(!isCurrent()) return;
       console.error("Start game error:", e);
       showToast("Couldn't start game 😬");
     }
@@ -5693,7 +5710,7 @@ export default function WhatTheFudgeTrivia(){
     // touch the game in progress.
     await saveAnswerThenSync({
       save: ()=>dbRecordAnswer(player.id, puzzleId, answers, score),
-      setRecord: setGameRecord, puzzleId, answers, score,
+      setRecord: setGameRecord, puzzleId, answers, score, isCurrent: capturePlayer(),
     });
   };
 
@@ -5702,7 +5719,8 @@ export default function WhatTheFudgeTrivia(){
   // the share text wait for the save (see crowdStats.js). Claiming the crowd
   // request first stops the revisit loader from reading ahead of the save.
   const handleComplete = async(finalRec) => {
-    if(!player) return;
+    const isCurrent = capturePlayer();
+    if(!player || !isCurrent()) return;
     const {puzzleId} = finalRec;
     crowdRequestRef.current = `${puzzleId}:${finalRec.score}`;
     setGameRecord(finalRec);
@@ -5712,13 +5730,17 @@ export default function WhatTheFudgeTrivia(){
       fetchStats: ()=>dbGetPuzzleCommunityStats(puzzleId, finalRec.score),
       score: finalRec.score,
       onSaved: async()=>{
+        if(!isCurrent()) return;
         try{
           // Streaks count calendar days, so they use the day the puzzle ran.
           await dbUpdatePlayerStatsForFinish(player.id, finalRec.date, finalRec.score, finalRec.totalQuestions, finalRec.answers);
-          setStats(await dbGetStats(player.id));
+          if(!isCurrent()) return;
+          const updatedStats = await dbGetStats(player.id);
+          if(isCurrent()) setStats(updatedStats);
         }catch(e){ console.error("Complete game error:", e); }
       }
     });
+    if(!isCurrent()) return;
     if(result.reason==="save-failed") console.error("Complete game error:", result.error);
     setCrowd({puzzleId, score:finalRec.score, ...result});
   };
