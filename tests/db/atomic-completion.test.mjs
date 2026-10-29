@@ -123,3 +123,168 @@ test('legacy completed records and streak semantics are preserved; stale totals 
   assert.equal(repaired.total_played, 3);
   assert.equal(repaired.total_correct, 3);
 });
+
+// Hold the parent in a completion transaction, allow a competing mutation to
+// reach a real lock wait, then finish. Before the protocol fix the competing
+// delete/import can own a record while waiting for this parent: a deadlock.
+async function completionAgainst(owner, mutationSql, verify) {
+  const { session, blocked } = await import('./transaction-session.mjs');
+  const tag = owner.id.replaceAll('-', '').slice(0, 12);
+  const completion = await session(`finish_${tag}`);
+  const mutation = await session(`mutation_${tag}`);
+  let pending;
+  try {
+    await completion.query(`begin; select set_config('request.jwt.claim.sub','${owner.id}',true);
+      select 1 from public.players where id='${owner.id}' for update;`);
+    pending = mutation.query(`begin; ${mutationSql}; commit;`).then(() => null, error => error);
+    await blocked(`mutation_${tag}`);
+    await completion.query(`select public.complete_my_game('${puzzles[0]}','${JSON.stringify(answers)}'::jsonb,2); commit;`);
+    const error = await pending;
+    if (error) throw error;
+    await verify();
+  } finally {
+    await completion.close();
+    await mutation.close();
+    if (pending) await pending;
+  }
+}
+
+test('completion and account deletion use parent-before-record order at a forced lock barrier', async () => {
+  const owner = await makeAccount('delete-race');
+  await start(owner, puzzles[0]);
+  await completionAgainst(owner, `select public.delete_local_account('${owner.id}')`, () => {
+    assert.equal(sql(`select count(*) from public.players where id='${owner.id}'`), '0');
+    assert.equal(sql(`select count(*) from public.game_records where player_id='${owner.id}'`), '0');
+    assert.equal(sql(`select count(*) from auth.users where id='${owner.id}'`), '0');
+  });
+});
+
+test('completion and consenting guest import serialize and keep the completed guest winner', async () => {
+  const guest = await makeGuest();
+  const account = await makeAccount('import-race');
+  await start(guest, puzzles[0]);
+  await start(account, puzzles[0]);
+  const offer = await rpc(guest.client, 'offer_guest_history');
+  assert.equal(offer.outcome, 'ok');
+  await completionAgainst(guest, `select set_config('request.jwt.claim.sub','${account.id}',true);
+    select * from public.import_guest_history('${offer.code}')`, () => {
+    assert.equal(sql(`select count(*) from public.players where id='${guest.id}'`), '0');
+    assert.equal(sql(`select completed from public.game_records where player_id='${account.id}'`), 't');
+    assert.equal(stats(account).total_played, 1);
+    assert.equal(stats(account).total_correct, 2);
+  });
+  assert.equal((await rpc(account.client, 'import_guest_history', { _code: offer.code })).outcome, 'invalid');
+});
+
+test('completion and import into the same account serialize without losing either puzzle', async () => {
+  const guest = await makeGuest();
+  const account = await makeAccount('import-account-race');
+  await start(guest, puzzles[1]);
+  await finish(guest, puzzles[1]);
+  await start(account, puzzles[0]);
+  const offer = await rpc(guest.client, 'offer_guest_history');
+  await completionAgainst(account, `select set_config('request.jwt.claim.sub','${account.id}',true);
+    select * from public.import_guest_history('${offer.code}')`, () => {
+    assert.equal(stats(account).total_played, 2);
+    assert.equal(stats(account).total_correct, 4);
+  });
+});
+
+test('malformed legacy calendar date aborts completion and preserves prior record and cached stats', async () => {
+  const owner = await makeGuest();
+  await start(owner, puzzles[0], '2026-02-30');
+  sql(`update public.game_records set completed=true,score=2 where player_id='${owner.id}';
+       insert into public.player_stats(player_id,total_played,best_combo) values('${owner.id}',1,9)`);
+  await start(owner, puzzles[1]);
+  const before = stats(owner);
+  await assert.rejects(finish(owner, puzzles[1]), { code: '22008' });
+  await assert.rejects(rpc(owner.client, 'my_reconciled_player_stats'), { code: '22008' });
+  assert.deepEqual(stats(owner), before);
+  assert.equal(sql(`select completed from public.game_records where player_id='${owner.id}' and puzzle_id='${puzzles[1]}'`), 'f');
+});
+
+test('document baseline compatibility: incomplete history can lower best combo; no history deletes cached stats', async () => {
+  const owner = await makeGuest();
+  await start(owner, puzzles[0]);
+  sql(`update public.game_records set completed=true,score=2,answers='[]' where player_id='${owner.id}';
+       insert into public.player_stats(player_id,total_played,best_combo) values('${owner.id}',1,9)`);
+  const result = await rpc(owner.client, 'my_reconciled_player_stats');
+  assert.equal(result.best_combo, 0, 'baseline recomputation derives combo only from retained answers');
+  const empty = await makeGuest();
+  sql(`insert into public.player_stats(player_id,total_played,best_combo) values('${empty.id}',2,9)`);
+  assert.equal(await rpc(empty.client, 'my_reconciled_player_stats'), null);
+  assert.equal(sql(`select count(*) from public.player_stats where player_id='${empty.id}'`), '0');
+});
+
+test('two owners completing one puzzle contend at the community lock and both remain counted', async () => {
+  const { session, blocked } = await import('./transaction-session.mjs');
+  const a = await makeGuest(), b = await makeGuest();
+  await start(a, puzzles[0]);
+  await start(b, puzzles[0]);
+  const before = Number(sql(`select total_finished from public.puzzle_stats where puzzle_id='${puzzles[0]}'`));
+  const gate = await session('community_gate');
+  const first = await session('community_first');
+  const second = await session('community_second');
+  let tasks = [];
+  try {
+    await gate.query(`begin; select pg_advisory_xact_lock(hashtext('puzzle_stats:' || '${puzzles[0]}'));`);
+    tasks = [[first,a], [second,b]].map(([conn, owner]) => conn.query(`begin;
+      select set_config('request.jwt.claim.sub','${owner.id}',true);
+      select public.complete_my_game('${puzzles[0]}','${JSON.stringify(answers)}'::jsonb,2); commit;`).then(() => null, error => error));
+    await blocked('community_first');
+    await blocked('community_second');
+    await gate.query('commit;');
+    for (const error of await Promise.all(tasks)) if (error) throw error;
+    assert.equal(stats(a).total_played, 1);
+    assert.equal(stats(b).total_played, 1);
+    assert.equal(Number(sql(`select total_finished from public.puzzle_stats where puzzle_id='${puzzles[0]}'`)), before + 2);
+  } finally {
+    await gate.close(); await first.close(); await second.close();
+    await Promise.all(tasks);
+  }
+});
+
+test('explicit mixed-client limit: delayed direct writes can overwrite the RPC winner and aggregate', async () => {
+  const owner = await makeGuest();
+  await start(owner, puzzles[0]);
+  // An old browser has captured this finish and aggregate before the RPC.
+  const staleRecord = { completed: true, score: 0, answers: [] };
+  const staleStats = { player_id: owner.id, total_played: 99, total_correct: 99, best_combo: 9 };
+  const winner = await finish(owner, puzzles[0]);
+  assert.equal(winner.record.score, 2);
+  assert.equal(winner.stats.total_played, 1);
+  const overwrite = await owner.client.from('game_records').update(staleRecord).eq('player_id',owner.id).eq('puzzle_id',puzzles[0]);
+  assert.ifError(overwrite.error);
+  const cached = await owner.client.from('player_stats').upsert(staleStats);
+  assert.ifError(cached.error);
+  assert.equal(stats(owner).total_played, 99);
+  const retry = await finish(owner, puzzles[0]);
+  assert.equal(retry.record.score, 0, 'first-win guarantee cannot survive an unrestricted old writer');
+  assert.equal(retry.stats.total_correct, 0, 'reconciliation follows the overwritten durable record');
+});
+
+test('negative control: baseline deletion and import reproduce deadlocks under the same barriers', async () => {
+  const { readFileSync } = await import('node:fs');
+  const baseline = readFileSync(new URL('../../supabase/migrations/0001_wtf_baseline.sql', import.meta.url), 'utf8');
+  for (const name of ['delete_local_account', 'import_guest_history']) {
+    const signature = name === 'delete_local_account' ? 'uuid' : 'text';
+    const saved = sql(`select pg_get_functiondef('public.${name}(${signature})'::regprocedure)`);
+    const startAt = baseline.indexOf(`create function public.${name}(`);
+    const original = baseline.slice(startAt, baseline.indexOf('\n$$;',startAt)+4).replace('create function', 'create or replace function');
+    const owner = name === 'delete_local_account' ? await makeAccount('negative-delete') : await makeGuest();
+    await start(owner,puzzles[0]);
+    let mutation = `select public.delete_local_account('${owner.id}')`;
+    if (name === 'import_guest_history') {
+      const account = await makeAccount('negative-import');
+      await start(account,puzzles[0]);
+      const offer = await rpc(owner.client,'offer_guest_history');
+      mutation = `select set_config('request.jwt.claim.sub','${account.id}',true); select * from public.import_guest_history('${offer.code}')`;
+    }
+    try {
+      sql(original);
+      await assert.rejects(completionAgainst(owner, mutation, () => {}), /deadlock detected/);
+    } finally {
+      sql(saved);
+    }
+  }
+});
