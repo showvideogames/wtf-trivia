@@ -3553,13 +3553,13 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
     };
   },[]);
 
-  // Guard: once we've advanced past the last question, stop rendering question/reveal UI.
-  if(!cq) return null;
-
   // Pick a fresh suspense emoji each time a new question starts
   useEffect(()=>{
     e_ref.current=beatOpts[Math.floor(Math.random()*beatOpts.length)];
   },[idx]);
+
+  // Keep hooks unconditional even if a completion callback waits before navigation.
+  if(!cq) return null;
 
   const handleAnswerClick=cat=>{
     if(!answerable) return;
@@ -5726,6 +5726,12 @@ export default function WhatTheFudgeTrivia(){
   const handleComplete = async(finalRec) => {
     const isCurrent = capturePlayer();
     if(!player || !isCurrent()) return;
+    const {puzzleId} = finalRec;
+    const crowdTicket = crowdRequests.start(`${puzzleId}:${finalRec.score}`);
+    // Leave GameScreen synchronously: its question index has already advanced
+    // past the final question. Session reads/refreshes may wait on a lock.
+    setGameRecord(finalRec);
+    setView("score");
     let request;
     try {
       request = OFFLINE_PREVIEW ? sbFetch : await bindPlayerRequest({
@@ -5733,13 +5739,12 @@ export default function WhatTheFudgeTrivia(){
       });
     } catch(e) {
       console.error("Complete game error:", e);
+      if(isCurrent() && crowdRequests.owns(crowdTicket)) {
+        setCrowd({puzzleId, score:finalRec.score, status:"unavailable", reason:"save-failed"});
+      }
       return;
     }
     if(!isCurrent()) return;
-    const {puzzleId} = finalRec;
-    const crowdTicket = crowdRequests.start(`${puzzleId}:${finalRec.score}`);
-    setGameRecord(finalRec);
-    setView("score");
     const result = await saveThenLoadCrowdStats({
       save: ()=>dbCompleteGame(player.id, puzzleId, finalRec.answers, finalRec.score, finalRec.totalQuestions, request),
       fetchStats: ()=>dbGetPuzzleCommunityStats(puzzleId, finalRec.score),
