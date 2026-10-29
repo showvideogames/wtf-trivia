@@ -15,27 +15,27 @@
   },
   {
     "title": "Cluevoyance",
-    "subtitle": "A word association game best played with friends.",
+    "subtitle": "Word association game best played with friends.",
     "url": "https://cluevoyance.com/",
     "asset": "/game-icons/cluevoyance.png",
     "sourceAsset": "https://cluevoyance.com/apple-touch-icon.png"
   },
   {
     "title": "Hamburgle",
-    "subtitle": "A bite-sized, Wordle-style game.",
+    "subtitle": "Bite-sized Wordle-inspired game.",
     "url": "https://hamburgle.com/",
     "asset": "/game-icons/hamburgle.png",
     "sourceAsset": "https://hamburgle.com/icon-192.png"
   },
   {
     "title": "Yodel",
-    "subtitle": "A Family Feud-style daily climb.",
+    "subtitle": "Family Feud-style daily climb.",
     "url": "https://yodel.gg/",
     "asset": "/game-icons/yodel.png",
     "sourceAsset": "https://yodel.gg/apple-touch-icon.png"
   },
   {
-    "title": "Price Is What?!",
+    "title": "Price Is What",
     "subtitle": "Guess yesterday’s prices in today’s dollars.",
     "url": "https://priceiswhat.com/",
     "asset": "/game-icons/price-is-what.png",
