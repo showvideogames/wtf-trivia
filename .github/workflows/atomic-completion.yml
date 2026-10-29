@@ -21,6 +21,6 @@ jobs:
       - run: npm ci
       - run: npm run db:start
       - run: npm run db:reset
-      - run: npm run test:db:completion
+      - run: npm run test:db
       - if: always()
         run: npm run db:stop
