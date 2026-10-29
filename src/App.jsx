@@ -9,6 +9,7 @@ import { checkAdminStatus, deleteMyAccount, ensureAccount, signInWithPlatform, s
 import { StorageUploadError, canWriteAs, classifyStorageFailure, copyFailureCode } from "./admin/adminAccess.js";
 import { declinePendingHandoff, importPendingHandoff, resolvePendingHandoff } from "./account/guestHandoff.js";
 import { createGuestSessionGuard } from "./account/guestSession.js";
+import { createAccountDataLoader } from "./account/accountData.js";
 import { ensurePlayerRow, isAnonymousUser } from "./account/playerRow.js";
 import ImportPrompt from "./account/ImportPrompt.jsx";
 import "./home.css";
@@ -5226,6 +5227,12 @@ export default function WhatTheFudgeTrivia(){
   const[adminAuthBusy,setAdminAuthBusy]=useState(false);
   const[adminAuthError,setAdminAuthError]=useState(null);
   const authUserIdRef = useRef(null);
+  const [accountLoader] = useState(() => createAccountDataLoader({
+    ensureSession: authEnsureSession, resolveAccount: authResolveAccount,
+    getPlayer: dbGetOrCreatePlayer, resolveAdminStatus,
+    resolveHandoff: resolvePendingHandoff, loadGames: dbLoadGames,
+    getStats: dbGetStats, getRecord: dbGetGameRecord,
+  }));
 
   const sound=useSoundEngine();
   // Two days (dailySession.js):
@@ -5245,48 +5252,27 @@ export default function WhatTheFudgeTrivia(){
   const sessionDayRef = useRef(sessionDay);
   useEffect(()=>{ sessionDayRef.current = sessionDay; },[sessionDay]);
 
-  const loadAppData = useCallback(async(sessionOverride=null,{recoverAuth=false}={})=>{
-    const today = sessionDayRef.current;
-    const session = sessionOverride || await authEnsureSession({recover:recoverAuth});
-    // [accounts] a non-guest session must be a WTF account; see authResolveAccount.
-    const resolved = await authResolveAccount(session);
-    if(resolved.notice) setAccountNotice(resolved.notice);
-    const p = await dbGetOrCreatePlayer(resolved.session?.user);
-    if(!p?.id) throw new Error("Player session could not be created.");
-    if(resolved.account){
-      // The account's email is identity-first (account_email on the server); never auth.users.email.
-      p.isGuest = false;
-      p.email = resolved.account.email || p.email;
-      p.globalUserId = resolved.account.global_user_id;
-    }
-    authUserIdRef.current = p?.id || null;
-    setPlayer(p);
-    setAdminStatus(await resolveAdminStatus(resolved));
-    // [accounts] first sign-in from a browser whose guest had history: ask once.
-    setHandoff(resolved.account ? await resolvePendingHandoff().catch(()=>null) : null);
-    const [allGames, playerStats] = await Promise.all([
-      dbLoadGames(),
-      dbGetStats(p.id)
-    ]);
-    setGames(allGames);
-    setStats(playerStats);
-    // Which puzzle is today's is a scheduling question (by date); the
-    // player's record for it is looked up by the puzzle's id.
-    const todayG = allGames.find(g=>g.date===today&&g.status==="published");
-    if(todayG){
-      const rec = await dbGetGameRecord(p.id, todayG.id);
-      setGameRecord(rec);
-    } else {
-      setGameRecord(null);
-    }
-    loadedDayRef.current = today;
-  },[]);
+  const loadAppData = useCallback((sessionOverride=null,{recoverAuth=false}={})=>{
+    return accountLoader.load(sessionOverride, {recoverAuth, today:sessionDayRef.current}, snapshot=>{
+      authUserIdRef.current = snapshot.player.id;
+      setAccountNotice(snapshot.notice || null);
+      setPlayer(snapshot.player);
+      setAdminStatus(snapshot.adminStatus);
+      setHandoff(snapshot.handoff);
+      setGames(snapshot.games);
+      setStats(snapshot.stats);
+      setGameRecord(snapshot.record);
+      loadedDayRef.current = snapshot.today;
+    });
+  },[accountLoader]);
 
   // Boot and listen for auth session changes
   useEffect(()=>{
     let active = true;
     let authReloadTimer = null;
+    let authVersion = 0;
     const boot = async()=>{
+      const bootVersion = authVersion;
       try {
         setLoading(true);
         setError(null);
@@ -5296,6 +5282,7 @@ export default function WhatTheFudgeTrivia(){
           "App boot timed out."
         );
       } catch(e){
+        if(!active || bootVersion!==authVersion) return;
         console.error("[boot] first attempt failed", e);
         try{
           clearSupabaseAuthCache();
@@ -5305,12 +5292,14 @@ export default function WhatTheFudgeTrivia(){
             "App boot retry timed out."
           );
         }catch(retryError){
+          if(!active || bootVersion!==authVersion) return;
           setError("Couldn't connect to server. Check your connection.");
+          accountLoader.invalidate();
           setAdminStatus(s=>s==="checking"?"unavailable":s);
           console.error("[boot] retry failed", retryError);
         }
       } finally {
-        if(active) setLoading(false);
+        if(active && bootVersion===authVersion) setLoading(false);
       }
     };
     boot();
@@ -5318,15 +5307,26 @@ export default function WhatTheFudgeTrivia(){
       if(!active) return;
       if(event==="TOKEN_REFRESHED"||event==="INITIAL_SESSION") return;
       if(event==="SIGNED_IN" && session?.user?.id===authUserIdRef.current) return;
+      const eventVersion = ++authVersion;
+      accountLoader.invalidate();
+      authUserIdRef.current = null;
+      setLoading(true);
+      setPlayer(null);
+      setGameRecord(null);
+      setHandoff(null);
+      setLinkRecord(null);
+      setReplayRecord(null);
+      setView(v=>["game", "score", "replay", "replay-score"].includes(v)?"home":v);
       // The account changed (here or in another tab): no Studio write goes
       // out until the new one is confirmed as an admin.
       if(!OFFLINE_PREVIEW) setAdminStatus("checking");
       clearTimeout(authReloadTimer);
       authReloadTimer = setTimeout(async()=>{
-        if(!active) return;
+        if(!active || eventVersion!==authVersion) return;
         try{
           setError(null);
           const ensured = session?.user ? session : await authEnsureSession({recover:true});
+          if(!active || eventVersion!==authVersion) return;
           await withTimeout(
             loadAppData(ensured,{recoverAuth:true}),
             APP_BOOT_TIMEOUT_MS,
@@ -5336,28 +5336,34 @@ export default function WhatTheFudgeTrivia(){
           // [accounts] A sign-out in another tab can land here while the
           // browser's tabs are still agreeing on the new guest. Ask once more
           // for the (now shared) guest before giving up on the page.
+          if(!active || eventVersion!==authVersion) return;
           console.error("[auth change] reload failed, retrying once", e);
           try{
-            if(!active) return;
+            if(!active || eventVersion!==authVersion) return;
             await withTimeout(
               loadAppData(null,{recoverAuth:true}),
               APP_BOOT_TIMEOUT_MS,
               "Auth reload retry timed out."
             );
           }catch(retryError){
+            if(!active || eventVersion!==authVersion) return;
             setError("Couldn't connect to server. Check your connection.");
+            accountLoader.invalidate();
             setAdminStatus("unavailable");
             console.error("[auth change] retry failed", retryError);
           }
+        }finally{
+          if(active && eventVersion===authVersion) setLoading(false);
         }
       },0);
     });
     return ()=>{
       active = false;
+      accountLoader.invalidate();
       clearTimeout(authReloadTimer);
       subscription.unsubscribe();
     };
-  },[loadAppData]);
+  },[loadAppData, accountLoader]);
 
   // The session's daily puzzle ("today's" on Home, in the game and Results).
   const todayGame = games.find(g=>g.date===sessionDay&&g.status==="published") || null;

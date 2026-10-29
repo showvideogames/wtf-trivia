@@ -137,7 +137,17 @@ const toAccount = (row) => ({
  */
 export async function ensureAccount() {
   if (!supabase) return { ok: false, account: null, reason: "unavailable", message: HUB_UNAVAILABLE };
-  const { data, error } = await supabase.rpc("ensure_account");
+  const { data: initial } = await supabase.auth.getSession();
+  const session = initial?.session;
+  if (!session?.user?.id || !session.access_token) {
+    return { ok: false, account: null, reason: "not_signed_in", message: "Not signed in." };
+  }
+  const { data, error } = await supabase.rpc("ensure_account")
+    .setHeader("Authorization", `Bearer ${session.access_token}`);
+  const { data: latest } = await supabase.auth.getSession();
+  if (latest?.session?.user?.id !== session.user.id) {
+    return { ok: false, account: null, reason: "session_changed", message: "Account changed. Please try again." };
+  }
   if (error) return { ok: false, account: null, reason: "unavailable", message: error.message };
   const row = Array.isArray(data) ? data[0] : data;
   switch (row?.outcome) {
