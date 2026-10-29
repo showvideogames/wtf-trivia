@@ -1,5 +1,23 @@
 # WTF Trivia
 
+## Start here for the next session
+
+This is **What The Fudge Trivia**. Players assign each clue to one of two categories, reveal the answer, then compare and share results; see [player instructions](src/HowToPlay.jsx). Read [shared accounts](docs/SHARED-ACCOUNTS.md), the [pre-launch checklist](docs/pre-launch-checklist.md), and the [puzzle ID cutover record](supabase/puzzle_id_cutover/PLAN.md). Use the root app; the nested `wtf-trivia/README.md` is not the primary entry point. The React/Vite app, Studio and gameplay are in `src/`; `supabase/migrations/` and `tools/hosted.mjs` define database changes and content-safety tooling.
+
+### Status checked 2026-10-29
+
+`main` is `c349a5cc9b24d5b277336b31a8e7c77cd8088435`; GitHub records a [successful Production deployment](https://api.github.com/repos/showvideogames/wtf-trivia/deployments/7269941420/statuses) for it. The recent merged work includes picture quizzes, desktop layout fitting and the temporary beta editing override. That establishes source/release history, not the override's current hosted flag or expiry.
+
+The pre-launch checklist explicitly requires ending the beta editing override before launch. Its older exposure, draft privacy and concurrent-finish items need current verification; do not label them fixed or current exploitable bugs from the checklist alone. Published/played content stability matters because edits can invalidate saved picks, results and links. Studio editing is not authorization to alter approved content.
+
+### Checks and release boundary
+
+Use the local setup below. `npm run test:unit` and `npm run build` do not establish hosted account acceptance; `npm test` also needs the disposable local database. `npm run lint` is configured. No game suites, migrations or live account tests were run in this documentation pass.
+
+WorkOS supplies shared identity through this game's Supabase Auth; guests have anonymous sessions, and row ownership is enforced in the database. Configure Preview and Production deliberately: identical variable names do not require identical backend values. The old instruction to copy the same environment everywhere could couple preview writes to live data; actual hosting values were not inspected. Use a disposable backend for tests that create games or player records.
+
+Before a later release, resolve the checklist items with evidence, record the exact deployment and schema state, and retain the previous deployment. A frontend rollback does not undo content edits or database flags. Content snapshots are not proof of complete player/account/storage recovery; confirm backup scope and rehearse restoration separately. Keep content queue ownership and publish approval explicit.
+
 WTF Trivia is a React + Vite trivia game with:
 
 - a public daily game experience
@@ -30,7 +48,8 @@ This repo is configured for Vercel with [vercel.json](vercel.json), which forces
 - output directory: `dist`
 - SPA rewrites for `/admin` and `/auth/callback`
 
-Add the same environment variables in Vercel for Production, Preview, and Development.
+Set the required variable names separately for Production, Preview and Development.
+Use isolated backend values for write-testing environments; do not blindly copy production values.
 
 Production address: `https://whatthefudge.gg` (Vercel project `wtf-trivia`, not `wtf-triviaold`). `www.whatthefudge.gg` redirects to it with a 308. `wtf-trivia.vercel.app` keeps serving the app so guests who started there keep their session.
 
