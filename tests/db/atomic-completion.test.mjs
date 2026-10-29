@@ -312,3 +312,32 @@ test('account refresh waits before the account row while deletion holds the play
     if (pending) await pending;
   }
 });
+
+test('revoking consent while import waits invalidates the code without moving guest history', async () => {
+  const { session, blocked } = await import('./transaction-session.mjs');
+  const guest = await makeGuest();
+  const account = await makeAccount('revoke-waiting-import');
+  await start(guest, puzzles[0]);
+  const offer = await rpc(guest.client, 'offer_guest_history');
+  assert.equal(offer.outcome, 'ok');
+  const gate = await session('consent_gate');
+  const importer = await session('consent_importer');
+  let pending;
+  try {
+    await gate.query(`begin; select 1 from public.players where id='${guest.id}' for update;`);
+    pending = importer.query(`begin; select set_config('request.jwt.claim.sub','${account.id}',true);
+      select * from public.import_guest_history('${offer.code}'); commit;`).then(value => ({value}), error => ({error}));
+    await blocked('consent_importer');
+    assert.equal((await rpc(account.client, 'decline_guest_history', { _code: offer.code })).outcome, 'started_fresh');
+    await gate.query('commit;');
+    const result = await pending;
+    if (result.error) throw result.error;
+    assert.match(result.value, /invalid\|0\|0\|0/);
+    assert.equal(sql(`select count(*) from public.game_records where player_id='${guest.id}'`), '1');
+    assert.equal(sql(`select count(*) from public.game_records where player_id='${account.id}'`), '0');
+    assert.equal(sql(`select count(*) from auth.users where id='${guest.id}'`), '1');
+  } finally {
+    await gate.close(); await importer.close();
+    if (pending) await pending;
+  }
+});

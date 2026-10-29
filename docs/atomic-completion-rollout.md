@@ -1,6 +1,6 @@
 # Atomic completion: backend preparation, not a release
 
-Migration 0008 is unapplied to hosted databases. This draft adds two RPCs, coordinates existing mutation locks, and adds local database tests; it deliberately does not switch App.jsx to use them. Merging or deploying the frontend alone does not fix the remaining completion/stats consistency gap. Do not apply the migration without separate database/security release review.
+Migration 0008 is unapplied to hosted databases. This draft adds two RPCs, coordinates existing mutation locks, and adds local database tests; it deliberately does not switch App.jsx to use them. Merging or deploying the frontend alone does not fix the remaining completion/stats consistency gap. Do not apply the migration without separate database/security release review. Applying this migration immediately changes the locking behavior of existing handoff, import, account deletion and account refresh callers, even before any frontend adopts the new RPCs. It is not merely an installation of unused endpoints.
 
 ## Existing failure and new contract
 
