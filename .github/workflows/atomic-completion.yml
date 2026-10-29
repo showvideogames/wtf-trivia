@@ -6,6 +6,9 @@ on:
       - 'tests/db/**'
       - 'package*.json'
       - '.github/workflows/atomic-completion.yml'
+concurrency:
+  group: wtf-local-database-tests
+  cancel-in-progress: false
 permissions:
   contents: read
 jobs:
@@ -19,7 +22,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run db:start
+      - run: npx supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector,supavisor,mailpit,studio,postgres-meta
       - run: npm run db:reset
       - run: npm run test:db
       - if: always()
