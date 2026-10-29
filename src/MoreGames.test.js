@@ -42,3 +42,20 @@ it("keeps existing navigation and returns focus after Escape", async () => {
   expect(visits).toBe(1);
   expect(button.getAttribute("aria-expanded")).toBe("false");
 });
+
+it("keeps the real PlayerHeader's four-link desktop track separate from More Games", async () => {
+  const { default: PlayerHeader } = await import("./PlayerHeader.jsx");
+  const { PlayerChromeContext } = await import("./playerChrome.js");
+  const host = document.createElement("div"); document.body.append(host); root = createRoot(host);
+  const chrome = {
+    nav: ["Play", "Archive", "Stats", "How to Play"].map(label => ({id:label,label,href:"/"+label,onClick(){}})),
+    sound:{muted:false,setMuted(){}},account:{label:"Sign in",onClick(){}},
+  };
+  await act(async () => root.render(React.createElement(PlayerChromeContext.Provider, {value:chrome}, React.createElement(PlayerHeader))));
+  expect(host.querySelectorAll(".sh-nav > a")).toHaveLength(4);
+  expect(host.querySelector(".sh-nav button")).toBeNull();
+  const desktop = host.querySelector('.sh-tools button[aria-label="More Games"]');
+  expect(desktop).not.toBeNull();
+  await act(async () => desktop.click());
+  expect(host.querySelectorAll(".sh-tools .more-games a")).toHaveLength(6);
+});

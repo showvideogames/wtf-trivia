@@ -86,10 +86,10 @@ function HeaderMenu({ items, current, moreOnly = false }) {
 
   return (
     <div className="sh-menu" ref={wrapRef}>
-      <button type="button" ref={buttonRef} className={moreOnly ? "sh-link" : "sh-icon-btn sh-menu-btn"}
+      <button type="button" ref={buttonRef} className={moreOnly ? "sh-icon-btn" : "sh-icon-btn sh-menu-btn"}
               aria-expanded={open} aria-controls={panelId} aria-label={moreOnly ? "More Games" : "Menu"}
               onClick={() => setOpen((o) => !o)}>
-        {moreOnly ? "More Games" : <MenuGlyph/>}
+        <MenuGlyph/>
       </button>
       {open && (
         <nav className="sh-menu-panel" id={panelId} ref={panelRef} aria-label={moreOnly ? "More Games" : "Main"}>
@@ -194,7 +194,6 @@ export default function SiteHeader({ nav, current, sound, account, admin }) {
         )}
       </div>
       <nav className="sh-nav" aria-label="Main">
-        <HeaderMenu items={[]} moreOnly/>
         {nav.map((item) => (
           <NavItem key={item.id} item={item}
                    className={currentClass("sh-link", item.id, current)}
@@ -207,6 +206,7 @@ export default function SiteHeader({ nav, current, sound, account, admin }) {
           artwork, cropped), on every screen and at every width. */}
       <img src="/wtf-logo-wordmark.png" alt="What The Fudge" className="sh-logo"/>
       <div className="sh-tools">
+        <div className="sh-more-desktop"><HeaderMenu items={[]} moreOnly/></div>
         {help && (
           <NavItem item={help} className={currentClass("sh-icon-btn sh-shortcut sh-help", "help", current)}
                    aria-label={help.label} title={help.label}>
