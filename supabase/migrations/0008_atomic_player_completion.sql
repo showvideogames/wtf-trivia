@@ -87,11 +87,9 @@ begin
     return;
   end if;
   -- Parent before handoff rows: consistent with import and deletion.
+  -- Keep the guest eligibility check first in response precedence even when
+  -- no player row exists; a non-guest still receives not_a_guest.
   perform 1 from public.players where id = _uid for update;
-  if not found then
-    return query select 'no_history'::text, null::text, 0, 0, 0, 0, 0;
-    return;
-  end if;
   -- Only an anonymous guest that is not an account can hand anything over.
   if exists (select 1 from public.accounts a where a.user_id = _uid)
      or not exists (select 1 from auth.users u where u.id = _uid and u.is_anonymous) then
