@@ -288,3 +288,27 @@ test('negative control: baseline deletion and import reproduce deadlocks under t
     }
   }
 });
+
+test('account refresh waits before the account row while deletion holds the player', async () => {
+  const { session, blocked } = await import('./transaction-session.mjs');
+  const owner = await makeAccount('refresh-delete');
+  const deletion = await session('refresh_delete_owner');
+  const refresh = await session('refresh_delete_waiter');
+  let pending;
+  try {
+    await deletion.query(`begin; select 1 from public.players where id='${owner.id}' for update;`);
+    pending = refresh.query(`begin; select set_config('request.jwt.claim.sub','${owner.id}',true);
+      select * from public.ensure_account(); commit;`).then(() => null, error => error);
+    await blocked('refresh_delete_waiter');
+    await deletion.query(`select public.delete_local_account('${owner.id}'); commit;`);
+    // A refresh authenticated before deletion may fail its FK after deletion;
+    // it must never resurrect the owner or deadlock with deletion.
+    const result = await pending;
+    if (result) assert.doesNotMatch(result.message, /deadlock detected/);
+    assert.equal(sql(`select count(*) from public.players where id='${owner.id}'`), '0');
+    assert.equal(sql(`select count(*) from public.accounts where user_id='${owner.id}'`), '0');
+  } finally {
+    await deletion.close(); await refresh.close();
+    if (pending) await pending;
+  }
+});

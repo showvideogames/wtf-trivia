@@ -260,3 +260,54 @@ begin
   end if;
 end;
 $$;
+
+
+create or replace function public.ensure_account()
+returns table(outcome text, user_id uuid, global_user_id text, email text, created_at timestamptz)
+language plpgsql security definer set search_path = public as $$
+#variable_conflict use_column
+declare
+  _uid uuid := auth.uid();
+  _gid text;
+begin
+  if _uid is null then
+    return query select 'not_signed_in'::text, null::uuid, null::text, null::text, null::timestamptz;
+    return;
+  end if;
+
+  -- The link is read from GoTrue's identity table, never from the client.
+  select i.provider_id
+    into _gid
+    from auth.identities i
+   where i.user_id = _uid
+     and i.provider = 'custom:platform'
+   order by i.created_at
+   limit 1;
+
+  if _gid is null then
+    -- A guest (anonymous user) or an auth user that did not come through the
+    -- shared sign-in (the old email/password beta users, dashboard users).
+    -- Not, and never becomes, an account.
+    return query select 'not_platform_linked'::text, null::uuid, null::text, null::text, null::timestamptz;
+    return;
+  end if;
+
+  -- Existing account refresh must take the player before the account row,
+  -- matching deletion. Both upserts still commit or roll back together.
+  insert into public.players (id, email, is_guest, last_seen_at)
+  values (_uid, public.account_email(_uid), false, now())
+  on conflict (id) do update
+    set email = excluded.email, is_guest = false, last_seen_at = now();
+
+  insert into public.accounts (user_id, global_user_id)
+  values (_uid, _gid)
+  on conflict (user_id) do update
+    set last_seen_at = now();
+
+
+  return query
+    select 'ok'::text, a.user_id, a.global_user_id, public.account_email(a.user_id), a.created_at
+      from public.accounts a
+     where a.user_id = _uid;
+end;
+$$;
