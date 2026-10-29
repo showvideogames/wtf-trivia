@@ -3334,7 +3334,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
   const{play}=sound;
   const{canvasRef,shoot}=useConfetti();
   const beatOpts=["🤔","🤔","🤔","😬"];
-  const e_ref=useRef(beatOpts[Math.floor(Math.random()*beatOpts.length)]);
+  const [beatEmoji,setBeatEmoji]=useState(()=>beatOpts[Math.floor(Math.random()*beatOpts.length)]);
 
   const idx=rec.currentIndex;
   const qs=game.questions.map(q=>({...q,_catA:game.categoryA,_catB:game.categoryB}));
@@ -3553,11 +3553,6 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
     };
   },[]);
 
-  // Pick a fresh suspense emoji each time a new question starts
-  useEffect(()=>{
-    e_ref.current=beatOpts[Math.floor(Math.random()*beatOpts.length)];
-  },[idx]);
-
   // Keep hooks unconditional even if a completion callback waits before navigation.
   if(!cq) return null;
 
@@ -3595,6 +3590,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
       if(final.score===final.totalQuestions){play("perfect");shoot("perfect");}
       onComplete(final);
     } else {
+      setBeatEmoji(beatOpts[Math.floor(Math.random()*beatOpts.length)]);
       setPhase("question");
     }
   };
@@ -3701,7 +3697,7 @@ function GameScreen({game,gameRecord:initRec,onAnswer,onComplete,sound,isReplay=
 
       {phase==="beat"&&(
         <div className="beat-overlay">
-          <span className="beat-emoji-pop">{e_ref.current}</span>
+          <span className="beat-emoji-pop">{beatEmoji}</span>
         </div>
       )}
 
