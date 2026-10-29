@@ -543,3 +543,11 @@ button.candy-badge:active { transform: translateY(2px); box-shadow: 0 1px 0 var(
   .candy-btn:active,
   button.candy-badge:active { transform: none; }
 }
+
+/* Keep the portfolio links reachable in short phone and desktop viewports. */
+.sh-menu-panel { width: min(320px, calc(100vw - 32px)); max-height: calc(100dvh - 100px); overflow-y: auto; overscroll-behavior: contain; z-index: 50; }
+.sh-more-desktop .sh-menu { position: relative; }
+.sh-more-desktop .sh-menu-panel { left: auto; right: 0; }
+@media (max-width: 899px) { .sh-more-desktop { display: none; } }
+.ph-compact .sh-more-desktop { display: none; }
+.sh-more-desktop .more-games { margin-top: 0; padding-top: 0; border-top: 0; }

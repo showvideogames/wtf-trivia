@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 
+import MoreGames from "./MoreGames.jsx";
+
 // ---- SITE HEADER ----
 // The cream navigation bar from the Archive design: page links on the left,
 // the logo in the middle, the player's own controls (sound, Admin when the
@@ -58,7 +60,7 @@ function NavItem({ item, onClick = item.onClick, children, ...props }) {
 // outside the header closes it; choosing an item closes it and puts focus back
 // on the button (so a dialog it opens can return focus there), then runs the
 // item's own action.
-function HeaderMenu({ items, current }) {
+function HeaderMenu({ items, current, moreOnly = false }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const wrapRef = useRef(null);
@@ -84,13 +86,13 @@ function HeaderMenu({ items, current }) {
 
   return (
     <div className="sh-menu" ref={wrapRef}>
-      <button type="button" ref={buttonRef} className="sh-icon-btn sh-menu-btn"
-              aria-expanded={open} aria-controls={panelId} aria-label="Menu"
+      <button type="button" ref={buttonRef} className={moreOnly ? "sh-icon-btn" : "sh-icon-btn sh-menu-btn"}
+              aria-expanded={open} aria-controls={panelId} aria-label={moreOnly ? "More Games" : "Menu"}
               onClick={() => setOpen((o) => !o)}>
         <MenuGlyph/>
       </button>
       {open && (
-        <nav className="sh-menu-panel" id={panelId} ref={panelRef} aria-label="Main">
+        <nav className="sh-menu-panel" id={panelId} ref={panelRef} aria-label={moreOnly ? "More Games" : "Main"}>
           <ul>
             {items.map((item) => (
               <li key={item.id}>
@@ -105,6 +107,7 @@ function HeaderMenu({ items, current }) {
               </li>
             ))}
           </ul>
+          <MoreGames/>
         </nav>
       )}
     </div>
@@ -203,6 +206,7 @@ export default function SiteHeader({ nav, current, sound, account, admin }) {
           artwork, cropped), on every screen and at every width. */}
       <img src="/wtf-logo-wordmark.png" alt="What The Fudge" className="sh-logo"/>
       <div className="sh-tools">
+        <div className="sh-more-desktop"><HeaderMenu items={[]} moreOnly/></div>
         {help && (
           <NavItem item={help} className={currentClass("sh-icon-btn sh-shortcut sh-help", "help", current)}
                    aria-label={help.label} title={help.label}>
