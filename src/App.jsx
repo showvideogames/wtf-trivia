@@ -10,7 +10,7 @@ import { StorageUploadError, canWriteAs, classifyStorageFailure, copyFailureCode
 import { declinePendingHandoff, importPendingHandoff, resolvePendingHandoff } from "./account/guestHandoff.js";
 import { createGuestSessionGuard } from "./account/guestSession.js";
 import { createAccountDataLoader } from "./account/accountData.js";
-import { ensurePlayerRow, isAnonymousUser } from "./account/playerRow.js";
+import { bindPlayerRequest, ensurePlayerRow, isAnonymousUser } from "./account/playerRow.js";
 import ImportPrompt from "./account/ImportPrompt.jsx";
 import "./home.css";
 import "./game.css";
@@ -24,12 +24,12 @@ import "./paperLook.css";
 import "./admin/studio.css";
 import { preloadImage, getImageStatus, primeActiveWindow, usableMediaUrl } from "./mediaPreloader.js";
 import { archivePuzzleImages, describeImageWarning, failureReason, imageName, isWarningResolved } from "./admin/publishImages.js";
-import { crowdBeatPercent, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats } from "./crowdStats.js";
+import { crowdBeatPercent, createCrowdRequestTracker, crowdStatsFor, loadCrowdStats, saveThenLoadCrowdStats } from "./crowdStats.js";
 import { gameToRow, rowToGame } from "./gameRow.js";
 import { copyText, puzzleArtworkUrl, shareResult, teaserArtworkUrl, wideArtworkUrl } from "./homeShare.js";
 import { gameDayKey, isReleased, nextPuzzle, releaseTime, shiftDay } from "./schedule.js";
 import { sessionGameDay } from "./dailySession.js";
-import { statsAfterFinish } from "./playerStats.js";
+import { statsAfterFinish, syncFinishedPlayerStats } from "./playerStats.js";
 import { buildResultsShareText, normalizeShareLabel } from "./share.js";
 import { puzzleIdFromPath, puzzlePath } from "./puzzleLink.js";
 import { quizPath, quizSlugFromPath, resolveQuizSlugs, slugifyTitle } from "./quizSlug.js";
@@ -2189,9 +2189,9 @@ async function dbRecordAnswer(playerId, puzzleId, answers, score){
 // updated row as completed; throws otherwise. The puzzle_stats trigger on
 // game_records runs inside this same UPDATE's transaction, so crowd stats
 // read after this resolves already count the game (see crowdStats.js).
-async function dbCompleteGame(playerId, puzzleId, answers, score, totalQuestions){
+async function dbCompleteGame(playerId, puzzleId, answers, score, totalQuestions, request=sbFetch){
   if(OFFLINE_PREVIEW) return devCompleteGame(puzzleId, answers, score, totalQuestions);
-  const rows = await sbFetch(`/rest/v1/game_records?${puzzleFilter(playerId, puzzleId)}`, {
+  const rows = await request(`/rest/v1/game_records?${puzzleFilter(playerId, puzzleId)}`, {
     method:"PATCH",
     body: JSON.stringify({answers, score, completed:true, completed_at:new Date().toISOString()})
   });
@@ -2199,9 +2199,9 @@ async function dbCompleteGame(playerId, puzzleId, answers, score, totalQuestions
   if(!confirmed) throw new Error("The database didn't confirm the finished game.");
 }
 // The player's own streak/totals, updated after the finished game is saved.
-async function dbUpdatePlayerStatsForFinish(playerId, date, score, totalQuestions, answers){
+async function dbUpdatePlayerStatsForFinish(playerId, date, score, totalQuestions, answers, request=sbFetch){
   if(OFFLINE_PREVIEW) return; // devCompleteGame already updated them
-  await dbUpdateStats(playerId, date, score, totalQuestions, answers);
+  await dbUpdateStats(playerId, date, score, totalQuestions, answers, request);
 }
 async function dbGetPuzzleCommunityStats(puzzleId, userScore){
   if(OFFLINE_PREVIEW) return devCommunityStats(puzzleId, userScore);
@@ -2302,19 +2302,19 @@ async function dbGetArchiveStats(){
 }
 
 // ===== DB FUNCTIONS — STATS =====
-async function dbGetStats(playerId){
+async function dbGetStats(playerId, request=sbFetch, strict=false){
   if(OFFLINE_PREVIEW) return devGetStats();
   try {
-    const rows = await sbFetch(`/rest/v1/player_stats?player_id=eq.${playerId}&select=*`);
+    const rows = await request(`/rest/v1/player_stats?player_id=eq.${playerId}&select=*`);
     if(!rows||!rows.length) return {currentStreak:0,longestStreak:0,lastPlayedDate:null,totalPlayed:0,totalCorrect:0,totalQuestions:0,bestCombo:0};
     const r = rows[0];
     return {currentStreak:r.current_streak,longestStreak:r.longest_streak,lastPlayedDate:r.last_played_date,totalPlayed:r.total_played,totalCorrect:r.total_correct,totalQuestions:r.total_questions,bestCombo:r.best_combo};
-  } catch(e){ return {currentStreak:0,longestStreak:0,lastPlayedDate:null,totalPlayed:0,totalCorrect:0,totalQuestions:0,bestCombo:0}; }
+  } catch(e){ if(strict) throw e; return {currentStreak:0,longestStreak:0,lastPlayedDate:null,totalPlayed:0,totalCorrect:0,totalQuestions:0,bestCombo:0}; }
 }
-async function dbUpdateStats(playerId, date, score, totalQuestions, answers){
+async function dbUpdateStats(playerId, date, score, totalQuestions, answers, request=sbFetch){
   // Streaks go by the puzzle's date (playerStats.js), not the clock.
-  const s = statsAfterFinish(await dbGetStats(playerId), {date, score, totalQuestions, bestCombo:calcBestCombo(answers)});
-  await sbFetch("/rest/v1/player_stats", {
+  const s = statsAfterFinish(await dbGetStats(playerId, request, true), {date, score, totalQuestions, bestCombo:calcBestCombo(answers)});
+  await request("/rest/v1/player_stats", {
     method:"POST",
     headers:{"Prefer":"resolution=merge-duplicates"},
     body: JSON.stringify({
@@ -5228,6 +5228,7 @@ export default function WhatTheFudgeTrivia(){
   const[adminAuthError,setAdminAuthError]=useState(null);
   const authUserIdRef = useRef(null);
   const identityVersionRef = useRef(0);
+  const [crowdRequests] = useState(createCrowdRequestTracker);
   const [accountLoader] = useState(() => createAccountDataLoader({
     ensureSession: authEnsureSession, resolveAccount: authResolveAccount,
     getPlayer: dbGetOrCreatePlayer, resolveAdminStatus,
@@ -5318,6 +5319,8 @@ export default function WhatTheFudgeTrivia(){
       setHandoff(null);
       setLinkRecord(null);
       setReplayRecord(null);
+      crowdRequests.reset();
+      setCrowd(null);
       setView(v=>["game", "score", "replay", "replay-score"].includes(v)?"home":v);
       // The account changed (here or in another tab): no Studio write goes
       // out until the new one is confirmed as an admin.
@@ -5363,10 +5366,11 @@ export default function WhatTheFudgeTrivia(){
       active = false;
       identityVersionRef.current += 1;
       accountLoader.invalidate();
+      crowdRequests.reset();
       clearTimeout(authReloadTimer);
       subscription.unsubscribe();
     };
-  },[loadAppData, accountLoader]);
+  },[loadAppData, accountLoader, crowdRequests]);
 
   // The session's daily puzzle ("today's" on Home, in the game and Results).
   const todayGame = games.find(g=>g.date===sessionDay&&g.status==="published") || null;
@@ -5460,16 +5464,17 @@ export default function WhatTheFudgeTrivia(){
   // loads them in handleComplete, after its save. A game already finished
   // before this page load (it's in the database) loads them here, once.
   const[crowd,setCrowd]=useState(null);
-  const crowdRequestRef=useRef(null);
   useEffect(()=>{
     if(!gameRecord?.completed || !gameRecord.puzzleId) return;
     const {puzzleId, score} = gameRecord;
     const key = `${puzzleId}:${score}`;
-    if(crowdRequestRef.current===key) return;
-    crowdRequestRef.current = key;
+    const ticket = crowdRequests.claim(key);
+    if(!ticket) return;
     loadCrowdStats({fetchStats:()=>dbGetPuzzleCommunityStats(puzzleId, score), score})
-      .then(result=>setCrowd({puzzleId, score, ...result}));
-  },[gameRecord]);
+      .then(result=>{
+        if(crowdRequests.owns(ticket)) setCrowd({puzzleId, score, ...result});
+      });
+  },[gameRecord, crowdRequests]);
 
   const showToast = m => { setToast(m); setTimeout(()=>setToast(null),2100); };
 
@@ -5721,26 +5726,32 @@ export default function WhatTheFudgeTrivia(){
   const handleComplete = async(finalRec) => {
     const isCurrent = capturePlayer();
     if(!player || !isCurrent()) return;
+    let request;
+    try {
+      request = OFFLINE_PREVIEW ? sbFetch : await bindPlayerRequest({
+        playerId: player.id, getSession: getAuthSession, fetchWithToken: sbFetchWithToken,
+      });
+    } catch(e) {
+      console.error("Complete game error:", e);
+      return;
+    }
+    if(!isCurrent()) return;
     const {puzzleId} = finalRec;
-    crowdRequestRef.current = `${puzzleId}:${finalRec.score}`;
+    const crowdTicket = crowdRequests.start(`${puzzleId}:${finalRec.score}`);
     setGameRecord(finalRec);
     setView("score");
     const result = await saveThenLoadCrowdStats({
-      save: ()=>dbCompleteGame(player.id, puzzleId, finalRec.answers, finalRec.score, finalRec.totalQuestions),
+      save: ()=>dbCompleteGame(player.id, puzzleId, finalRec.answers, finalRec.score, finalRec.totalQuestions, request),
       fetchStats: ()=>dbGetPuzzleCommunityStats(puzzleId, finalRec.score),
       score: finalRec.score,
-      onSaved: async()=>{
-        if(!isCurrent()) return;
-        try{
-          // Streaks count calendar days, so they use the day the puzzle ran.
-          await dbUpdatePlayerStatsForFinish(player.id, finalRec.date, finalRec.score, finalRec.totalQuestions, finalRec.answers);
-          if(!isCurrent()) return;
-          const updatedStats = await dbGetStats(player.id);
-          if(isCurrent()) setStats(updatedStats);
-        }catch(e){ console.error("Complete game error:", e); }
-      }
+      onSaved: ()=>syncFinishedPlayerStats({
+        update: ()=>dbUpdatePlayerStatsForFinish(player.id, finalRec.date, finalRec.score, finalRec.totalQuestions, finalRec.answers, request),
+        read: ()=>dbGetStats(player.id, request),
+        publish: setStats,
+        isCurrent,
+      }).catch(e=>console.error("Complete game stats error:", e)),
     });
-    if(!isCurrent()) return;
+    if(!isCurrent() || !crowdRequests.owns(crowdTicket)) return;
     if(result.reason==="save-failed") console.error("Complete game error:", result.error);
     setCrowd({puzzleId, score:finalRec.score, ...result});
   };
