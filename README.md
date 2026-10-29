@@ -6,7 +6,7 @@ This is **What The Fudge Trivia**. Players assign each clue to one of two catego
 
 ### Status checked 2026-10-29
 
-`main` is `c349a5cc9b24d5b277336b31a8e7c77cd8088435`; GitHub records a [successful Production deployment](https://api.github.com/repos/showvideogames/wtf-trivia/deployments/7269941420/statuses) for it. The recent merged work includes picture quizzes, desktop layout fitting and the temporary beta editing override. That establishes source/release history, not the override's current hosted flag or expiry.
+Release snapshot checked 2026-10-29: `main` at `4b084db59f88072d903a1043b56870881e489a06` has a [successful Production deployment](https://api.github.com/repos/showvideogames/wtf-trivia/deployments/7404114243/statuses) for the active `wtf-trivia` project. [PR 77](https://github.com/showvideogames/wtf-trivia/pull/77) merged there, isolating account loading and expired-session retries by player. The earlier `c349a5c` release included picture quizzes, desktop layout fitting and the temporary beta editing override. Neither deployment record establishes the override's current hosted flag or expiry. The obsolete `wtf-triviaold` project's check is separate from the active site's deployment evidence.
 
 The pre-launch checklist explicitly requires ending the beta editing override before launch. Its older exposure, draft privacy and concurrent-finish items need current verification; do not label them fixed or current exploitable bugs from the checklist alone. Published/played content stability matters because edits can invalidate saved picks, results and links. Studio editing is not authorization to alter approved content.
 
