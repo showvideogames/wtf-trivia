@@ -69,7 +69,7 @@ export function EditorHeader({heading, title, headerImage, status, onBack, actio
   return(
     <header className="ps-editor-head" ref={ref}>
       <div className="ps-editor-head-row">
-        <button type="button" className="ps-btn ps-back" onClick={onBack}><Icon name="back" size={18}/>Back</button>
+        <button type="button" className="ps-btn ps-back" onClick={onBack}><Icon name="back" size={18}/><span className="ps-back-label">All puzzles</span></button>
         <span className="ps-head-divider" aria-hidden="true"/>
         <h1 className="ps-head-heading">{heading}</h1>
         <div className="ps-head-puzzle">
@@ -83,6 +83,38 @@ export function EditorHeader({heading, title, headerImage, status, onBack, actio
       </div>
       {notice&&<div className="ps-head-notice">{notice}</div>}
     </header>
+  );
+}
+
+// What stands between this puzzle and Publish, from publishReadiness
+// (questionStatus.js), each with a way to it. Publish still explains itself
+// when pressed; this only says so sooner. Nothing to do on a retired puzzle,
+// or on a published one with nothing wrong.
+export function PublishReadiness({readiness, published, retired, onGo}){
+  const {blocking, unfinished} = readiness;
+  if(retired||(published&&!blocking.length)) return null;
+  if(blocking.length) return(
+    <section className="ps-ready" aria-labelledby="ps-ready-title">
+      <h2 id="ps-ready-title">Before you can publish</h2>
+      <ul className="ps-ready-list">
+        {blocking.map(b=>(
+          <li key={b.key}><button type="button" className="ps-link-btn" onClick={()=>onGo(b.go)}>{b.text}</button></li>
+        ))}
+      </ul>
+    </section>
+  );
+  const n = unfinished.length;
+  return(
+    <section className="ps-ready is-ok" aria-labelledby="ps-ready-title">
+      <Icon name="check" size={18}/>
+      <h2 id="ps-ready-title">Ready to publish</h2>
+      {n>0&&(
+        <>
+          <button type="button" className="ps-link-btn" onClick={()=>onGo("questions")}>{n} question{n===1?"":"s"} still unfinished</button>
+          <span className="ps-ready-note">This won&rsquo;t stop publishing.</span>
+        </>
+      )}
+    </section>
   );
 }
 

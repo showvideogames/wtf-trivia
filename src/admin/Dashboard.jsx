@@ -30,6 +30,11 @@ function matchup(g){
   return [g.categoryA, g.categoryB].filter(Boolean).join(" vs ") || "Categories not set";
 }
 
+// The database row shows the stored puzzle; this says the device holds more.
+function DeviceEditsNote(){
+  return <span className="ps-device-note"><span className="ps-status-dot" aria-hidden="true"/>Unsaved edits on this device</span>;
+}
+
 function SectionHead({icon, tone, title, sub, children}){
   return(
     <div className="ps-dash-head">
@@ -45,7 +50,7 @@ function SectionHead({icon, tone, title, sub, children}){
 
 // One puzzle per row: date, title with its matchup, questions, status, Edit.
 // On phones the columns fold into a two-line card.
-function PuzzleTable({games, today, onEdit, quiet=false}){
+function PuzzleTable({games, today, onEdit, deviceEdits, quiet=false}){
   return(
     <div className={`ps-table${quiet?" is-quiet":""}`} role="table">
       <div className="ps-tr ps-th" role="row">
@@ -64,6 +69,7 @@ function PuzzleTable({games, today, onEdit, quiet=false}){
           <span className="ps-td-title" role="cell">
             <strong>{g.themeTitle||"Untitled puzzle"}</strong>
             <small>{matchup(g)}</small>
+            {deviceEdits(g)&&<DeviceEditsNote/>}
           </span>
           <span className="ps-td-count" role="cell">{questionCount(g)}</span>
           <span className="ps-td-status" role="cell"><StatusBadge game={g} today={today}/></span>
@@ -76,7 +82,8 @@ function PuzzleTable({games, today, onEdit, quiet=false}){
   );
 }
 
-export default function Dashboard({games, today, onNew, onEdit, onLogout, onExit}){
+// deviceEdits: puzzle => true when this device holds edits it hasn't saved.
+export default function Dashboard({games, today, onNew, onEdit, onLogout, onExit, deviceEdits=()=>false}){
   const {BrandIcon} = useStudio();
   const[query,setQuery]=useState("");
   const {drafts, upcoming, history, retired} = groupPuzzles(games, today);
@@ -117,6 +124,7 @@ export default function Dashboard({games, today, onNew, onEdit, onLogout, onExit
                   <div className="ps-draft-text">
                     <strong>{g.themeTitle||"Untitled puzzle"}</strong>
                     <span>{g.date?`${formatAdminDate(g.date)} · ${whenLabel(today, g.date)}`:"No date yet"} · {questionCount(g)} · {matchup(g)}</span>
+                    {deviceEdits(g)&&<DeviceEditsNote/>}
                   </div>
                   <button type="button" className="ps-btn ps-btn-primary ps-btn-sm" onClick={()=>onEdit(g)} aria-label={`Continue editing ${g.themeTitle||"untitled puzzle"}`}>Continue editing</button>
                 </li>
@@ -129,7 +137,7 @@ export default function Dashboard({games, today, onNew, onEdit, onLogout, onExit
           <SectionHead icon="calendar" tone="teal" title={<span id="ps-upcoming-title">Today &amp; upcoming</span>} sub="Published puzzles for today and the days ahead."/>
           {upcoming.length===0
             ? <div className="ps-empty"><span>Nothing is scheduled for today or later.</span></div>
-            : <PuzzleTable games={upcoming} today={today} onEdit={onEdit}/>}
+            : <PuzzleTable games={upcoming} today={today} onEdit={onEdit} deviceEdits={deviceEdits}/>}
         </section>
 
         <section className="ps-panel ps-dash-section" aria-labelledby="ps-history-title">
@@ -146,13 +154,13 @@ export default function Dashboard({games, today, onNew, onEdit, onLogout, onExit
             ? <div className="ps-empty"><span>No past puzzles yet.</span></div>
             : shownHistory.length===0
               ? <div className="ps-empty"><span>No past puzzles match “{query.trim()}”.</span></div>
-              : <PuzzleTable games={shownHistory} today={today} onEdit={onEdit} quiet/>}
+              : <PuzzleTable games={shownHistory} today={today} onEdit={onEdit} deviceEdits={deviceEdits} quiet/>}
         </section>
 
         {retired.length>0&&(
           <section className="ps-panel ps-dash-section" aria-labelledby="ps-retired-title">
             <SectionHead icon="doc" tone="yellow" title={<span id="ps-retired-title">Retired</span>} sub="Hidden from players. Kept because people played them; their dates are free again."/>
-            <PuzzleTable games={retired} today={today} onEdit={onEdit} quiet/>
+            <PuzzleTable games={retired} today={today} onEdit={onEdit} deviceEdits={deviceEdits} quiet/>
           </section>
         )}
       </main>
