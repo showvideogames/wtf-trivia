@@ -187,7 +187,8 @@
 .ps-input:focus { border-color: #0F9488; box-shadow: var(--ps-ring); }
 .ps-shell .ps-input:focus-visible { outline: none; }
 .ps-input[aria-invalid="true"] { border-color: #E08A80; }
-.ps-textarea { min-height: 96px; resize: vertical; line-height: 1.45; }
+/* Grows with its text up to a limit, then scrolls; it can still be dragged. */
+.ps-textarea { min-height: 96px; max-height: min(360px, 60vh); field-sizing: content; resize: vertical; line-height: 1.45; }
 .ps-hint { margin-top: 6px; font-size: 13.5px; font-weight: 600; line-height: 1.4; color: var(--ps-ink-3); }
 .ps-field-error { margin-top: 6px; font-size: 14px; font-weight: 800; color: var(--ps-red-ink); }
 .ps-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 28px; align-items: start; }
@@ -323,11 +324,11 @@
   cursor: pointer;
   white-space: nowrap;
 }
-/* The tabs stay centred; Export text sits at the row's right end (under the
-   tabs, right-aligned, on phones). */
+/* The tabs stay centred; Export text and Discard changes sit at the row's
+   right end (under the tabs, right-aligned, on phones). */
 .ps-tabs-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; margin-bottom: 20px; }
 .ps-tabs-row .ps-tabs { grid-column: 2; margin: 0; }
-.ps-export-btn { grid-column: 3; justify-self: end; }
+.ps-tabs-tools { grid-column: 3; justify-self: end; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .ps-tab:hover { color: var(--ps-ink); background: rgba(255, 255, 255, 0.6); }
 .ps-tab.on { background: #fff; border-color: var(--ps-teal); color: var(--ps-teal-ink); box-shadow: 0 2px 0 rgba(15, 148, 136, 0.25); }
 
@@ -966,13 +967,14 @@ span.ps-qrow-main { cursor: default; }
 .ps-qeditor { display: flex; flex-direction: column; gap: 20px; padding: 22px 28px 24px; min-width: 0; }
 .ps-qeditor.is-empty { align-items: center; justify-content: center; min-height: 260px; text-align: center; font-weight: 700; color: var(--ps-ink-3); gap: 14px; }
 .ps-qeditor-back { display: none; align-self: flex-start; }
+/* A heading too long to share the row keeps its line; the status drops under it. */
 .ps-qeditor-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--ps-line);
 }
 .ps-qeditor-head h2 { min-width: 0; font-family: 'Fredoka One', cursive; font-size: 26px; line-height: 1.15; overflow-wrap: anywhere; }
-.ps-complete { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 800; color: var(--ps-green-ink); }
+.ps-complete { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 800; color: var(--ps-green-ink); }
 .ps-complete.is-missing { color: var(--ps-amber-ink); }
 .ps-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .ps-answer {
@@ -1144,7 +1146,9 @@ span.ps-qrow-main { cursor: default; }
   .ps-topbar { padding: 10px 16px; flex-wrap: wrap; }
   .ps-brand { font-size: 21px; }
   .ps-brand img { width: 28px !important; height: 28px !important; }
-  .ps-topbar-actions .ps-btn { min-height: 42px; padding: 0 14px; font-size: 15px; }
+  .ps-topbar-actions { flex: 1 1 100%; flex-wrap: wrap; }
+  .ps-topbar-actions .ps-btn { flex: 1 1 0; min-width: 0; min-height: 42px; padding: 0 14px; font-size: 15px; }
+  .ps-topbar-actions .ps-btn-primary { flex-basis: 100%; } /* the other two share the row beneath */
   .ps-dash { padding: 16px 12px 48px; gap: 16px; }
   .ps-dash-section { padding: 16px 14px 16px; }
   .ps-dash-head h2 { font-size: 23px; }
@@ -1166,6 +1170,12 @@ span.ps-qrow-main { cursor: default; }
 
   .ps-editor-head-row { padding: 10px 12px; gap: 10px; }
   .ps-back { min-height: 42px; padding: 0 12px 0 8px; }
+  /* All puzzles: icon only, so the title keeps its room; still announced. */
+  .ps-back:has(.ps-back-label) { padding: 0 10px; }
+  .ps-back-label {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
   .ps-head-actions { display: none; }
   .ps-head-notice { display: none; }
   .ps-head-title { font-size: 18px; }
@@ -1177,7 +1187,8 @@ span.ps-qrow-main { cursor: default; }
   .ps-tabs { width: 100%; margin-bottom: 12px; padding: 3px; }
   .ps-tabs-row { grid-template-columns: 1fr; gap: 8px; margin-bottom: 12px; }
   .ps-tabs-row .ps-tabs { grid-column: 1; margin: 0; }
-  .ps-export-btn { grid-column: 1; min-height: 40px; }
+  .ps-tabs-tools { grid-column: 1; }
+  .ps-tabs-tools .ps-btn { min-height: 40px; }
   .ps-tab { flex: 1; min-width: 0; min-height: 42px; padding: 0 10px; font-size: 15px; gap: 6px; }
   .ps-card { padding: 14px 12px 16px; border-radius: 18px; }
   .ps-card-head { margin-bottom: 12px; gap: 10px; }
@@ -1228,7 +1239,6 @@ span.ps-qrow-main { cursor: default; }
   .ps-qrow-title { font-size: 16px; }
   .ps-menu-btn { width: 44px; height: 44px; }
   .ps-qeditor { padding: 12px 12px 16px; border-radius: 18px; gap: 13px; }
-  .ps-qeditor-head { flex-wrap: wrap; }
   .ps-qeditor-head { padding-bottom: 10px; }
   .ps-qeditor-head h2 { font-size: 20px; }
   .ps-answer { min-height: 50px; font-size: 16px; }
@@ -1372,4 +1382,108 @@ span.ps-qrow-main { cursor: default; }
   .ps-media-picture .ps-media-thumb { width: 136px; }
   .ps-media-picture .ps-media-card { gap: 12px; }
   .ps-qrow-pic { width: 38px; height: 38px; }
+}
+
+/* The question editor's text boxes start level however their labels wrap:
+   each field's label and box sit in the same two rows as its neighbour's. */
+@supports (grid-template-rows: subgrid) {
+  .ps-qeditor .ps-field:has(> .ps-textarea) {
+    display: grid;
+    grid-row: span 2;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: subgrid;
+    row-gap: 0;
+  }
+}
+
+/* The checklist under the editor's tabs (PublishReadiness). */
+.ps-ready {
+  margin-bottom: 18px;
+  padding: 10px 16px 8px;
+  border-radius: 16px;
+  border: 1px solid #E6C35A;
+  background: var(--ps-amber-wash);
+  font-size: 15px; font-weight: 700;
+  box-shadow: var(--ps-shadow);
+}
+.ps-ready h2 { font-size: 16px; font-weight: 900; color: var(--ps-ink); }
+.ps-ready-list { list-style: none; display: flex; flex-wrap: wrap; gap: 0 18px; }
+.ps-ready .ps-link-btn { text-align: left; }
+.ps-ready.is-ok {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px;
+  border-color: #A5DAB7;
+  background: var(--ps-green-wash);
+  color: var(--ps-green-ink);
+}
+.ps-ready-note { font-weight: 600; color: var(--ps-ink-3); }
+
+/* A dashboard row whose device copy differs from the stored puzzle. */
+.ps-device-note,
+.ps-draft-text .ps-device-note {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 2px;
+  font-size: 13.5px; font-weight: 800;
+  color: var(--ps-amber-ink);
+}
+.ps-device-note .ps-status-dot { color: var(--ps-amber-ink); } /* .ps-draft-text span would grey it */
+
+/* Focus and Tab never leave a field behind the sticky header, with room for
+   a notice bar arriving just after, or behind the phone's action bar. */
+.ps-editor-main :where(input, textarea, button) {
+  scroll-margin-top: calc(var(--ps-head-h, 0px) + 64px);
+  scroll-margin-bottom: calc(var(--ps-bar-h, 0px) + 16px);
+}
+/* The sticky bars are already in view: there it would only nudge the page. */
+.ps-setup-nav button,
+.ps-qlist button { scroll-margin: 0; }
+
+/* The Setup jump bar (SetupNav): always one row, scrolling sideways inside
+   itself when it doesn't fit, so it can never widen the page. */
+.ps-setup-nav {
+  position: sticky; top: var(--ps-head-h, 0px); z-index: 10;
+  display: flex; gap: 2px;
+  box-sizing: border-box;
+  width: fit-content; max-width: 100%;
+  margin: 0 auto 16px;
+  padding: 4px;
+  overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+  border-radius: 999px;
+  border: 1px solid var(--ps-line-strong);
+  background: var(--ps-panel);
+  box-shadow: var(--ps-shadow);
+}
+.ps-setup-nav::-webkit-scrollbar { display: none; }
+.ps-setup-nav button {
+  flex: none;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 0; border-radius: 999px;
+  background: transparent;
+  color: var(--ps-ink-2);
+  font-size: 15px; font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ps-setup-nav button:hover { background: var(--ps-teal-wash); color: var(--ps-teal-ink); }
+.ps-shell .ps-setup-nav button:focus-visible { outline-offset: -3px; } /* the bar's scrolling would clip it */
+/* A card jumped to clears the header and the bar (52px high) with room to spare. */
+.ps-card { scroll-margin-top: calc(var(--ps-head-h, 0px) + 66px); }
+
+@media (max-width: 759px) {
+  /* A checklist shows everything: each link stacked and readable in full. */
+  .ps-ready { margin-bottom: 12px; padding: 6px 12px 2px; }
+  .ps-ready h2 { font-size: 14.5px; }
+  .ps-ready-list { flex-direction: column; gap: 0; }
+  .ps-ready-list .ps-link-btn { overflow-wrap: anywhere; }
+  .ps-ready .ps-link-btn { min-height: 44px; font-size: 14.5px; }
+  /* Ready to publish: heading and link share a row, the link wrapping inside
+     its own tap height. The note stays for screen readers only. */
+  .ps-ready.is-ok { flex-wrap: nowrap; gap: 8px; padding: 6px 12px; }
+  .ps-ready.is-ok h2 { flex: none; white-space: nowrap; }
+  .ps-ready.is-ok .ps-link-btn { min-width: 0; margin-left: auto; padding: 0 2px; line-height: 1.25; text-align: right; white-space: normal; }
+  .ps-ready-note {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .ps-setup-nav { width: 100%; margin-bottom: 12px; border-radius: 16px; }
 }

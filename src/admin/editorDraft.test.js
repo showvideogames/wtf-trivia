@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeEditorDraft, restoreEditorDraft } from "./editorDraft.js";
+import { editorSnapshot, hasDeviceEdits, normalizeEditorDraft, restoreEditorDraft } from "./editorDraft.js";
 import { gameToRow, rowToGame } from "../gameRow.js";
 
 const ROW = {
@@ -83,5 +83,54 @@ describe("Admin draft copy keeps the wide artwork", () => {
     const loaded = rowToGame(ROW);
     const reopened = restoreEditorDraft(loaded, storeAndRead({ ...loaded, wideImageColumn: true }));
     expect(reopened.wideImageColumn).toBe(false);
+  });
+});
+
+describe("editorSnapshot", () => {
+  it("treats blank fields alike and ignores key order, strictly by default", () => {
+    expect(editorSnapshot({ id: "x", themeTitle: "", slug: null, tags: [] })).toBe(editorSnapshot({ tags: [], id: "x" }));
+    expect(editorSnapshot({ id: "x", themeTitle: "Opera " })).not.toBe(editorSnapshot({ id: "x", themeTitle: "Opera" }));
+  });
+
+  it("ignores spaces around strings only when asked, at any depth", () => {
+    const a = { id: "x", categoryAShareName: "  ", questions: [{ itemText: " Espresso " }] };
+    const b = { id: "x", questions: [{ itemText: "Espresso" }] };
+    expect(editorSnapshot(a, { trim: true })).toBe(editorSnapshot(b, { trim: true }));
+    expect(editorSnapshot(a)).not.toBe(editorSnapshot(b));
+    expect(editorSnapshot({ ...a, themeTitle: "Opera" }, { trim: true })).not.toBe(editorSnapshot(b, { trim: true }));
+  });
+});
+
+describe("hasDeviceEdits", () => {
+  const stored = rowToGame(ROW);
+
+  it("is false for a copy that matches, as every open draft keeps one", () => {
+    expect(hasDeviceEdits(stored, storeAndRead(stored))).toBe(false);
+  });
+
+  it("is true for a copy that differs, on a draft or a retired puzzle", () => {
+    expect(hasDeviceEdits(stored, storeAndRead({ ...stored, themeTitle: "Edited" }))).toBe(true);
+    const retired = { ...stored, status: "retired" };
+    expect(hasDeviceEdits(retired, storeAndRead({ ...retired, themeTitle: "Edited" }))).toBe(true);
+  });
+
+  it("is false for a published puzzle, whatever the device holds", () => {
+    const live = { ...stored, status: "published" };
+    expect(hasDeviceEdits(live, storeAndRead({ ...live, themeTitle: "Edited" }))).toBe(false);
+  });
+
+  it("is false after a save that only trimmed: the row is trimmed, the device copy isn't", () => {
+    const typed = { ...stored, categoryAShareName: " Stage ", categoryBSubtitle: "Sauce ", wideImage: " https://x.example/w.webp " };
+    const saved = rowToGame(gameToRow(typed));
+    const copy = storeAndRead(typed);
+    expect(saved.categoryAShareName).toBe("Stage");
+    expect(hasDeviceEdits(saved, copy)).toBe(false);
+    // The editor's own Unsaved changes check stays strict.
+    expect(editorSnapshot(restoreEditorDraft(saved, copy))).not.toBe(editorSnapshot(saved));
+  });
+
+  it("is false for a missing or unreadable copy", () => {
+    for (const copy of [null, undefined, "", "x", 5, {}, { game: null }, { game: "x" }, { game: 5 }, { game: ["x"] }])
+      expect(hasDeviceEdits(stored, copy)).toBe(false);
   });
 });

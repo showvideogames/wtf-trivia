@@ -105,12 +105,12 @@ export default function QuestionEditor({question:q, number, fresh, picture=false
           </div>
         </div>
         <div className="ps-field">
-          <label className="ps-label" htmlFor="ps-q-flavor">Needless Commentary <span className="ps-label-note">(the flavor text)</span></label>
-          <textarea id="ps-q-flavor" className="ps-input ps-textarea" value={q.flavorCopy||""} placeholder="Funny reaction line…" onChange={e=>onChange({flavorCopy:e.target.value})}/>
-        </div>
-        <div className="ps-field">
           <label className="ps-label" htmlFor="ps-q-info">Actual Info <span className="ps-label-note">(the explanation)</span></label>
           <textarea id="ps-q-info" className="ps-input ps-textarea" value={q.explanationCopy||""} placeholder="One factual sentence…" onChange={e=>onChange({explanationCopy:e.target.value})}/>
+        </div>
+        <div className="ps-field">
+          <label className="ps-label" htmlFor="ps-q-flavor">Needless Commentary <span className="ps-label-note">(the flavor text)</span></label>
+          <textarea id="ps-q-flavor" className="ps-input ps-textarea" value={q.flavorCopy||""} placeholder="Funny reaction line…" onChange={e=>onChange({flavorCopy:e.target.value})}/>
         </div>
       </div>
 

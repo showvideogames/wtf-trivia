@@ -59,16 +59,17 @@ import { emptyFavorites, toggleFavorite } from "./archiveFavorites.js";
 import ArchiveTopicFilter from "./ArchiveTopicFilter.jsx";
 import ArchiveSortMenu from "./ArchiveSortMenu.jsx";
 import ArchiveFavoriteButton from "./ArchiveFavoriteButton.jsx";
-import { editorDraftKey, normalizeEditorDraft, restoreEditorDraft } from "./admin/editorDraft.js";
+import { editorDraftKey, editorSnapshot, hasDeviceEdits, normalizeEditorDraft, restoreEditorDraft } from "./admin/editorDraft.js";
+import { browserBackAction, leaveCopy, leaveRisk, useBrowserBackGuard } from "./admin/editorHistory.js";
 import { histogramBuckets } from "./scoreHistogram.js";
 import { StudioContext, paletteColor } from "./admin/StudioContext.js";
 import AdminAccessNotice from "./admin/AdminAccessNotice.jsx";
 import { clearAdminResume, prepareSignInFromEditor, saveEditorDraftVerified, takeAdminResume, writeAdminResume } from "./admin/signInResume.js";
 import { localDateFromISO } from "./admin/adminDates.js";
 import { findDateConflict } from "./admin/dashboardGroups.js";
-import { QUESTION_LOCK_TEXT, applyOrder, firstBlankItem, followMove, moveQuestion, questionCountOk, questionKey, questionLock, questionStructureChanged, restoreSavedQuestions, shuffleOrder, undoOrder } from "./admin/questionStatus.js";
+import { QUESTION_LOCK_TEXT, applyOrder, firstBlankItem, followMove, isBlankQuestion, moveQuestion, publishReadiness, questionCountOk, questionKey, questionLock, questionStructureChanged, restoreSavedQuestions, shuffleOrder, undoOrder } from "./admin/questionStatus.js";
 import Dashboard from "./admin/Dashboard.jsx";
-import { EditorActions, EditorHeader, EditorTabs, MobileActionBar, NoticeBar } from "./admin/EditorChrome.jsx";
+import { EditorActions, EditorHeader, EditorTabs, MobileActionBar, NoticeBar, PublishReadiness } from "./admin/EditorChrome.jsx";
 import { buildPuzzleExport, downloadTextFile, exportFileName } from "./admin/puzzleExport.js";
 import SetupTab from "./admin/SetupTab.jsx";
 import QuestionList from "./admin/QuestionList.jsx";
@@ -4500,24 +4501,8 @@ const STUDIO_SERVICES = {
   BrandIcon: FI,
 };
 
-// A stable fingerprint of a puzzle for the "Unsaved changes" check: sorted
-// keys, and null / undefined / "" treated alike, so clearing a field that
-// was never set doesn't count as a change.
-function editorSnapshot(game){
-  const norm = v=>{
-    if(Array.isArray(v)) return v.map(norm);
-    if(v && typeof v==="object"){
-      const out = {};
-      for(const k of Object.keys(v).sort()){
-        if(v[k]===null||v[k]===undefined||v[k]==="") continue;
-        out[k] = norm(v[k]);
-      }
-      return out;
-    }
-    return v;
-  };
-  return JSON.stringify(norm(normalizeEditorDraft(game)));
-}
+// The dashboard's note: this device's copy of a puzzle against the stored one.
+const deviceEditsOf = g=>hasDeviceEdits(g, safeRead(getEditorDraftKey(g.id)));
 
 function savedAgo(at, now){
   const s = Math.max(0, Math.round((now-at)/1000));
@@ -4527,11 +4512,25 @@ function savedAgo(at, now){
 }
 
 const BLANK_QUESTION = {itemText:"",correctCategory:"A",flavorCopy:"",explanationCopy:"",imageUrl:"",imageAlt:"",imageSource:""};
+const STILL_SAVING = "Hang on, still saving…";
+
+// A puzzle has one device copy, shared by every tab. Leaving or hiding writes
+// it only for this tab's own edits, or to replace a copy of its own that still
+// holds edits since undone (holdsEdits: its last write was made while dirty).
+// A clean tab that wrote none leaves it alone: it may be another tab's edits.
+function keepEditorCopy(game, dirty, holdsEdits){
+  if(!dirty&&!holdsEdits.current) return true;
+  const saved = saveEditorDraft(game);
+  if(saved) holdsEdits.current = dirty;
+  return saved;
+}
 
 // access: {canWrite, status, email, busy, error, onSignIn, onSignOut, onRetry}
 // from the root. Without admin access the editor stays open with every edit
 // kept, and Save, Publish, Retire, Delete and uploads are paused.
-function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
+// keepPageRef: the root's popstate handler asks it before following a jump
+// away from /admin, so edits at risk get the leave dialog first.
+function AdminEditor({game:ig,games,onSave,onDelete,onBack,access,keepPageRef}){
   const inDb=(games||[]).some(g=>g.id===ig.id);
   const canWrite=access?.canWrite??true;
   const[game,setGame]=useState(()=>loadEditorDraft(ig));
@@ -4552,7 +4551,10 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   // blank item text is shown as a to-do rather than an error.
   const[freshKey,setFreshKey]=useState(null);
   const[focusItem,setFocusItem]=useState(0); // bumped to focus Item text after Add question
-  const[notice,setNotice]=useState(null); // {kind:"success"|"info"|"progress"|"error", text}
+  // {kind:"success"|"info"|"progress"|"error", text}. A saved puzzle that
+  // reopens with this device's edits says so, since they aren't saved yet.
+  const[notice,setNotice]=useState(()=>inDb&&editorSnapshot(game,{trim:true})!==editorSnapshot(ig,{trim:true})
+    ? {kind:"info", text:"Your unsaved edits from this device are back. Save to keep them, or discard them.", at:Date.now()} : null);
   const[imageWarning,setImageWarning]=useState(null); // {items, action} after a save with image failures
   const[saving,setSaving]=useState(false); // false | "save" | "publish"
   const[saveFailed,setSaveFailed]=useState(false); // the last database save threw
@@ -4591,8 +4593,11 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   const qc=qs.length;
   const ok=questionCountOk(qc);
   const dateConflict = findDateConflict(games, game);
-  const dateOk = Boolean(localDateFromISO(game.date)) && !dateConflict;
-  const canPublish = ok && dateOk;
+  // The checklist under the tabs. Guidance: the checks that really hold a
+  // publish are validateDate, validateItems, pub and validatePictures below.
+  const readiness = publishReadiness({hasDate:Boolean(localDateFromISO(game.date)), conflictTitle:dateConflict?dateConflict.themeTitle||"another puzzle":null,
+    questions:qs, picture:isPictureQuiz(game), isYouTube:isYouTubeUrl});
+  const canPublish = readiness.blocking.length===0;
   const published = game.status==="published";
   const retired = game.status==="retired";
   const validateDate = () => {
@@ -4622,6 +4627,8 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   // Drafts keep a copy on this device as you type (restored when the puzzle
   // is reopened). Published puzzles don't: their edits exist only here until
   // "Publish changes".
+  const copyHoldsEdits=useRef(false); // see keepEditorCopy
+  const dirtyNow=useRef(false); // dirty when the wait ends, not when it began
   useEffect(()=>{
     if(!game?.id) return;
     if(game.status==="published"){
@@ -4629,7 +4636,9 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
       return;
     }
     const timer = setTimeout(()=>{
-      setAutoSaveState(saveEditorDraft(game)?"saved":"failed");
+      const saved = saveEditorDraft(game);
+      if(saved) copyHoldsEdits.current = dirtyNow.current;
+      setAutoSaveState(saved?"saved":"failed");
     }, 700);
     return ()=>clearTimeout(timer);
   },[game]);
@@ -4637,6 +4646,41 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   // The database copy is the puzzle this editor was opened with, replaced by
   // each successful save, so this compares against what is really stored.
   const dirty = useMemo(()=>editorSnapshot(game)!==editorSnapshot(ig),[game,ig]);
+  useEffect(()=>{ dirtyNow.current=dirty; });
+  const risk = leaveRisk({dirty, published, inDb, autoSaveState, imagesBusy});
+
+  // Closing or reloading the tab warns while something would really be lost.
+  // Not for the sign-in redirect: signInKeepingEdits has already stored the
+  // edits, and puts the puzzle it stored in signingIn. Anything after that
+  // isn't stored, so a further edit turns the warning back on (the redirect
+  // can be slow, and the page can come back), as does a sign-in that fails.
+  const signingIn=useRef(null);
+  const signInError=access?.error;
+  useEffect(()=>{ if(signInError) signingIn.current=null; },[signInError]);
+  useEffect(()=>{ if(signingIn.current!==game) signingIn.current=null; },[game]);
+  const warnOnUnload=Boolean(risk||saving);
+  useEffect(()=>{
+    if(!warnOnUnload) return;
+    const warn=e=>{
+      if(signingIn.current) return;
+      e.preventDefault();
+      e.returnValue="";
+    };
+    window.addEventListener("beforeunload",warn);
+    return ()=>window.removeEventListener("beforeunload",warn);
+  },[warnOnUnload]);
+  // A page on its way out can't wait for the draft copy's 700 ms.
+  useEffect(()=>{
+    if(game.status==="published") return;
+    const flush=()=>{ keepEditorCopy(game, dirty, copyHoldsEdits); };
+    const onVisibility=()=>{ if(document.visibilityState==="hidden") flush(); };
+    window.addEventListener("pagehide",flush);
+    document.addEventListener("visibilitychange",onVisibility);
+    return ()=>{
+      window.removeEventListener("pagehide",flush);
+      document.removeEventListener("visibilitychange",onVisibility);
+    };
+  },[dirty,game]);
 
   // Played question lock (questionLock, questionStatus.js): one rule for
   // Add question, Delete question, Shuffle Order, drag, Move up/down and for
@@ -4710,6 +4754,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
     try{
       const {game:saved, imageFailures, listRefreshed} = await onSave(s);
       clearEditorDraft(saved.id);
+      copyHoldsEdits.current=false;
       setGame(saved);
       setAutoSaveState("idle");
       setSaveFailed(false);
@@ -4733,41 +4778,106 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   const pubSafe=async()=>{if(waitForImages()||!validateDate()||!validateItems())return;await pub();};
   // A retired puzzle holds no date, so saving it never needs a free one.
   const dftSafe=async()=>{if(waitForImages()||(!retired&&!validateDate())||!validateItems())return;await dft();};
-  // Delete and Retire each ask first (ConfirmDialog): the buttons only open
-  // the dialog, and only its confirm button acts.
+  // Delete, Retire and everything else that can't be taken back ask first
+  // (ConfirmDialog): the buttons only open the dialog, and only its confirm
+  // button acts.
   const[confirming,setConfirming]=useState(null); // null | "delete" | "retire"
+  const[leaving,setLeaving]=useState(false); // its words follow risk and imagesBusy as they change
+  const[discarding,setDiscarding]=useState(false);
+  const[resetKey,setResetKey]=useState(0); // bumped by Discard: forms start over, with no half-typed links
+  const[deleting,setDeleting]=useState(null); // index of the question being asked about
+  const[answerFix,setAnswerFix]=useState(null); // {index, patch}
+  if(leaving&&!risk) setLeaving(false); // nothing left to lose, so nothing to ask
+  const holdForSave=()=>{ if(saving){ say("info",STILL_SAVING); return true; } return false; };
+  // A draft's copy waits 700 ms after typing, and leaving cancels that wait.
+  const writeCopy=()=>!inDb||published||keepEditorCopy(game, dirty, copyHoldsEdits);
+  // False when the device refused edits leaving would then lose: leaveRisk
+  // now says so, and whoever asked stays and shows the leave dialog.
+  const keepDraft=()=>{
+    if(writeCopy()||!dirty) return true;
+    setAutoSaveState("failed");
+    return false;
+  };
+  // Browser Back or Forward, asked at the moment it happens. The list step is
+  // only for Back onto the admin's own entry: a jump to another page isn't one.
+  const backAction=()=>browserBackAction({preview, saving, risk,
+    dialogOpen:Boolean(answerFix||confirming||leaving||discarding)||deleting!==null,
+    phoneQuestion:mobileEditing&&tab==="questions"&&typeof selected==="number"&&qc>0
+      &&isAdminPath()&&window.matchMedia("(max-width: 959px)").matches});
+  // The same way out as the All puzzles button, with Preview, dialogs and an
+  // open phone question closing first. Whatever stays here puts the guard's
+  // history entry back; leaving doesn't need to, it's already gone.
+  const {release}=useBrowserBackGuard(hold=>{
+    switch(backAction()){
+      case "preview": hold(); setPreview(false); break;
+      case "dialog":
+        hold();
+        setAnswerFix(null);setConfirming(null);setLeaving(false);setDiscarding(false);setDeleting(null);
+        break;
+      case "list": hold(); setMobileEditing(false); break;
+      case "saving": hold(); holdForSave(); break;
+      case "ask": hold(); setLeaving(true); break;
+      default:
+        if(keepDraft()) onBack();
+        else{ hold(); setLeaving(true); }
+    }
+  });
+  // A jump off /admin: the root follows it unless this says stay, in which
+  // case the guard's listener then holds and shows why (only it opens the
+  // dialog: it would close one already open). The root unmounts a clean
+  // editor straight away, so its draft copy has to be kept here.
+  useEffect(()=>{
+    keepPageRef.current=()=>backAction()!=="exit"||!keepDraft();
+    return ()=>{ keepPageRef.current=null; };
+  });
   const removeGame=()=>{
     if(!canWrite){ say("error", WRITES_PAUSED); return; }
+    if(holdForSave()) return;
     setConfirming("delete");
   };
   const confirmRemove=async()=>{
     setConfirming(null);
-    try{ await onDelete(game.id); }
+    try{ await onDelete(game.id); release(); }
     catch(e){ say("error", e?.message || "The puzzle wasn't deleted."); }
   };
   // Once anyone has played a puzzle it can't be deleted (the database
   // refuses): retiring hides it from players and frees its date instead.
   const retireGame=()=>{
     if(!canWrite){ say("error", WRITES_PAUSED); return; }
-    if(dirty){ say("error","Publish or undo your changes before retiring this puzzle."); return; }
+    if(holdForSave()) return;
+    if(dirty){ say("error","Publish or discard your changes before retiring this puzzle."); return; }
     setConfirming("retire");
   };
   const confirmRetire=async()=>{
     setConfirming(null);
     await save(false, true);
   };
-  // Leaving is only risky where no copy of the edits survives: a published
-  // puzzle (never kept on the device), a puzzle never saved to the database,
-  // or a draft the device couldn't store.
-  const leave=()=>{
-    const losing = dirty && (published || !inDb || autoSaveState==="failed");
-    if(losing && !window.confirm(published
-      ? "Leave without publishing? Your changes to this live puzzle will be lost."
-      : !inDb ? "Leave without saving? This new puzzle hasn't been saved yet, so it will be lost."
-      : "Leave without saving? Your changes couldn't be kept on this device, so they will be lost.")) return;
-    onBack();
+  const leaveNow=()=>{ release(); onBack(); };
+  const exit=()=>{ if(keepDraft()) leaveNow(); else setLeaving(true); };
+  // The leave dialog's answer: go, whatever the device says this time. An
+  // upload's dialog hasn't said the edits are at risk, so a refused copy keeps
+  // it open once, in the device's words; the risk is then no longer "upload".
+  const leaveAnyway=()=>{
+    if(!keepDraft()&&risk==="upload") return;
+    leaveNow();
   };
-  const openPreview=()=>{ if(!waitForImages()) setPreview(true); };
+  const leave=()=>{
+    if(holdForSave()) return;
+    if(risk){ setLeaving(true); return; }
+    exit();
+  };
+  // Preview replaces the editor, so coming back puts the page where it was.
+  const previewScroll=useRef(null);
+  const openPreview=()=>{
+    if(waitForImages()) return;
+    previewScroll.current=window.scrollY;
+    setPreview(true);
+  };
+  useLayoutEffect(()=>{
+    if(preview||previewScroll.current===null) return;
+    window.scrollTo({top:previewScroll.current, left:0, behavior:"instant"});
+    previewScroll.current=null;
+  },[preview]);
   // Export text: the puzzle exactly as it is in this editor, unsaved edits
   // included, downloaded as a .txt file. Never touches the database.
   const exportText=()=>{
@@ -4784,12 +4894,27 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
     if(holdForUpload()) return;
     setSelected(i);setFreshKey(null);setMobileEditing(true);
   };
+  // The checklist's links: a place in Setup, the question list, or a question.
+  const goToReadiness=go=>{
+    if(go==="date"){ setTab("setup"); window.scrollTo({top:0, left:0, behavior:"instant"}); return; }
+    setTab("questions");
+    if(go==="questions"){ setMobileEditing(false); return; }
+    if(go!==sel&&holdForUpload()) return;
+    setSelected(go);setFreshKey(null);setMobileEditing(true);
+  };
   // Add question appends a blank question to this editor's copy of the
   // puzzle (and so to the on-device draft) and opens it, like any other.
   // Nothing is saved to the database; the save-time checks still apply.
+  // A last question that's still empty is opened instead: a second blank
+  // would only hold up saving.
   const[shuffled,setShuffled]=useState(null); // {order} of the last Shuffle Order, while it can be undone
   const startNew=()=>{
     if(holdForUpload()||!canChangeQuestions()) return;
+    if(qc>0&&isBlankQuestion(qs[qc-1])){
+      setSelected(qc-1);setFreshKey(questionKey(qs[qc-1],qc-1));setMobileEditing(true);setFocusItem(n=>n+1);
+      say("info",`Question ${qc} is still empty, so use that one first.`);
+      return;
+    }
     setShuffled(null);
     const id=`q-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
     setGame(g=>({...g,questions:[...(g.questions??[]),{...BLANK_QUESTION,id,orderIndex:(g.questions?.length??0)+1}]}));
@@ -4803,7 +4928,6 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   const updQ=(i,patch)=>setGame(g=>({...g,questions:g.questions.map((q,j)=>j===i?{...q,...patch}:q)}));
   // Correcting an answer stays available on a puzzle that may have plays,
   // after a confirmation that saved results and stats keep the old answer.
-  const[answerFix,setAnswerFix]=useState(null); // {index, patch}
   const editQuestion=(i,patch)=>{
     if("correctCategory" in patch){
       const q=qs[i];
@@ -4817,11 +4941,23 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
     if(!q) return;
     if(i===sel&&holdForUpload()) return;
     if(!canChangeQuestions()) return;
-    if(!window.confirm(`Delete "${q.itemText||"this question"}"?`)) return;
+    setDeleting(i);
+  };
+  const confirmDelQ=()=>{
+    const i=deleting;
+    setDeleting(null);
     setShuffled(null);
     setGame(g=>({...g,questions:g.questions.filter((_,j)=>j!==i).map((item,j)=>({...item,orderIndex:j+1}))}));
     if(i===sel) setMobileEditing(false);
     setSelected(s=>typeof s!=="number"?s:s>i?s-1:s===i?(qc>1?Math.min(i,qc-2):null):s);
+    // The control that opened the dialog went with its menu or its row.
+    requestAnimationFrame(()=>(document.querySelector(".ps-qrow.is-selected .ps-qrow-main")??document.querySelector(".ps-qlist-add"))?.focus({preventScroll:true}));
+  };
+  const keepQuestion=()=>{
+    const i=deleting;
+    setDeleting(null);
+    // The menu item that opened the dialog has gone; its row's menu button hasn't.
+    requestAnimationFrame(()=>document.querySelectorAll(".ps-qrow")[i]?.querySelector(".ps-menu-btn")?.focus({preventScroll:true}));
   };
   const moveQ=(from,to)=>{
     if(holdForUpload()||!canChangeQuestions()) return;
@@ -4861,6 +4997,23 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
     setFreshKey(null);
     setShuffled(null);
     say("success","Saved questions restored.");
+  };
+  // Back to the last saved version. The device copy goes too, or reopening
+  // the puzzle would bring these edits back.
+  const discard=()=>{
+    setDiscarding(false);
+    setGame(ig);
+    clearEditorDraft(ig.id);
+    copyHoldsEdits.current=false;
+    setResetKey(n=>n+1);
+    setFreshKey(null);
+    setShuffled(null);
+    setAnswerFix(null);
+    setSaveFailed(false);
+    setAutoSaveState("idle");
+    say("success","Changes discarded.");
+    // The Discard button has just gone, so focus needs somewhere to land.
+    requestAnimationFrame(()=>document.getElementById(`ps-tab-${tab}`)?.focus());
   };
 
   // "Upload replacement": open the field that failed and bring it into view.
@@ -4903,6 +5056,8 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
       saveResume: ()=>writeAdminResume(ig),
     });
     if(!ready.ok){ say("error", ready.message); return; }
+    signingIn.current=game;
+    if(dirty) copyHoldsEdits.current=true;
     access?.onSignIn({resume:true});
   };
   const openWarnings = imageWarning ? imageWarning.items.filter(f=>!isWarningResolved(game,f)) : [];
@@ -4919,8 +5074,8 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
   const editingKey = sel!=null ? questionKey(qs[sel],sel) : null;
 
   const status = saving ? {tone:"saving", text:saving==="publish"?"Publishing…":"Saving…"}
-    : dirty&&saveFailed ? {tone:"error", text:"Couldn’t save", detail:!published&&autoSaveState==="saved"?"Draft kept on this device":null}
-    : dirty ? {tone:"dirty", text:"Unsaved changes", detail:published?"Not live until you publish":autoSaveState==="saved"?"Draft kept on this device":autoSaveState==="failed"?"Not kept on this device":null}
+    : dirty&&saveFailed ? {tone:"error", text:"Couldn’t save", detail:!inDb?"Not saved anywhere yet":!published&&autoSaveState==="saved"?"Draft kept on this device":null}
+    : dirty ? {tone:"dirty", text:"Unsaved changes", detail:published?"Not live until you publish":!inDb?"Not saved anywhere yet":autoSaveState==="saved"?"Draft kept on this device":autoSaveState==="failed"?"Not kept on this device":null}
     : lastSavedAt ? {tone:"saved", text:savedAgo(lastSavedAt, now)}
     : inDb ? {tone:"saved", text:"No unsaved changes"}
     : {tone:"idle", text:"Not saved yet"};
@@ -4937,11 +5092,17 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
       <main className="ps-editor-main">
         <div className="ps-tabs-row">
           <EditorTabs tab={tab} onTab={setTab} questionsLabel={<>Questions<span className="ps-tab-count"> · {qc}</span></>}/>
-          <button type="button" className="ps-btn ps-btn-sm ps-export-btn" onClick={exportText}
-                  title="Download this puzzle as a .txt file, unsaved edits included">
-            <Icon name="download" size={16}/>Export text
-          </button>
+          <div className="ps-tabs-tools">
+            {dirty&&inDb&&(
+              <button type="button" className="ps-btn ps-btn-sm" onClick={()=>setDiscarding(true)} disabled={Boolean(saving)||imagesBusy}>Discard changes</button>
+            )}
+            <button type="button" className="ps-btn ps-btn-sm ps-export-btn" onClick={exportText}
+                    title="Download this puzzle as a .txt file, unsaved edits included">
+              <Icon name="download" size={16}/>Export text
+            </button>
+          </div>
         </div>
+        <PublishReadiness readiness={readiness} published={published} retired={retired} onGo={goToReadiness}/>
         {beta.enabled&&(
           <div className="ps-beta-note" role="status">
             <strong>Beta editing enabled</strong>
@@ -4961,7 +5122,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
         {/* Both tabs stay mounted, so switching never drops an edit or an
             upload in progress. */}
         <div id="ps-panel-setup" role="tabpanel" aria-labelledby="ps-tab-setup" hidden={tab!=="setup"}>
-          <SetupTab game={game} set={set} games={games} trackImage={trackImage}
+          <SetupTab key={resetKey} game={game} set={set} games={games} trackImage={trackImage}
                     onDelete={inDb?removeGame:null}
                     onRetire={inDb&&published?retireGame:null}/>
         </div>
@@ -4974,7 +5135,7 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
                           onRestore={qLock&&inDb&&questionStructureChanged(ig.questions, qs)?restoreSaved:null}/>
             {editing?(
               <QuestionEditor
-                key={editingKey}
+                key={`${editingKey}-${resetKey}`}
                 question={editing}
                 number={sel+1}
                 fresh={editingKey===freshKey}
@@ -5019,6 +5180,27 @@ function AdminEditor({game:ig,games,onSave,onDelete,onBack,access}){
           </ConfirmDialog>
         );
       })()}
+      {leaving&&risk&&(()=>{
+        const copy=leaveCopy(risk, imagesBusy);
+        return(
+          <ConfirmDialog title={copy.title} confirmLabel={copy.confirmLabel} cancelLabel="Keep editing"
+                         onConfirm={leaveAnyway} onCancel={()=>setLeaving(false)}>
+            {copy.lines.map(line=><p key={line}>{line}</p>)}
+          </ConfirmDialog>
+        );
+      })()}
+      {discarding&&(
+        <ConfirmDialog title="Discard your changes?" confirmLabel="Discard changes" cancelLabel="Keep editing"
+                       onConfirm={discard} onCancel={()=>setDiscarding(false)}>
+          <p>This returns the puzzle to its last saved version. This can't be undone.</p>
+        </ConfirmDialog>
+      )}
+      {deleting!==null&&qs[deleting]&&(
+        <ConfirmDialog title={`Delete question ${deleting+1}?`} confirmLabel="Delete question" cancelLabel="Keep question"
+                       onConfirm={confirmDelQ} onCancel={keepQuestion}>
+          <p>{qs[deleting].itemText?.trim()?`“${qs[deleting].itemText.trim()}”`:"This question"} leaves the saved puzzle only when you save or publish.</p>
+        </ConfirmDialog>
+      )}
     </div>
   );
 }
@@ -5151,12 +5333,19 @@ export default function WhatTheFudgeTrivia(){
   // Set while Got it steps back over the dialog's own entry, which it has
   // already closed.
   const skipHelpPopRef = useRef(false);
+  // Set by an open AdminEditor: whether a jump away must wait for it. Its own
+  // popstate listener then puts /admin back, so nothing here changes. That
+  // listener usually runs after this one; when the editor is the first thing
+  // rendered (back from sign-in) it runs first, and /admin is already back by
+  // the time this one looks.
+  const keepEditorRef = useRef(null);
   // Back/forward (and swipe-back) between the site's sections, How to Play,
   // /admin, puzzle links and shared results.
   useEffect(()=>{
     const onPop=e=>{
       if(skipHelpPopRef.current){ skipHelpPopRef.current=false; return; }
       if(isAdminPath()){ setShowHelp(false); setView("admin"); return; }
+      if(keepEditorRef.current?.()) return;
       const section=sectionFromPath(window.location.pathname);
       if(section==="help"){ setShowHelp(true); return; }
       if(helpOpenRef.current){ setShowHelp(false); return; }
@@ -5831,7 +6020,7 @@ export default function WhatTheFudgeTrivia(){
   // change in another tab reloads the app data): its unsaved edits would go
   // with it. Without admin access it pauses writes instead (AdminEditor).
   const adminEditor = view==="admin" && adminIn && adminView==="editor" && editGame
-    ? <StudioContext.Provider value={studioServices}><style>{styles}</style><CandyBackdrop preset="admin"/><AdminEditor game={editGame} games={games} onSave={handleSave} onDelete={handleDel} onBack={()=>setAdminView("dashboard")} access={adminAccess}/></StudioContext.Provider>
+    ? <StudioContext.Provider value={studioServices}><style>{styles}</style><CandyBackdrop preset="admin"/><AdminEditor game={editGame} games={games} onSave={handleSave} onDelete={handleDel} onBack={()=>setAdminView("dashboard")} access={adminAccess} keepPageRef={keepEditorRef}/></StudioContext.Provider>
     : null;
   if(adminEditor) return adminEditor;
 
@@ -5854,7 +6043,7 @@ export default function WhatTheFudgeTrivia(){
     if(!adminIn)return <><style>{styles}</style><CandyBackdrop preset="admin"/><AdminLogin onLogin={()=>{writeAdminSession(true);setAdminIn(true);setAdminView("dashboard");}} onExit={exitAdmin}/></>;
     // The password opened the Studio; only an admin account gets past here.
     if(!isAdmin)return <StudioContext.Provider value={studioServices}><style>{styles}</style><CandyBackdrop preset="admin"/><AdminAccessNotice variant="gate" {...adminAccess} onSignIn={()=>handleAdminSignIn()} onLock={lockAdmin} onExit={exitAdmin}/></StudioContext.Provider>;
-    if(adminView==="dashboard")return <StudioContext.Provider value={studioServices}><style>{styles}</style><CandyBackdrop preset="admin"/><Dashboard games={games} today={getLocalGameDay()} onNew={()=>{setEditGame({id:`g-${Date.now()}`,date:"",themeTitle:"",categoryA:"",categoryB:"",status:"draft",questions:[],tags:[]});setAdminView("editor");}} onEdit={g=>{setEditGame(g);setAdminView("editor");}} onLogout={lockAdmin} onExit={exitAdmin}/></StudioContext.Provider>;
+    if(adminView==="dashboard")return <StudioContext.Provider value={studioServices}><style>{styles}</style><CandyBackdrop preset="admin"/><Dashboard games={games} today={getLocalGameDay()} onNew={()=>{setEditGame({id:`g-${Date.now()}`,date:"",themeTitle:"",categoryA:"",categoryB:"",status:"draft",questions:[],tags:[]});setAdminView("editor");}} onEdit={g=>{setEditGame(g);setAdminView("editor");}} onLogout={lockAdmin} onExit={exitAdmin} deviceEdits={deviceEditsOf}/></StudioContext.Provider>;
   }
 
   // Player app

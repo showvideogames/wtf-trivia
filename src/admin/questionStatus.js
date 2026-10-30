@@ -4,7 +4,7 @@
 // here blocks a save except a question with no item text.
 
 import { previewReleased } from "../puzzleMeta.js";
-import { questionPicture } from "../pictureQuiz.js";
+import { firstMissingPicture, questionPicture } from "../pictureQuiz.js";
 
 export const MIN_QUESTIONS = 4;
 export const MAX_QUESTIONS = 15;
@@ -34,14 +34,14 @@ export function questionGaps(q, isYouTube, {picture = false} = {}){
     else if(!hasText(q?.questionImageAlt)) gaps.push("Picture description");
   }
   if(!hasText(q?.itemText)) gaps.push(picture ? "Answer name" : "Item text");
-  if(!hasText(q?.flavorCopy)) gaps.push("Needless Commentary");
   if(!hasText(q?.explanationCopy)) gaps.push("Actual Info");
+  if(!hasText(q?.flavorCopy)) gaps.push("Needless Commentary");
   if(mediaKind(q?.imageUrl, isYouTube)==="image" && !hasText(q?.imageAlt)) gaps.push("Alt text");
   return gaps;
 }
 
 // One short status per question: "Complete", or only what's missing, e.g.
-// "Missing commentary and explanation". Guidance only; nothing is blocked.
+// "Missing explanation and commentary". Guidance only; nothing is blocked.
 const GAP_WORDS = {"Item text":"item text", "Answer name":"answer name", "Picture":"picture", "Picture description":"picture description",
   "Actual Info":"explanation", "Needless Commentary":"commentary", "Alt text":"alt text"};
 export function missingSummary(gaps){
@@ -62,6 +62,36 @@ export function questionCountOk(count){
 // Index of the first question the database save must not accept.
 export function firstBlankItem(questions){
   return (questions||[]).findIndex(q=>!hasText(q?.itemText));
+}
+
+const WRITTEN_FIELDS = ["itemText", "flavorCopy", "explanationCopy", "imageUrl", "imageAlt", "imageSource", "questionImage", "questionImageAlt"];
+
+// Nothing written or chosen yet (the answer always has a default), so Add
+// question reuses it instead of adding another.
+export function isBlankQuestion(q){
+  return WRITTEN_FIELDS.every(f=>!hasText(q?.[f]));
+}
+
+// The checklist under the editor's tabs. Guidance only, as above: it reports
+// what pubSafe would refuse and adds no rule of its own. blocking is what
+// stops a publish, in order, each with where to go: "date", "questions" or a
+// question's index. unfinished is the questions with gaps, which never stop it.
+export function publishReadiness({hasDate, conflictTitle, questions, picture = false, isYouTube = () => false}){
+  const qs = questions||[];
+  const blocking = [];
+  if(!hasDate) blocking.push({key:"date", text:"Pick a puzzle date", go:"date"});
+  if(conflictTitle) blocking.push({key:"conflict", text:`That day already has "${conflictTitle}"`, go:"date"});
+  const short = MIN_QUESTIONS-qs.length, over = qs.length-MAX_QUESTIONS;
+  const plural = n=>`question${n===1?"":"s"}`;
+  if(short>0) blocking.push({key:"count", text:`Add ${short} more ${plural(short)} (publishing needs ${MIN_QUESTIONS}–${MAX_QUESTIONS})`, go:"questions"});
+  if(over>0) blocking.push({key:"count", text:`Remove ${over} ${plural(over)} (publishing needs ${MIN_QUESTIONS}–${MAX_QUESTIONS})`, go:"questions"});
+  const blank = firstBlankItem(qs);
+  if(blank>=0) blocking.push({key:"item", text:`Question ${blank+1} has no ${picture?"answer name":"item text"}`, go:blank});
+  const noPicture = picture ? firstMissingPicture(qs) : -1;
+  if(noPicture>=0) blocking.push({key:"picture", text:`Question ${noPicture+1} needs a picture`, go:noPicture});
+  const unfinished = [];
+  qs.forEach((q, i)=>{ if(!isBlankQuestion(q) && questionGaps(q, isYouTube, {picture}).length) unfinished.push(i); });
+  return {blocking, unfinished};
 }
 
 // Moves one question and renumbers orderIndex, like the drag reorder always has.

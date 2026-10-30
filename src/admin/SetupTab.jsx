@@ -469,12 +469,47 @@ function SilhouetteArtwork({game, set, trackImage}){
   );
 }
 
+const SETUP_SECTIONS = [
+  ["Basics", "ps-basics-title"],
+  ["Quiz link", "ps-quizlink-title"],
+  ["Names", "ps-names-title"],
+  ["Topics", "ps-topics-title"],
+  ["Appearance", "ps-appearance-title"],
+  ["Poster", "ps-artwork-title"],
+  ["Wide art", "ps-wide-title"],
+  ["Teaser", "ps-silhouette-title"],
+];
+
+// Setup is one long page, so this bar jumps to each card. It sits outside
+// .ps-setup: a sticky grid item could never leave its own row. Focus goes to
+// the card's heading, so the keyboard carries on from there, not from the bar.
+export function SetupNav(){
+  const jump = id=>{
+    const section = document.getElementById(id)?.closest("section");
+    if(!section) return;
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    section.scrollIntoView({block:"start", behavior});
+    const heading = section.querySelector("h2");
+    heading?.setAttribute("tabindex", "-1");
+    heading?.focus({preventScroll:true});
+  };
+  return(
+    <nav className="ps-setup-nav" aria-label="Setup sections">
+      {SETUP_SECTIONS.map(([label, id])=>(
+        <button key={id} type="button" onClick={()=>jump(id)}>{label}</button>
+      ))}
+    </nav>
+  );
+}
+
 // onDelete: any saved puzzle, but the database refuses once anyone has
 // played it. onRetire: published puzzles. A played puzzle is retired
 // instead: hidden from players, its date freed, its plays and stats kept.
 export default function SetupTab({game, set, games, trackImage, onDelete, onRetire}){
   const isDraft = game.status!=="published"&&game.status!=="retired";
   return(
+    <>
+    <SetupNav/>
     <div className="ps-setup">
       <PuzzleBasics game={game} set={set} games={games}/>
       <QuizLink game={game} set={set} games={games}/>
@@ -504,5 +539,6 @@ export default function SetupTab({game, set, games, trackImage, onDelete, onReti
         </div>
       )}
     </div>
+    </>
   );
 }
