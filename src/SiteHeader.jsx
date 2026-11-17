@@ -25,11 +25,10 @@ function MenuGlyph() {
     </svg>
   );
 }
-function PersonGlyph() {
+function PersonGlyph({ signedIn }) {
   return (
     <svg className="sh-account-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="12" cy="8.2" r="4" fill="currentColor"/>
-      <path d="M4.6 20.2c.7-4 3.7-6.3 7.4-6.3s6.7 2.3 7.4 6.3z" fill="currentColor"/>
+      <g fill={signedIn ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"><circle cx="12" cy="7" r="4" /><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7Z" /></g>
     </svg>
   );
 }
@@ -230,7 +229,7 @@ export default function SiteHeader({ nav, current, sound, account, admin }) {
             button's accessible name. */}
         <button type="button" className={account.signedIn ? "sh-account is-signed-in" : "sh-account"}
                 onClick={account.onClick} title={account.title}>
-          <PersonGlyph/>
+          <PersonGlyph signedIn={account.signedIn}/>
           <span className="sh-account-label">{account.label}</span>
         </button>
       </div>
