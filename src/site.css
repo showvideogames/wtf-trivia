@@ -551,3 +551,13 @@ button.candy-badge:active { transform: translateY(2px); box-shadow: 0 1px 0 var(
 @media (max-width: 899px) { .sh-more-desktop { display: none; } }
 .ph-compact .sh-more-desktop { display: none; }
 .sh-more-desktop .more-games { margin-top: 0; padding-top: 0; border-top: 0; }
+
+/* Shared header: one menu beside the wordmark at every width. */
+.sh-bar { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "menu nav tools"; }
+.sh-bar .sh-left { display: flex; min-width: 0; gap: 6px; }
+.sh-left .sh-menu { flex-shrink: 0; }
+.sh-left .sh-logo { min-width: 0; object-fit: contain; }
+@media(max-width: 899px) {
+  .sh-bar { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "menu tools"; }
+}
+.ph-compact .sh-bar { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "menu tools"; }

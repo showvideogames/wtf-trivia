@@ -43,7 +43,7 @@ it("keeps existing navigation and returns focus after Escape", async () => {
   expect(button.getAttribute("aria-expanded")).toBe("false");
 });
 
-it("keeps the real PlayerHeader's four-link desktop track separate from More Games", async () => {
+it("keeps desktop links and exposes More Games in the shared left menu", async () => {
   const { default: PlayerHeader } = await import("./PlayerHeader.jsx");
   const { PlayerChromeContext } = await import("./playerChrome.js");
   const host = document.createElement("div"); document.body.append(host); root = createRoot(host);
@@ -54,8 +54,9 @@ it("keeps the real PlayerHeader's four-link desktop track separate from More Gam
   await act(async () => root.render(React.createElement(PlayerChromeContext.Provider, {value:chrome}, React.createElement(PlayerHeader))));
   expect(host.querySelectorAll(".sh-nav > a")).toHaveLength(4);
   expect(host.querySelector(".sh-nav button")).toBeNull();
-  const desktop = host.querySelector('.sh-tools button[aria-label="More Games"]');
-  expect(desktop).not.toBeNull();
-  await act(async () => desktop.click());
-  expect(host.querySelectorAll(".sh-tools .more-games a")).toHaveLength(6);
+  const menu = host.querySelector('.sh-left button[aria-label="Menu"]');
+  expect(menu).not.toBeNull();
+  expect(host.querySelector('.sh-tools button[aria-label="More Games"]')).toBeNull();
+  await act(async () => menu.click());
+  expect(host.querySelectorAll(".sh-left .more-games a")).toHaveLength(6);
 });

@@ -25,11 +25,10 @@ function MenuGlyph() {
     </svg>
   );
 }
-function PersonGlyph() {
+function PersonGlyph({ signedIn }) {
   return (
     <svg className="sh-account-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="12" cy="8.2" r="4" fill="currentColor"/>
-      <path d="M4.6 20.2c.7-4 3.7-6.3 7.4-6.3s6.7 2.3 7.4 6.3z" fill="currentColor"/>
+      <g fill={signedIn ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"><circle cx="12" cy="7" r="4" /><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7Z" /></g>
     </svg>
   );
 }
@@ -135,11 +134,8 @@ function GridGlyph() {
   );
 }
 
-// Phone shortcuts (Archive beside the menu, ? beside sound) show only when
-// both fit in their side of the bar with the logo still dead centre: the
-// bar's two side tracks are equal, so each side's controls are measured
-// against half of what the logo leaves. If either side would not fit, both
-// stay hidden (they are always in the menu too). Nothing is shrunk to fit.
+// Optional shortcuts share the space left by the menu/logo group and tools.
+// All destinations remain available in the menu when space is tight.
 function useShortcutRoom(barRef) {
   const [room, setRoom] = useState(false);
   useEffect(() => {
@@ -148,12 +144,11 @@ function useShortcutRoom(barRef) {
     const measure = () => {
       const left = bar.querySelector(".sh-left");
       const tools = bar.querySelector(".sh-tools");
-      const logo = bar.querySelector(".sh-logo");
       const menuBtn = bar.querySelector(".sh-menu-btn");
       if (!left || !menuBtn || !left.offsetWidth) { setRoom(false); return; }
       const cs = getComputedStyle(bar);
       const inner = bar.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-      const side = (inner - logo.offsetWidth - 2 * parseFloat(cs.columnGap)) / 2;
+      const available = inner - parseFloat(cs.columnGap);
       const btn = menuBtn.offsetWidth;
       const gapL = parseFloat(getComputedStyle(left).columnGap) || 0;
       const gapT = parseFloat(getComputedStyle(tools).columnGap) || 0;
@@ -163,7 +158,7 @@ function useShortcutRoom(barRef) {
         .reduce((w, c, i) => w + c.offsetWidth + (i ? gap : 0), 0);
       const needLeft = base(left, gapL) + gapL + btn;
       const needRight = base(tools, gapT) + gapT + btn;
-      setRoom(needLeft <= side && needRight <= side);
+      setRoom(needLeft + needRight <= available);
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -185,13 +180,7 @@ export default function SiteHeader({ nav, current, sound, account, admin }) {
     <header className="sh-bar" ref={barRef} data-shortcuts={room ? "on" : undefined}>
       <div className="sh-left">
         <HeaderMenu items={menuItems} current={current}/>
-        {archive && (
-          <NavItem item={archive} className={currentClass("sh-icon-btn sh-shortcut", "archive", current)}
-                   aria-current={ariaCurrent("archive", current)}
-                   aria-label={archive.label} title={archive.label}>
-            <GridGlyph/>
-          </NavItem>
-        )}
+        <img src="/wtf-logo-wordmark.png" alt="What The Fudge" className="sh-logo"/>
       </div>
       <nav className="sh-nav" aria-label="Main">
         {nav.map((item) => (
@@ -202,11 +191,14 @@ export default function SiteHeader({ nav, current, sound, account, admin }) {
           </NavItem>
         ))}
       </nav>
-      {/* The approved wordmark: the logo without its TRIVIA line (the same
-          artwork, cropped), on every screen and at every width. */}
-      <img src="/wtf-logo-wordmark.png" alt="What The Fudge" className="sh-logo"/>
       <div className="sh-tools">
-        <div className="sh-more-desktop"><HeaderMenu items={[]} moreOnly/></div>
+        {archive && (
+          <NavItem item={archive} className={currentClass("sh-icon-btn sh-shortcut", "archive", current)}
+                   aria-current={ariaCurrent("archive", current)}
+                   aria-label={archive.label} title={archive.label}>
+            <GridGlyph/>
+          </NavItem>
+        )}
         {help && (
           <NavItem item={help} className={currentClass("sh-icon-btn sh-shortcut sh-help", "help", current)}
                    aria-label={help.label} title={help.label}>
@@ -230,7 +222,7 @@ export default function SiteHeader({ nav, current, sound, account, admin }) {
             button's accessible name. */}
         <button type="button" className={account.signedIn ? "sh-account is-signed-in" : "sh-account"}
                 onClick={account.onClick} title={account.title}>
-          <PersonGlyph/>
+          <PersonGlyph signedIn={account.signedIn}/>
           <span className="sh-account-label">{account.label}</span>
         </button>
       </div>
