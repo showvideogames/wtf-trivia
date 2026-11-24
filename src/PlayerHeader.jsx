@@ -9,16 +9,16 @@ import { PlayerChromeContext } from "./playerChrome.js";
 // fixed frame (.ph-top in site.css: the same width, gutters and top offset
 // everywhere), so moving between screens never resizes or shifts the bar or
 // its centred logo. Under 900px that is the compact row: menu on the left,
-// logo centred, sound and account on the right. From 900px the page links
+// logo centred, sound, settings and account on the right. From 900px the page links
 // show inline.
 //
 // The screen supplies everything through PlayerChromeContext
 // (playerChrome.js), so no screen builds its own copy:
 //   current  id of the nav link for the screen being shown, or null
 //   nav      [{id, label, onClick}] (Play -- the Home page --, Archive,
-//            Stats, How to Play)
+//            Stats, How To Play)
 //   sound    the sound engine ({muted, setMuted})
-//   account  {signedIn, label, title, onClick}
+//   account  {signedIn, onClick}
 //   admin    {onClick, icon} or null (the dev-only Admin entry)
 
 // pending: loading and error, where nothing behind the links is ready yet.

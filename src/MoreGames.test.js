@@ -48,7 +48,7 @@ it("keeps desktop links and exposes More Games in the shared left menu", async (
   const { PlayerChromeContext } = await import("./playerChrome.js");
   const host = document.createElement("div"); document.body.append(host); root = createRoot(host);
   const chrome = {
-    nav: ["Play", "Archive", "Stats", "How to Play"].map(label => ({id:label,label,href:"/"+label,onClick(){}})),
+    nav: ["Play", "Archive", "Stats", "How To Play"].map(label => ({id:label,label,href:"/"+label,onClick(){}})),
     sound:{muted:false,setMuted(){}},account:{label:"Sign in",onClick(){}},
   };
   await act(async () => root.render(React.createElement(PlayerChromeContext.Provider, {value:chrome}, React.createElement(PlayerHeader))));
