@@ -105,12 +105,12 @@ describe("Home across midnight", () => {
     expect(playNow()?.textContent).toBe("Play now");
     expect(host.querySelector('[role="timer"]')).toBeNull();
 
-    // 2. Unrelated updates: sound off and on, How to Play open and closed.
+    // 2. Unrelated updates: sound off and on, How To Play open and closed.
     click(host.querySelector('button[aria-label="Turn sound off"]'));
     await flush(100);
     click(host.querySelector('button[aria-label="Turn sound on"]'));
     await flush(100);
-    click([...host.querySelectorAll(".sh-link")].find((b) => b.textContent === "How to Play"));
+    click([...host.querySelectorAll(".sh-link")].find((b) => b.textContent === "How To Play"));
     await flush(100);
     expect(document.querySelector(".htp-modal")).not.toBeNull();
     click(document.querySelector(".htp-play"));

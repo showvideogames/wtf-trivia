@@ -3,21 +3,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import MoreGames from "./MoreGames.jsx";
 
 // ---- SITE HEADER ----
-// The cream navigation bar from the Archive design: page links on the left,
-// the logo in the middle, the player's own controls (sound, Admin when the
-// dev flag allows it, Sign in / account) on the right. Under 900px it stays
-// one compact row: a menu button on the left holding the page links (and
-// the dev Admin entry), the logo centred, sound and a compact account
-// button on the right. Every player screen shows it, through PlayerHeader.
-//
-//   nav:     [{id, label, href?, onClick}] -- real destinations or actions
-//            only. With an href the item is a real link (its address opens in
-//            a new tab, copies, ...); a plain click runs onClick instead.
-//   current: id of the link for the page being shown (pink, aria-current)
-//   sound:   the sound engine ({muted, setMuted}), optional
-//   account: {label, title, signedIn, onClick}
-//   admin:   {onClick, icon}, optional; the caller decides when it shows
-
+// One cream header across all player screens. On compact widths, the menu
+// holds the same page links and the logo stays centered between the controls.
+// The optional Admin action is separate from player settings.
 function MenuGlyph() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -59,7 +47,7 @@ function NavItem({ item, onClick = item.onClick, children, ...props }) {
 // outside the header closes it; choosing an item closes it and puts focus back
 // on the button (so a dialog it opens can return focus there), then runs the
 // item's own action.
-function HeaderMenu({ items, current, moreOnly = false }) {
+function HeaderMenu({ items, current }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const wrapRef = useRef(null);
@@ -84,14 +72,14 @@ function HeaderMenu({ items, current, moreOnly = false }) {
   }, [open]);
 
   return (
-    <div className="sh-menu" ref={wrapRef}>
-      <button type="button" ref={buttonRef} className={moreOnly ? "sh-icon-btn" : "sh-icon-btn sh-menu-btn"}
-              aria-expanded={open} aria-controls={panelId} aria-label={moreOnly ? "More Games" : "Menu"}
+    <div className="sh-menu" ref={wrapRef} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false); }}>
+      <button type="button" ref={buttonRef} className="sh-icon-btn sh-menu-btn"
+              aria-expanded={open} aria-controls={panelId} aria-label="Menu"
               onClick={() => setOpen((o) => !o)}>
         <MenuGlyph/>
       </button>
       {open && (
-        <nav className="sh-menu-panel" id={panelId} ref={panelRef} aria-label={moreOnly ? "More Games" : "Main"}>
+        <nav className="sh-menu-panel" id={panelId} ref={panelRef} aria-label="Menu destinations">
           <ul>
             {items.map((item) => (
               <li key={item.id}>
@@ -123,107 +111,96 @@ function ariaCurrent(id, current) {
   return id === current && id !== "help" ? "page" : undefined;
 }
 
-function GridGlyph() {
+function GearGlyph() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect x="4" y="4" width="7" height="7" rx="1.6" fill="none" stroke="currentColor" strokeWidth="2.4"/>
-      <rect x="13" y="4" width="7" height="7" rx="1.6" fill="none" stroke="currentColor" strokeWidth="2.4"/>
-      <rect x="4" y="13" width="7" height="7" rx="1.6" fill="none" stroke="currentColor" strokeWidth="2.4"/>
-      <rect x="13" y="13" width="7" height="7" rx="1.6" fill="none" stroke="currentColor" strokeWidth="2.4"/>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <path d="M9.8 3.5h4.4l.5 2.4 1.4.8 2.3-.8 2.2 3.8-1.8 1.6v1.5l1.8 1.6-2.2 3.8-2.3-.8-1.4.8-.5 2.4H9.8l-.5-2.4-1.4-.8-2.3.8-2.2-3.8 1.8-1.6v-1.5L3.4 9.7l2.2-3.8 2.3.8 1.4-.8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  );
+}
+function SoundGlyph({ muted }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <path d="M11 5 6 9H3v6h3l5 4z"/>
+      {muted ? <path d="m15 9 5 6m0-6-5 6"/> : <path d="M15 9a4 4 0 0 1 0 6m3-9a8 8 0 0 1 0 12"/>}
     </svg>
   );
 }
 
-// Optional shortcuts share the space left by the menu/logo group and tools.
-// All destinations remain available in the menu when space is tight.
-function useShortcutRoom(barRef) {
-  const [room, setRoom] = useState(false);
+function SettingsMenu({ sound }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const wrapRef = useRef(null);
+  const triggerRef = useRef(null);
+  const optionRef = useRef(null);
   useEffect(() => {
-    const bar = barRef.current;
-    if (!bar || typeof ResizeObserver === "undefined") return;
-    const measure = () => {
-      const left = bar.querySelector(".sh-left");
-      const tools = bar.querySelector(".sh-tools");
-      const menuBtn = bar.querySelector(".sh-menu-btn");
-      if (!left || !menuBtn || !left.offsetWidth) { setRoom(false); return; }
-      const cs = getComputedStyle(bar);
-      const inner = bar.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-      const available = inner - parseFloat(cs.columnGap);
-      const btn = menuBtn.offsetWidth;
-      const gapL = parseFloat(getComputedStyle(left).columnGap) || 0;
-      const gapT = parseFloat(getComputedStyle(tools).columnGap) || 0;
-      // Each side's width without its shortcut, then with one more circle.
-      const base = (el, gap) => [...el.children]
-        .filter((c) => !c.classList.contains("sh-shortcut") && c.offsetWidth)
-        .reduce((w, c, i) => w + c.offsetWidth + (i ? gap : 0), 0);
-      const needLeft = base(left, gapL) + gapL + btn;
-      const needRight = base(tools, gapT) + gapT + btn;
-      setRoom(needLeft + needRight <= available);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(bar);
-    const logo = bar.querySelector(".sh-logo");
-    if (logo && !logo.complete) logo.addEventListener("load", measure, { once: true });
-    return () => ro.disconnect();
-  }, [barRef]);
-  return room;
+    if (!open) return;
+    optionRef.current?.focus({ preventScroll: true });
+    const onPointerDown = (e) => { if (!wrapRef.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+  const onKeyDown = (e) => {
+    if (open && e.key === "Escape") {
+      e.stopPropagation();
+      setOpen(false);
+      triggerRef.current?.focus({ preventScroll: true });
+    }
+  };
+  return (
+    <div className="sh-settings" ref={wrapRef}
+         onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false); }}
+         onKeyDown={onKeyDown}>
+      <button type="button" className="sh-icon-btn sh-settings-btn" ref={triggerRef}
+              aria-label="Settings" title="Settings" aria-expanded={open} aria-controls={id}
+              onClick={() => setOpen((value) => !value)}><GearGlyph/></button>
+      {open && (
+        <section className="sh-menu-panel sh-settings-panel" aria-label="Settings" id={id}>
+          <h2>Settings</h2>
+          <button type="button" className="sh-menu-item" role="switch" aria-checked={!sound.muted}
+                  aria-label="Sound effects" ref={optionRef} onClick={() => sound.setMuted((value) => !value)}>
+            <span>Sound effects</span>
+            <span className="sh-sound-state" aria-hidden="true">{sound.muted ? "Off" : "On"}</span>
+          </button>
+        </section>
+      )}
+    </div>
+  );
 }
 
 export default function SiteHeader({ nav, current, sound, account, admin }) {
-  const menuItems = admin ? [...nav, { id: "admin", label: "Admin", icon: admin.icon, onClick: admin.onClick }] : nav;
-  const barRef = useRef(null);
-  const room = useShortcutRoom(barRef);
-  const archive = nav.find((item) => item.id === "archive");
-  const help = nav.find((item) => item.id === "help");
+  const pageLinks = nav.map((item) => item.id === "help" ? { ...item, label: "How To Play" } : item);
+  const menuItems = admin ? [...pageLinks, { id: "admin", label: "Admin", icon: admin.icon, onClick: admin.onClick }] : pageLinks;
+  const accountName = account.signedIn ? "Account" : "Sign in";
   return (
-    <header className="sh-bar" ref={barRef} data-shortcuts={room ? "on" : undefined}>
+    <header className="sh-bar">
       <div className="sh-left">
         <HeaderMenu items={menuItems} current={current}/>
-        <img src="/wtf-logo-wordmark.png" alt="What The Fudge" className="sh-logo"/>
+        <nav className="sh-nav" aria-label="Main">
+          {pageLinks.map((item) => (
+            <NavItem key={item.id} item={item}
+                     className={currentClass("sh-link", item.id, current)}
+                     aria-current={ariaCurrent(item.id, current)}>
+              {item.label}
+            </NavItem>
+          ))}
+        </nav>
       </div>
-      <nav className="sh-nav" aria-label="Main">
-        {nav.map((item) => (
-          <NavItem key={item.id} item={item}
-                   className={currentClass("sh-link", item.id, current)}
-                   aria-current={ariaCurrent(item.id, current)}>
-            {item.label}
-          </NavItem>
-        ))}
-      </nav>
+      <img src="/wtf-logo-wordmark.png" alt="What The Fudge" className="sh-logo"/>
       <div className="sh-tools">
-        {archive && (
-          <NavItem item={archive} className={currentClass("sh-icon-btn sh-shortcut", "archive", current)}
-                   aria-current={ariaCurrent("archive", current)}
-                   aria-label={archive.label} title={archive.label}>
-            <GridGlyph/>
-          </NavItem>
-        )}
-        {help && (
-          <NavItem item={help} className={currentClass("sh-icon-btn sh-shortcut sh-help", "help", current)}
-                   aria-label={help.label} title={help.label}>
-            <span aria-hidden="true">?</span>
-          </NavItem>
-        )}
-        {sound && (
+        {sound && <>
           <button type="button" className="sh-icon-btn" onClick={() => sound.setMuted((m) => !m)}
                   aria-pressed={!sound.muted}
                   aria-label={sound.muted ? "Turn sound on" : "Turn sound off"}
                   title={sound.muted ? "Turn sound on" : "Turn sound off"}>
-            <span aria-hidden="true">{sound.muted ? "\u{1F507}" : "\u{1F50A}"}</span>
+            <SoundGlyph muted={sound.muted}/>
           </button>
-        )}
-        {admin && (
-          <button type="button" className="sh-icon-btn sh-admin" onClick={admin.onClick} aria-label="Admin" title="Admin">
-            {admin.icon}
-          </button>
-        )}
-        {/* On phones only the person icon shows; the label stays as the
-            button's accessible name. */}
-        <button type="button" className={account.signedIn ? "sh-account is-signed-in" : "sh-account"}
-                onClick={account.onClick} title={account.title}>
+          <SettingsMenu sound={sound}/>
+        </>}
+        <button type="button" className={account.signedIn ? "sh-icon-btn sh-account is-signed-in" : "sh-icon-btn sh-account"}
+                onClick={account.onClick} aria-label={accountName} title={accountName}>
           <PersonGlyph signedIn={account.signedIn}/>
-          <span className="sh-account-label">{account.label}</span>
         </button>
       </div>
     </header>

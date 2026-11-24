@@ -135,7 +135,6 @@
     border-width: 0 0 3px;
     border-radius: 0;
   }
-  .ph-top.ph-sticky .sh-tools { gap: 11px; }
   /* The menu panel lines up with the menu button, 16px in. */
   .ph-top.ph-sticky .sh-menu-panel { left: 16px; }
   /* Keyboard focus, find-in-page and in-page jumps stop below the fixed
@@ -183,7 +182,7 @@
   z-index: 20;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  grid-template-areas: "nav logo tools";
+  grid-template-areas: "navigation logo tools";
   align-items: center;
   gap: 16px;
   width: 100%;
@@ -195,7 +194,6 @@
   box-shadow: 0 3px 0 rgba(26, 26, 26, 0.10);
 }
 .sh-nav {
-  grid-area: nav;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -206,7 +204,8 @@
   display: block;
   width: auto;
   height: 64px;
-  max-width: 150px;
+  max-width: min(100%, 150px);
+  justify-self: center;
   object-fit: contain;
 }
 .sh-tools {
@@ -247,6 +246,7 @@
   place-items: center;
   width: 42px;
   height: 42px;
+  flex: none;
   padding: 0;
   border-radius: 50%;
   border: 2.5px solid var(--black);
@@ -258,44 +258,12 @@
   cursor: pointer;
 }
 .sh-icon-btn:hover { background: #fff; }
-.sh-admin img { width: 22px !important; height: 22px !important; }
 .sh-icon-btn svg { display: block; width: 22px; height: 22px; color: var(--black); }
-.sh-help { font-family: 'Fredoka One', cursive; font-size: 22px; color: var(--black); }
-.sh-icon-btn.is-current { background: var(--cs-pink); }
-
-/* Phone shortcuts: hidden unless SiteHeader measured room for both. */
-.sh-shortcut { display: none; }
-
-.sh-account {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 2px;
-  border: 2.5px solid var(--black);
-  background: var(--cs-cream);
-  color: var(--black);
-  font-family: 'Fredoka One', cursive;
-  font-size: 15px;
-  line-height: 1;
-  padding: 0 16px;
-  min-height: 42px;
-  border-radius: 999px;
-  cursor: pointer;
-  white-space: nowrap;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.sh-account:hover { background: #fff; }
 .sh-account.is-signed-in { background: #E9D5FF; }
-.sh-account-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.sh-account-icon { display: none; width: 22px; height: 22px; flex: none; }
-
-/* The phone menu (button + panel); hidden from 900px, where the links show. */
-.sh-left { grid-area: menu; justify-self: start; display: none; align-items: center; gap: 6px; }
-.sh-menu-btn svg { display: block; width: 24px; height: 24px; color: var(--black); }
-.sh-menu-btn[aria-expanded="true"] { background: var(--cs-pink-soft); }
+.sh-left { grid-area: navigation; display: flex; min-width: 0; align-items: center; gap: 6px; }
+.sh-menu, .sh-settings { flex: none; }
+.sh-menu-btn svg { width: 24px; height: 24px; }
+.sh-menu-btn[aria-expanded="true"], .sh-settings-btn[aria-expanded="true"] { background: var(--cs-pink-soft); }
 .sh-menu-panel {
   position: absolute;
   top: calc(100% + 8px);
@@ -334,90 +302,57 @@
 .sh-menu-icon img { width: 22px !important; height: 22px !important; }
 .sh-menu-check { flex: none; width: 18px; height: 18px; }
 
-/* Under 900px: one compact row. The page links (and the dev Admin entry)
-   move into the menu button on the left, the logo stays centred between
-   two equal side tracks, and sound + account sit on the right. */
+/* Matching left/right tracks keep the wordmark mathematically centered.
+   The compact tracks reserve space for all three right-side controls; only
+   the brand graphic shrinks on the smallest screens. */
 @media (max-width: 899px) {
   .ph-top { padding-left: 16px; padding-right: 16px; }
   .sh-bar {
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    grid-template-areas: "menu logo tools";
-    column-gap: 8px;
+    grid-template-columns: minmax(120px, 1fr) minmax(0, 128px) minmax(120px, 1fr);
+    column-gap: 6px;
     min-height: 0;
     padding: 6px 10px;
     border-radius: 22px;
   }
-  .sh-left { display: flex; }
-  .sh-bar[data-shortcuts="on"] .sh-shortcut { display: grid; }
-  .sh-nav,
-  .sh-admin { display: none; }
-  .sh-logo { height: 54px; max-width: 128px; }
+  .sh-nav { display: none; }
+  .sh-logo { width: 100%; height: 54px; }
+  .sh-tools { gap: 5px; }
+  .sh-icon-btn { position: relative; width: 36px; height: 36px; font-size: 17px; }
+  .sh-icon-btn::after { content: ""; position: absolute; inset: -4px -2px; border-radius: inherit; }
 }
-/* Compact row: the circles draw at 42px (40px on the narrowest phones) but
-   each one's touch area reaches 44px through an invisible ring, which stays
-   inside the 6px gaps between them. */
-@media (max-width: 899px) {
-  .sh-icon-btn, .sh-account { position: relative; }
-  .sh-account { overflow: visible; }
-  .sh-icon-btn::after, .sh-account::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; }
-}
-.ph-compact .sh-icon-btn, .ph-compact .sh-account { position: relative; }
-.ph-compact .sh-icon-btn::after, .ph-compact .sh-account::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; }
-/* Phones: the account control shrinks to the person icon. */
-@media (max-width: 599px) {
-  .sh-account { width: 42px; min-height: 42px; padding: 0; margin-left: 0; border-radius: 50%; overflow: visible; }
-  .sh-account-icon { display: block; }
-  .sh-account-label {
-    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
-    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
-  }
-}
-/* Desktop density (first set by the Archive, now every player screen's): at
-   100% zoom the header reads like the owner's preferred 80% view. Real
-   sizes, never zoom; controls stay at least 38px tall. The logo is ~17%
-   larger than that density first gave it (52px), drawn into the bar's own
-   padding by negative block margins so the bar keeps its 70px height. */
 @media (min-width: 900px) {
   .ph-top .sh-bar { min-height: 62px; padding: 6px 14px; gap: 12px; border-radius: 20px; }
-  .ph-top .sh-logo { height: 61px; max-width: 142px; margin-block: -4.5px; }
-  .ph-top .sh-link { font-size: 15px; min-height: 38px; padding: 9px 14px; }
+  .ph-top .sh-logo { height: 61px; max-width: min(100%, 142px); margin-block: -4.5px; }
+  .ph-top .sh-link { font-size: 15px; min-height: 38px; padding: 9px 12px; }
   .ph-top .sh-icon-btn { width: 38px; height: 38px; font-size: 17px; }
-  .ph-top .sh-account { min-height: 38px; padding: 0 14px; font-size: 14px; }
 }
-/* The narrowest desktops: four page links (Play, Archive, Stats, How to
-   Play) need a little less padding to stay clear of the centred logo. */
 @media (min-width: 900px) and (max-width: 999px) {
   .ph-top .sh-nav { gap: 2px; }
-  .ph-top .sh-link { padding: 9px 10px; }
+  .ph-top .sh-link { padding: 9px 9px; }
 }
-/* Admin Preview's phone-width stage: always the compact phone row, whatever
-   the window width (the stage already provides the gutters). */
+/* The Admin Preview stage is a phone width even on desktop. */
 .ph-top.ph-compact { max-width: none; padding: 0; }
 .ph-compact .sh-bar {
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  grid-template-areas: "menu logo tools";
-  column-gap: 8px;
+  grid-template-columns: minmax(110px, 1fr) minmax(0, 128px) minmax(110px, 1fr);
+  column-gap: 5px;
   min-height: 0;
-  padding: 6px 10px;
+  padding: 6px 8px;
   border-radius: 22px;
 }
-.ph-compact .sh-left { display: flex; }
-.ph-compact .sh-bar[data-shortcuts="on"] .sh-shortcut { display: grid; }
-.ph-compact .sh-nav,
-.ph-compact .sh-admin { display: none; }
-.ph-compact .sh-logo { height: 54px; max-width: 128px; margin-block: 0; }
-.ph-compact .sh-icon-btn { width: 42px; height: 42px; font-size: 19px; }
-.ph-compact .sh-account { width: 42px; min-height: 42px; padding: 0; margin-left: 0; border-radius: 50%; overflow: visible; }
-.ph-compact .sh-account-icon { display: block; }
-.ph-compact .sh-account-label {
-  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
-  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
-}
+.ph-compact .sh-nav { display: none; }
+.ph-compact .sh-logo { width: 100%; height: 54px; max-width: 100%; margin-block: 0; }
+.ph-compact .sh-tools { gap: 4px; }
+.ph-compact .sh-icon-btn { position: relative; width: 34px; height: 34px; }
+.ph-compact .sh-icon-btn::after { content: ""; position: absolute; inset: -4px -2px; border-radius: inherit; }
 @media (max-width: 380px) {
-  .sh-logo { height: 44px; max-width: 108px; }
-  .sh-icon-btn { width: 40px; height: 40px; font-size: 17px; }
-  .sh-account { width: 40px; min-height: 40px; }
-  .sh-icon-btn::after, .sh-account::after { inset: -2px; }
+  .ph-top { padding-left: 8px; padding-right: 8px; }
+  .ph-top.ph-sticky .sh-bar { padding-left: 8px; padding-right: 8px; }
+  .ph-top.ph-sticky .sh-menu-panel { left: 8px; }
+  .sh-bar { grid-template-columns: minmax(110px, 1fr) minmax(0, 108px) minmax(110px, 1fr); column-gap: 5px; padding-inline: 8px; }
+  .sh-logo { height: 44px; }
+  .sh-tools { gap: 4px; }
+  .sh-icon-btn { width: 34px; height: 34px; }
+  .sh-icon-btn svg { width: 20px; height: 20px; }
 }
 
 /* ===== CANDY CONTROLS =====
@@ -546,18 +481,16 @@ button.candy-badge:active { transform: translateY(2px); box-shadow: 0 1px 0 var(
 
 /* Keep the portfolio links reachable in short phone and desktop viewports. */
 .sh-menu-panel { width: min(320px, calc(100vw - 32px)); max-height: calc(100dvh - 100px); overflow-y: auto; overscroll-behavior: contain; z-index: 50; }
-.sh-more-desktop .sh-menu { position: relative; }
-.sh-more-desktop .sh-menu-panel { left: auto; right: 0; }
-@media (max-width: 899px) { .sh-more-desktop { display: none; } }
-.ph-compact .sh-more-desktop { display: none; }
-.sh-more-desktop .more-games { margin-top: 0; padding-top: 0; border-top: 0; }
-
-/* Shared header: one menu beside the wordmark at every width. */
-.sh-bar { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "menu nav tools"; }
-.sh-bar .sh-left { display: flex; min-width: 0; gap: 6px; }
-.sh-left .sh-menu { flex-shrink: 0; }
-.sh-left .sh-logo { min-width: 0; object-fit: contain; }
-@media(max-width: 899px) {
-  .sh-bar { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "menu tools"; }
+.sh-settings-panel,
+.ph-top.ph-sticky .sh-settings-panel {
+  inset-inline: auto 8px;
+  width: min(244px, calc(100% - 16px));
 }
-.ph-compact .sh-bar { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "menu tools"; }
+.sh-settings-panel h2 {
+  margin: 7px 14px 4px;
+  color: var(--black);
+  font-family: 'Fredoka One', cursive;
+  font-size: 17px;
+}
+.sh-settings-panel .sh-menu-item { justify-content: space-between; font-size: 16px; }
+.sh-sound-state { color: var(--cs-ink-soft); min-width: 2em; text-align: right; }

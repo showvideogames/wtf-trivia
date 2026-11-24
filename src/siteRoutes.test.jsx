@@ -148,11 +148,11 @@ describe("each section opens at its own address", () => {
     expect(path()).toBe(address);
   }, 30_000);
 
-  it("/how-to-play opens How to Play over Home; a refresh keeps it; Got it leaves Home at /", async () => {
+  it("/how-to-play opens How To Play over Home; a refresh keeps it; Got it leaves Home at /", async () => {
     await openAt("/how-to-play");
     expect(helpOpen()).toBe(true);
     expect(screen()).toBe("home");
-    expect(host.querySelector(".sh-link.is-current")?.textContent).toBe("How to Play");
+    expect(host.querySelector(".sh-link.is-current")?.textContent).toBe("How To Play");
     await refresh();
     expect(helpOpen()).toBe(true);
     const length = window.history.length;
@@ -175,7 +175,7 @@ describe("header navigation uses real links and real history", () => {
   it("the page links are links to their addresses", async () => {
     await openAt("/");
     const hrefs = [...host.querySelectorAll(".sh-nav a.sh-link")].map((a) => [a.textContent, a.getAttribute("href")]);
-    expect(hrefs).toEqual([["Play", "/"], ["Archive", "/archive"], ["Stats", "/stats"], ["How to Play", "/how-to-play"]]);
+    expect(hrefs).toEqual([["Play", "/"], ["Archive", "/archive"], ["Stats", "/stats"], ["How To Play", "/how-to-play"]]);
   }, 30_000);
 
   it("Home → Archive → Back → Home, then Forward → Archive", async () => {
@@ -251,10 +251,10 @@ describe("header navigation uses real links and real history", () => {
   }, 30_000);
 });
 
-describe("How to Play has its own history entry", () => {
+describe("How To Play has its own history entry", () => {
   it("opens at /how-to-play over the page; Back closes it and leaves the page as it was", async () => {
     await openAt("/archive");
-    await nav("How to Play");
+    await nav("How To Play");
     expect(helpOpen()).toBe(true);
     expect(path()).toBe("/how-to-play");
     expect(screen()).toBe("archive");
@@ -271,7 +271,7 @@ describe("How to Play has its own history entry", () => {
   it("Got it steps back over its entry, so Back afterwards goes to the page before", async () => {
     await openAt("/");
     await nav("Archive");
-    await nav("How to Play");
+    await nav("How To Play");
     click(document.querySelector(".htp-play"));
     await flush(300);
     expect(helpOpen()).toBe(false);
@@ -285,13 +285,13 @@ describe("How to Play has its own history entry", () => {
 describe("game and session state survive navigation", () => {
   const play = () => [...host.querySelectorAll("button")].find((b) => b.textContent.includes("PLAY TODAY’S PUZZLE"));
 
-  it("How to Play over a game in progress closes back to the same game", async () => {
+  it("How To Play over a game in progress closes back to the same game", async () => {
     await openAt("/");
     click(play());
     await flush(500);
     expect(screen()).toBe("game");
     const question = host.querySelector(".gp-prompt, .gp-clue-text").textContent;
-    await nav("How to Play");
+    await nav("How To Play");
     expect(path()).toBe("/how-to-play");
     await back();
     expect(helpOpen()).toBe(false);

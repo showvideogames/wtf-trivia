@@ -43,7 +43,7 @@ describe("gameplay progress", () => {
 describe("shared player header", () => {
   const chrome = {
     current: "play",
-    nav: [{ id: "play", label: "Play", onClick() {} }, { id: "archive", label: "Archive", onClick() {} }, { id: "help", label: "How to Play", onClick() {} }],
+    nav: [{ id: "play", label: "Play", onClick() {} }, { id: "archive", label: "Archive", onClick() {} }, { id: "help", label: "How To Play", onClick() {} }],
     sound: { muted: false, setMuted() {} },
     account: { signedIn: false, label: "Sign in", title: "Sign in", onClick() {} },
     admin: null,
